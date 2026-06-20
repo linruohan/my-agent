@@ -1,0 +1,140 @@
+"""WebView 聊天事件桥：Python -> JS。"""
+
+from __future__ import annotations
+
+import json
+import re
+from typing import Any, Callable
+
+WindowGetter = Callable[[], Any]
+
+
+class WebChatBridge:
+    """替代 ChatPanel，通过 evaluate_js 驱动前端 ChatUI。"""
+
+    def __init__(self, get_window: WindowGetter) -> None:
+        self._get_window = get_window
+        self._stream_buffer = ""
+        self._streaming = False
+
+    @property
+    def assistant_stream_buffer(self) -> str:
+        return self._stream_buffer
+
+    def _emit(self, event: dict[str, Any]) -> None:
+        window = self._get_window()
+        if window is None:
+            return
+        payload = json.dumps(event, ensure_ascii=False)
+        try:
+            window.evaluate_js(f"window.ChatApp.handleEvent({payload})")
+        except Exception:
+            pass
+
+    def append_user(self, content: str) -> None:
+        self._emit({"type": "user", "content": content})
+
+    def begin_assistant(self) -> None:
+        self._streaming = True
+        self._stream_buffer = ""
+        self._emit({"type": "assistant_start"})
+
+    def append_token(self, token: str) -> None:
+        self._stream_buffer += token
+        if not self._streaming:
+            self.begin_assistant()
+        self._emit({"type": "assistant_token", "content": token})
+
+    def end_assistant(self) -> None:
+        self._emit({"type": "assistant_end", "content": self._stream_buffer})
+        self._streaming = False
+        self._stream_buffer = ""
+
+    def reset_assistant_for_tool(self) -> None:
+        self._streaming = False
+        self._stream_buffer = ""
+        self._emit({"type": "assistant_reset"})
+
+    def append_tool_call(self, name: str, args: dict) -> None:
+        if name == "web_search":
+            query = args.get("query", "")
+            self._emit(
+                {
+                    "type": "tool_status",
+                    "content": f"🔍 正在搜索：{query}",
+                    "accent": "info",
+                }
+            )
+            return
+        self._emit({"type": "meta", "content": f"🔧 调用工具: {name}({args})"})
+
+    def append_tool_result(self, name: str, content: str) -> None:
+        if name == "web_search":
+            self.append_search_done(content)
+            return
+        preview = content[:200] + ("..." if len(content) > 200 else "")
+        self._emit({"type": "meta", "content": f"📋 {name} 返回: {preview}"})
+
+    def append_search_done(self, raw_result: str) -> None:
+        count = len(re.findall(r"^\d+\.\s", raw_result, re.MULTILINE))
+        if count:
+            self._emit(
+                {
+                    "type": "tool_status",
+                    "content": f"✓ 搜索完成，获取 {count} 条结果，正在汇总…",
+                    "accent": "success",
+                }
+            )
+        elif "未找到" in raw_result or "搜索失败" in raw_result:
+            self._emit(
+                {
+                    "type": "tool_status",
+                    "content": "⚠ 搜索未返回有效结果，正在分析…",
+                    "accent": "error",
+                }
+            )
+        else:
+            self._emit(
+                {
+                    "type": "tool_status",
+                    "content": "✓ 搜索完成，正在汇总…",
+                    "accent": "success",
+                }
+            )
+
+    def append_assistant_complete(self, content: str, *, from_cache: bool = False) -> None:
+        if from_cache:
+            self._emit(
+                {
+                    "type": "meta",
+                    "content": "📦 命中搜索缓存，直接返回历史回复",
+                    "accent": "info",
+                }
+            )
+        self._stream_buffer = content
+        self._emit({"type": "assistant_end", "content": content})
+        self._stream_buffer = ""
+        self._streaming = False
+
+    def append_system(self, content: str) -> None:
+        self._emit({"type": "meta", "content": f"⚙️ {content}"})
+
+    def append_error(self, content: str) -> None:
+        self._emit({"type": "meta", "content": f"❌ 错误: {content}", "accent": "error"})
+
+    def clear(self) -> None:
+        self._streaming = False
+        self._stream_buffer = ""
+        self._emit({"type": "clear"})
+
+    def set_status(self, text: str) -> None:
+        self._emit({"type": "status", "text": text})
+
+    def set_running(self, running: bool) -> None:
+        self._emit({"type": "running", "running": running})
+
+    def show_approval(self, description: str) -> None:
+        self._emit({"type": "approval", "description": description})
+
+    def apply_theme(self, variables: dict[str, str]) -> None:
+        self._emit({"type": "theme", "variables": variables})

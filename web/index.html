@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>个人助理 Agent</title>
+  <link rel="stylesheet" href="css/app.css" />
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+  <div id="app" class="app">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1 class="sidebar-title">会话</h1>
+      </div>
+      <button type="button" class="btn btn-secondary sidebar-btn" id="btn-new-session">＋ 新会话</button>
+      <div class="session-list" id="session-list">
+        <div class="session-item active">当前会话</div>
+      </div>
+      <div class="sidebar-footer">
+        <button type="button" class="btn btn-secondary sidebar-btn" id="btn-knowledge">📚 导入文档</button>
+        <button type="button" class="btn btn-secondary sidebar-btn" id="btn-settings">⚙ 设置</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="chat-surface">
+        <div class="chat-scroll" id="chat-scroll"></div>
+        <div class="tool-status hidden" id="tool-status"></div>
+      </div>
+
+      <div class="composer">
+        <textarea
+          id="input-box"
+          class="input-box"
+          rows="3"
+          placeholder="输入消息… Ctrl+Enter 发送"
+        ></textarea>
+        <div class="composer-actions">
+          <button type="button" class="btn btn-primary" id="btn-send">发送</button>
+          <button type="button" class="btn btn-muted" id="btn-stop">停止</button>
+        </div>
+      </div>
+
+      <footer class="status-bar" id="status-bar"></footer>
+    </main>
+  </div>
+
+  <!-- 设置 -->
+  <dialog class="modal" id="settings-modal">
+    <form method="dialog" class="modal-panel" id="settings-form">
+      <header class="modal-header">
+        <h2>设置</h2>
+        <button type="button" class="btn-icon" id="settings-close" aria-label="关闭">✕</button>
+      </header>
+      <div class="modal-body">
+        <section class="form-section">
+          <h3>外观</h3>
+          <label class="field">
+            <span>主题</span>
+            <select id="theme-select"></select>
+          </label>
+          <label class="field">
+            <span>明暗模式</span>
+            <select id="appearance-select">
+              <option value="system">跟随系统</option>
+              <option value="light">浅色</option>
+              <option value="dark">深色</option>
+            </select>
+          </label>
+        </section>
+        <section class="form-section">
+          <h3>LLM</h3>
+          <label class="field">
+            <span>提供商</span>
+            <select id="provider-select"></select>
+          </label>
+          <label class="field">
+            <span>模型</span>
+            <input type="text" id="model-input" />
+          </label>
+          <label class="field">
+            <span>API Base URL</span>
+            <input type="text" id="base-url-input" />
+          </label>
+          <label class="field">
+            <span>API Key</span>
+            <input type="password" id="api-key-input" placeholder="留空保留已有 Key" />
+            <small id="api-key-status" class="hint"></small>
+          </label>
+          <label class="field">
+            <span>Temperature <output id="temp-value">0.7</output></span>
+            <input type="range" id="temp-slider" min="0" max="1" step="0.05" value="0.7" />
+          </label>
+        </section>
+      </div>
+      <footer class="modal-footer">
+        <button type="button" class="btn btn-muted" id="settings-cancel">取消</button>
+        <button type="submit" class="btn btn-primary">保存</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <!-- HITL 确认 -->
+  <dialog class="modal" id="confirm-modal">
+    <div class="modal-panel confirm-panel">
+      <header class="modal-header">
+        <h2 id="confirm-title">操作确认</h2>
+      </header>
+      <div class="modal-body">
+        <p id="confirm-description" class="confirm-text"></p>
+      </div>
+      <footer class="modal-footer">
+        <button type="button" class="btn btn-muted" id="confirm-cancel">取消</button>
+        <button type="button" class="btn btn-primary" id="confirm-ok">确认执行</button>
+      </footer>
+    </div>
+  </dialog>
+
+  <!-- 知识库 -->
+  <dialog class="modal" id="knowledge-modal">
+    <div class="modal-panel">
+      <header class="modal-header">
+        <h2>知识库管理</h2>
+        <button type="button" class="btn-icon" id="knowledge-close" aria-label="关闭">✕</button>
+      </header>
+      <div class="modal-body">
+        <pre id="knowledge-stats" class="knowledge-stats"></pre>
+        <p class="hint">支持 .txt / .md / .pdf / .docx</p>
+        <div class="modal-actions-row">
+          <button type="button" class="btn btn-secondary" id="knowledge-pick-files">选择文件</button>
+          <button type="button" class="btn btn-secondary" id="knowledge-pick-folder">选择文件夹</button>
+        </div>
+        <pre id="knowledge-log" class="knowledge-log"></pre>
+      </div>
+      <footer class="modal-footer">
+        <button type="button" class="btn btn-muted" id="knowledge-done">关闭</button>
+      </footer>
+    </div>
+  </dialog>
+
+  <script src="js/chat.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

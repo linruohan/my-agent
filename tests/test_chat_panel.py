@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.ui.chat_panel import normalize_user_message
+from src.ui.message_utils import normalize_user_message
 
 
 def test_normalize_user_message_strips_edges():

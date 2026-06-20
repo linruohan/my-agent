@@ -42,10 +42,7 @@ from src.ui.theme import (
 )
 
 
-def normalize_user_message(text: str) -> str:
-    from src.ui.markdown_render import compact_bubble_content
-
-    return compact_bubble_content(text)
+from src.ui.message_utils import normalize_user_message
 
 
 class ChatPanel(ctk.CTkFrame):
