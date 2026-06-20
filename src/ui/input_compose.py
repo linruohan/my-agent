@@ -71,7 +71,20 @@ def save_temp_image_b64(data_b64: str, *, ext: str = "png") -> dict[str, Any]:
     return {"ok": True, "path": str(path.resolve())}
 
 
-def process_attachment(att: dict[str, Any]) -> dict[str, Any]:
+def process_image_ocr(att: dict[str, Any]) -> dict[str, Any]:
+    """仅 OCR 图片附件。"""
+    path = str(att.get("path", "")).strip()
+    if not path:
+        return {"ok": False, "error": "图片路径为空"}
+    ocr = ocr_image_path_in_process(path)
+    if not ocr.get("ok"):
+        return ocr
+    name = att.get("name") or Path(path).name
+    block = f"### 图片 OCR ({name})\n{ocr.get('text', '')}"
+    return {"ok": True, "block": block, "kind": "image", "ocr": ocr.get("text", "")}
+
+
+def process_attachment(att: dict[str, Any], *, ocr_images: bool = True) -> dict[str, Any]:
     """处理单个附件，返回 {ok, block} 供拼装。"""
     kind = att.get("type")
     if kind == "file":
@@ -83,15 +96,12 @@ def process_attachment(att: dict[str, Any]) -> dict[str, Any]:
         return {"ok": True, "block": block, "kind": kind}
 
     if kind == "image":
-        path = str(att.get("path", "")).strip()
-        if not path:
-            return {"ok": False, "error": "图片路径为空"}
-        ocr = ocr_image_path_in_process(path)
-        if not ocr.get("ok"):
-            return ocr
-        name = att.get("name") or Path(path).name
-        block = f"### 图片 OCR ({name})\n{ocr.get('text', '')}"
-        return {"ok": True, "block": block, "kind": kind, "ocr": ocr.get("text", "")}
+        if not ocr_images:
+            path = str(att.get("path", "")).strip()
+            name = att.get("name") or Path(path).name or "图片"
+            block = f"### 图片\n- 名称: {name}\n- 路径: `{path}`"
+            return {"ok": True, "block": block, "kind": kind}
+        return process_image_ocr(att)
 
     if kind == "link":
         url = str(att.get("url", "")).strip()
@@ -142,7 +152,48 @@ def format_ocr_reply(ocr_results: list[dict[str, str]]) -> str:
     return "\n\n".join(parts)
 
 
-def compose_user_message(text: str, attachments: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+def compose_ocr_message(text: str, attachments: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """仅对图片执行 OCR。"""
+    attachments = attachments or []
+    image_atts = [att for att in attachments if att.get("type") == "image"]
+    if not image_atts:
+        return {"ok": False, "error": "请先添加图片", "errors": ["请先添加图片"]}
+
+    errors: list[str] = []
+    ocr_results: list[dict[str, str]] = []
+    for att in image_atts:
+        result = process_image_ocr(att)
+        if result.get("ok"):
+            path = str(att.get("path", "")).strip()
+            ocr_results.append(
+                {
+                    "name": str(att.get("name") or Path(path).name or "图片"),
+                    "text": str(result.get("ocr") or ""),
+                }
+            )
+        else:
+            errors.append(str(result.get("error", "识别失败")))
+
+    if not ocr_results:
+        return {"ok": False, "error": errors[0] if errors else "识别失败", "errors": errors}
+
+    return {
+        "ok": True,
+        "message": "",
+        "user_text": normalize_user_message(text or ""),
+        "ocr_results": ocr_results,
+        "errors": errors,
+        "ocr_only": True,
+    }
+
+
+def compose_user_message(
+    text: str,
+    attachments: list[dict[str, Any]] | None = None,
+    *,
+    ocr_images: bool = True,
+    fetch_inline_urls: bool = True,
+) -> dict[str, Any]:
     """将文本与附件（含 OCR / 链接摘要）合并为发送给 Agent 的消息。"""
     attachments = attachments or []
     blocks: list[str] = []
@@ -154,10 +205,10 @@ def compose_user_message(text: str, attachments: list[dict[str, Any]] | None = N
         blocks.append(body)
 
     for att in attachments:
-        result = process_attachment(att)
+        result = process_attachment(att, ocr_images=ocr_images)
         if result.get("ok"):
             blocks.append(str(result["block"]))
-            if result.get("kind") == "image":
+            if result.get("kind") == "image" and ocr_images:
                 path = str(att.get("path", "")).strip()
                 ocr_results.append(
                     {
@@ -168,15 +219,15 @@ def compose_user_message(text: str, attachments: list[dict[str, Any]] | None = N
         else:
             errors.append(str(result.get("error", "附件处理失败")))
 
-    # 文本中的裸链接也尝试抓取
-    for url in extract_inline_urls(body):
-        if any(att.get("url") == url for att in attachments if att.get("type") == "link"):
-            continue
-        fetched = summarize_url_in_process(url)
-        if fetched.get("ok"):
-            blocks.append(f"### 链接摘要\n- URL: {url}\n\n{fetched.get('summary', '')}")
-        else:
-            errors.append(f"链接 {url}: {fetched.get('error', '抓取失败')}")
+    if fetch_inline_urls:
+        for url in extract_inline_urls(body):
+            if any(att.get("url") == url for att in attachments if att.get("type") == "link"):
+                continue
+            fetched = summarize_url_in_process(url)
+            if fetched.get("ok"):
+                blocks.append(f"### 链接摘要\n- URL: {url}\n\n{fetched.get('summary', '')}")
+            else:
+                errors.append(f"链接 {url}: {fetched.get('error', '抓取失败')}")
 
     if not blocks:
         return {"ok": False, "error": "请输入内容或添加附件", "errors": errors}

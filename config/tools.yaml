@@ -109,6 +109,11 @@ tools:
     risk: low
     requires_confirmation: false
 
+  add_note:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
   read_calendar:
     enabled: true
     risk: low

@@ -136,13 +136,7 @@ class WebChatBridge:
 
     def append_assistant_complete(self, content: str, *, from_cache: bool = False) -> None:
         if from_cache:
-            self._emit(
-                {
-                    "type": "meta",
-                    "content": "📦 命中搜索缓存，直接返回历史回复",
-                    "accent": "info",
-                }
-            )
+            pass
         self._stream_buffer = content
         event: dict[str, Any] = {"type": "assistant_end", "content": content}
         elapsed = self._elapsed_ms()

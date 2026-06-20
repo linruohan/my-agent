@@ -327,16 +327,10 @@ window.ChatUI = (() => {
       clearToolStatus();
       return;
     }
-    el.classList.remove("hidden");
+    el.classList.remove("hidden", "accent-info", "accent-success", "accent-error");
+    if (accent) el.classList.add(`accent-${accent}`);
     el.textContent = text;
-    el.style.color =
-      accent === "success"
-        ? "var(--success)"
-        : accent === "error"
-          ? "var(--danger)"
-          : accent === "info"
-            ? "var(--info)"
-            : "var(--meta-fg)";
+    el.style.color = "";
     scrollBottom();
   }
 
@@ -344,7 +338,9 @@ window.ChatUI = (() => {
     const el = toolStatusEl();
     if (el) {
       el.classList.add("hidden");
+      el.classList.remove("accent-info", "accent-success", "accent-error");
       el.textContent = "";
+      el.style.color = "";
     }
   }
 

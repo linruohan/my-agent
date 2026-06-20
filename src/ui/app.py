@@ -30,11 +30,22 @@ from src.ui.font_prefs import (
 )
 from src.ui.input_compose import (
     build_image_previews,
+    compose_ocr_message,
     compose_user_message,
     format_ocr_reply,
     has_sendable_content,
     save_temp_image_b64,
 )
+from src.ui.input_intent import (
+    INTENT_LINK,
+    INTENT_OCR,
+    INTENT_SEARCH,
+    INTENT_SLASH_NOTE,
+    INTENT_SLASH_OCR,
+    InputIntent,
+    resolve_input_intent,
+)
+from src.ui.link_summarize import run_link_summarize_turn
 from src.ui.message_utils import normalize_user_message
 from src.ui.ocr_worker import ocr_progress_text
 from src.infra.process_executor import shutdown_process_pools
@@ -49,6 +60,8 @@ from src.ui.theme_loader import (
     list_theme_catalog,
     persist_theme_prefs,
 )
+from src.tools.tool_worker import invoke_tool_in_process
+from src.ui.search_turn import run_web_search_turn
 from src.ui.web_bridge import WebChatBridge
 
 WEB_DIR = PROJECT_ROOT / "web"
@@ -133,6 +146,7 @@ class AssistantController:
         self._thread_id = str(uuid.uuid4())
         self._running = False
         self._graph_bundle: AgentGraphBundle | None = None
+        self._llm: Any = None
         self._awaiting_approval = False
         self._search_cache = SearchCache()
         self._turn_user_query = ""
@@ -246,9 +260,9 @@ class AssistantController:
             if self._graph_bundle:
                 self._graph_bundle.close()
             set_rag_provider(self._current_provider)
-            llm = create_llm(self._current_provider)
+            self._llm = create_llm(self._current_provider)
             ckpt = Path(self.app_cfg["paths"]["checkpoints"]) / "agent.db"
-            self._graph_bundle = build_agent_graph(llm, ckpt)
+            self._graph_bundle = build_agent_graph(self._llm, ckpt)
             self.runner = AgentRunner(graph=self._graph_bundle.graph)
             self.chat.set_status(self._status_text("就绪"))
         except Exception as exc:
@@ -286,11 +300,66 @@ class AssistantController:
         ).start()
         return True
 
+    @staticmethod
+    def _should_use_search_pipeline(
+        composed: dict[str, Any],
+        attachments: list[dict[str, Any]],
+    ) -> bool:
+        """已由 resolve_input_intent 替代，保留供测试/兼容。"""
+        if composed.get("ocr_only"):
+            return False
+        if any(att.get("type") in ("file", "link") for att in attachments):
+            return False
+        user_text = str(composed.get("user_text") or "").strip()
+        message = str(composed.get("message") or "").strip()
+        if attachments and message != user_text:
+            return False
+        return bool(user_text or message)
+
+    def _lookup_search_cache(self, *queries: str) -> str | None:
+        seen: set[str] = set()
+        for query in queries:
+            q = (query or "").strip()
+            if not q or q in seen:
+                continue
+            seen.add(q)
+            hit = self._search_cache.lookup(q)
+            if hit:
+                return hit
+        return None
+
     def _process_send_message(self, text: str, attachments: list[dict[str, Any]]) -> None:
         try:
             if self._compose_cancel.is_set():
                 return
 
+            intent = resolve_input_intent(text, attachments, llm=self._llm)
+            logger.info("[intent] kind={} reason={}", intent.kind, intent.reason)
+
+            if intent.kind == INTENT_SLASH_NOTE:
+                self._handle_slash_note(intent)
+                return
+
+            if intent.kind in (INTENT_OCR, INTENT_SLASH_OCR):
+                self._handle_ocr_intent(text, attachments, intent)
+                return
+
+            if intent.kind == INTENT_LINK:
+                self._start_link_summarize_turn(intent)
+                return
+
+            search_query = (intent.search_query or normalize_user_message(text or "")).strip()
+            if intent.kind == INTENT_SEARCH and search_query and not attachments:
+                cached = self._lookup_search_cache(search_query)
+                if cached:
+                    self._deliver_cached_search(search_query, cached)
+                    return
+
+            if intent.kind == INTENT_SEARCH and search_query:
+                self._start_search_turn(search_query)
+                return
+
+            # Agent 路径：按需 OCR / 抓取链接
             has_images = any(att.get("type") == "image" for att in attachments)
             ocr_progress = False
             if has_images:
@@ -317,16 +386,6 @@ class AssistantController:
             if self._compose_cancel.is_set():
                 return
 
-            if composed.get("ocr_only"):
-                if composed.get("errors") and not composed.get("ocr_results"):
-                    err = "；".join(composed.get("errors") or []) or "识别失败"
-                    self.chat.append_assistant_complete(f"识别失败：{err}")
-                else:
-                    reply = format_ocr_reply(composed.get("ocr_results") or [])
-                    self.chat.append_assistant_complete(reply)
-                self.chat.set_status(self._status_text("就绪"))
-                return
-
             message = composed["message"]
             if not self.runner.graph:
                 if ocr_progress:
@@ -341,17 +400,106 @@ class AssistantController:
             if self._compose_cancel.is_set():
                 return
 
-            cached = self._search_cache.lookup(message)
-            if cached:
-                self._deliver_cached_search(message, cached)
-                return
-
             self._start_agent_turn(message)
         finally:
             if not self._running:
                 self._compose_busy = False
                 if not self._compose_cancel.is_set():
                     self.chat.set_running(False)
+
+    def _handle_slash_note(self, intent: InputIntent) -> None:
+        content = (intent.note_content or "").strip()
+        if not content:
+            self.chat.append_error("笔记内容不能为空，例如：/note 添加笔记：内容")
+            self.chat.set_status(self._status_text("就绪"))
+            return
+        try:
+            result = invoke_tool_in_process("add_note", {"content": content})
+            self.chat.append_assistant_complete(result)
+            self.chat.set_status(self._status_text("就绪"))
+        except Exception as exc:
+            logger.exception("添加笔记失败")
+            self.chat.append_error(f"添加笔记失败: {exc}")
+
+    def _handle_ocr_intent(
+        self,
+        text: str,
+        attachments: list[dict[str, Any]],
+        intent: InputIntent,
+    ) -> None:
+        if intent.kind == INTENT_SLASH_OCR and not any(
+            att.get("type") == "image" for att in attachments
+        ):
+            self.chat.append_error("请先添加图片，或使用 /ocr 时粘贴/上传图片")
+            self.chat.set_status(self._status_text("就绪"))
+            return
+
+        self.chat.begin_assistant_progress(ocr_progress_text())
+        composed = compose_ocr_message(text, attachments)
+        if not composed.get("ok"):
+            err = composed.get("error") or "识别失败"
+            self.chat.append_assistant_complete(f"识别失败：{err}")
+            self.chat.set_status(self._status_text("就绪"))
+            return
+        for warn in composed.get("errors") or []:
+            self.chat.append_system(warn)
+        reply = format_ocr_reply(composed.get("ocr_results") or [])
+        self.chat.append_assistant_complete(reply)
+        self.chat.set_status(self._status_text("就绪"))
+
+    def _start_link_summarize_turn(self, intent: InputIntent) -> None:
+        self._compose_busy = False
+        self._turn_user_query = intent.link_instruction
+        self._running = True
+        self.chat.set_running(True)
+        self.chat.set_status(self._status_text("获取链接…"))
+        threading.Thread(
+            target=self._run_link_summarize_turn,
+            args=(intent.link_instruction, list(intent.urls)),
+            daemon=True,
+            name="link-summarize",
+        ).start()
+
+    def _run_link_summarize_turn(self, instruction: str, urls: list[str]) -> None:
+        try:
+            if self._compose_cancel.is_set() or not self._llm:
+                if not self._llm:
+                    self.chat.append_error("Agent 未就绪，请检查 LLM 配置与 API Key。")
+                return
+
+            self.chat.begin_assistant()
+
+            def on_token(token: str) -> None:
+                if not self._compose_cancel.is_set():
+                    self.chat.append_token(token)
+
+            def on_status(status_text: str, accent: str | None) -> None:
+                self.chat.set_tool_status(status_text, accent=accent)
+
+            response, _fetches = run_link_summarize_turn(
+                self._llm,
+                instruction,
+                urls,
+                on_token=on_token,
+                on_status=on_status,
+                cancel_check=self._compose_cancel.is_set,
+            )
+
+            if self._compose_cancel.is_set():
+                return
+
+            self.chat.end_assistant()
+            self.chat.set_status(self._status_text("就绪"))
+        except Exception as exc:
+            logger.exception("链接总结失败")
+            self.chat.append_error(f"链接处理失败: {exc}")
+        finally:
+            self._running = False
+            self._compose_busy = False
+            if not self._compose_cancel.is_set():
+                self.chat.set_running(False)
+            self.chat.clear_tool_status()
+            self._reset_turn_state()
 
     def pick_input_image(self) -> dict[str, Any]:
         window = self._get_window()
@@ -447,8 +595,75 @@ class AssistantController:
         self.runner.run_async(text, self._thread_id)
 
     def _deliver_cached_search(self, user_query: str, response: str) -> None:
-        self.chat.append_assistant_complete(response, from_cache=True)
+        self.chat.append_assistant_complete(response)
         self.chat.set_status(self._status_text("搜索缓存命中"))
+
+    def _start_search_turn(self, user_query: str) -> None:
+        self._compose_busy = False
+        self._turn_user_query = user_query
+        self._turn_search_query = user_query
+        self._turn_used_web_search = True
+        self._turn_search_ok = False
+        self._collecting_assistant = True
+        self._running = True
+        self.chat.set_running(True)
+        self.chat.set_status(self._status_text("搜索中…"))
+        threading.Thread(
+            target=self._run_search_turn,
+            args=(user_query,),
+            daemon=True,
+            name="search-turn",
+        ).start()
+
+    def _run_search_turn(self, user_query: str) -> None:
+        try:
+            if self._compose_cancel.is_set():
+                return
+            if not self._llm:
+                self.chat.append_error("Agent 未就绪，请检查 LLM 配置与 API Key。")
+                return
+
+            self.chat.reset_assistant_for_tool()
+            self.chat.begin_assistant()
+
+            def on_token(token: str) -> None:
+                if not self._compose_cancel.is_set():
+                    self.chat.append_token(token)
+
+            def on_status(status_text: str, accent: str | None) -> None:
+                self.chat.set_tool_status(status_text, accent=accent)
+
+            response, _raw, ok = run_web_search_turn(
+                self._llm,
+                user_query,
+                on_token=on_token,
+                on_search_status=on_status,
+                cancel_check=self._compose_cancel.is_set,
+            )
+
+            if self._compose_cancel.is_set():
+                return
+
+            self._turn_search_ok = ok
+            self.chat.end_assistant()
+            self._search_cache.save_async(
+                user_query,
+                user_query,
+                self.chat.assistant_stream_buffer or response,
+                search_ok=ok,
+                finished=True,
+            )
+            self.chat.set_status(self._status_text("就绪"))
+        except Exception as exc:
+            logger.exception("搜索流程失败")
+            self.chat.append_error(f"搜索失败: {exc}")
+        finally:
+            self._running = False
+            self._compose_busy = False
+            if not self._compose_cancel.is_set():
+                self.chat.set_running(False)
+            self.chat.clear_tool_status()
+            self._reset_turn_state()
 
     def stop_agent(self) -> None:
         if not self._is_busy():

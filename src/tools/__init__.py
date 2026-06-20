@@ -16,6 +16,7 @@ from src.tools.search import SearchEngine, web_search_impl
 # 工具注册约定：按类别分包（如 file/、web/），各包导出 *_TOOLS 列表，在此汇总。
 _TODOS_FILE = DATA_DIR / "workspace" / "todos.json"
 _CALENDAR_FILE = DATA_DIR / "workspace" / "calendar.json"
+_NOTES_FILE = DATA_DIR / "workspace" / "notes.json"
 
 
 def _load_json(path: Path, default: Any) -> Any:
@@ -40,6 +41,29 @@ def web_search(query: str, engine: SearchEngine = "auto") -> str:
         engine: 搜索引擎 bing / baidu / auto（默认 auto，先 Bing 后百度）
     """
     return web_search_impl(query, engine)
+
+
+@tool
+def add_note(content: str, title: str = "") -> str:
+    """添加一条个人笔记。
+
+    Args:
+        content: 笔记正文
+        title: 可选标题，留空则取正文前 30 字
+    """
+    body = (content or "").strip()
+    if not body:
+        return "笔记内容不能为空。"
+    notes = _load_json(_NOTES_FILE, [])
+    note = {
+        "id": len(notes) + 1,
+        "title": (title or body[:30]).strip() or body[:30],
+        "content": body,
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    notes.append(note)
+    _save_json(_NOTES_FILE, notes)
+    return f"已添加笔记 #{note['id']}：{note['title']}"
 
 
 @tool
@@ -139,6 +163,7 @@ def list_todos(include_done: bool = False) -> str:
 
 OTHER_TOOLS = [
     web_search,
+    add_note,
     search_notes,
     read_calendar,
     create_calendar_event,
