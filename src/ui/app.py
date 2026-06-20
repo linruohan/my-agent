@@ -19,6 +19,12 @@ from src.llm.providers import ProviderConfig
 from src.memory.rag import get_knowledge_stats, ingest_files, set_rag_provider
 from src.memory.search_cache import SearchCache
 from src.ui.message_utils import normalize_user_message
+from src.ui.font_prefs import (
+    build_font_variables,
+    get_font_prefs,
+    list_font_catalog,
+    persist_font_prefs,
+)
 from src.ui.theme_loader import (
     build_css_variables,
     get_theme_prefs,
@@ -78,6 +84,7 @@ class AssistantController:
         self._current_provider_name, self._providers = load_merged_providers()
         self._current_provider = self._providers[self._current_provider_name]
         self._theme_id, self._appearance = get_theme_prefs()
+        self._font_id = get_font_prefs()
 
         self._window: webview.Window | None = None
         self.chat = WebChatBridge(self._get_window)
@@ -106,16 +113,19 @@ class AssistantController:
         base = f"模型: {self._current_provider_name} / {p.model}  |  会话: {self._thread_id[:8]}..."
         return f"{base}  |  {suffix}" if suffix else base
 
-    def _theme_variables(self) -> dict[str, str]:
-        return build_css_variables(self._theme_id, self._appearance)
+    def _ui_variables(self) -> dict[str, str]:
+        vars_ = build_css_variables(self._theme_id, self._appearance)
+        vars_.update(build_font_variables(self._font_id))
+        return vars_
 
     def build_initial_state(self) -> dict[str, Any]:
         app = self.app_cfg.get("app", {})
         return {
             "title": app.get("title", "个人助理 Agent"),
-            "theme_variables": self._theme_variables(),
+            "theme_variables": self._ui_variables(),
             "theme_id": self._theme_id,
             "appearance": self._appearance,
+            "font_id": self._font_id,
             "status_text": self._status_text("就绪"),
             "welcome": "欢迎使用个人助理 Agent。配置 API Key 后即可开始对话（Ctrl+Enter 发送）。",
         }
@@ -136,6 +146,8 @@ class AssistantController:
             "theme_catalog": list_theme_catalog(),
             "theme_id": self._theme_id,
             "appearance": self._appearance,
+            "font_catalog": list_font_catalog(),
+            "font_id": self._font_id,
             "current_provider": self._current_provider_name,
             "provider_names": list(self._providers.keys()),
             "providers": self._provider_payload(),
@@ -144,10 +156,13 @@ class AssistantController:
     def save_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
         theme_id = payload.get("theme_id") or "default"
         appearance = payload.get("appearance") or "dark"
+        font_id = payload.get("font_id") or get_font_prefs()
         persist_theme_prefs(theme_id, appearance)
+        persist_font_prefs(font_id)
         self._theme_id = theme_id
         self._appearance = appearance
-        vars_ = self._theme_variables()
+        self._font_id = get_font_prefs()
+        vars_ = self._ui_variables()
 
         name = payload.get("provider") or self._current_provider_name
         if name not in self._providers:

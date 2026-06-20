@@ -106,12 +106,26 @@ window.ChatApp = (() => {
     }
   }
 
+  function fillFontSelect(catalog, currentId) {
+    const sel = document.getElementById("font-select");
+    if (!sel) return;
+    sel.innerHTML = "";
+    (catalog || []).forEach((f) => {
+      const opt = document.createElement("option");
+      opt.value = f.id;
+      opt.textContent = f.name;
+      if (f.id === currentId) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+
   async function openSettings() {
     if (!api()) return;
     const data = await api().get_settings_data();
     providers = data.providers || {};
     providerNames = data.provider_names || [];
     fillThemeSelect(data.theme_catalog, data.theme_id);
+    fillFontSelect(data.font_catalog, data.font_id);
     document.getElementById("appearance-select").value = data.appearance || "dark";
     fillProviderSelect(data.current_provider);
     loadProviderFields(data.current_provider);
@@ -138,6 +152,7 @@ window.ChatApp = (() => {
       const payload = {
         theme_id: document.getElementById("theme-select").value,
         appearance: document.getElementById("appearance-select").value,
+        font_id: document.getElementById("font-select").value,
         provider: document.getElementById("provider-select").value,
         model: document.getElementById("model-input").value,
         base_url: document.getElementById("base-url-input").value,
