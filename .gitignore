@@ -5,6 +5,7 @@ __pycache__/
 venv/
 .env
 *.log
+data/temp/
 data/secrets.json
 data/user_settings.yaml
 data/vectorstore/*

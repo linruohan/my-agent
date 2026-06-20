@@ -3,14 +3,15 @@ name = "my-agent"
 version = "0.1.0"
 description = "个人助理 Agent — LangChain + LangGraph + pywebview"
 readme = "个人助理Agent设计文档.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dependencies = [
-    "langchain>=0.3",
-    "langgraph>=0.3",
-    "langgraph-checkpoint-sqlite>=2.0",
-    "langchain-openai>=0.3",
-    "langchain-community>=0.3",
-    "langchain-text-splitters>=0.3",
+    "langchain-core>=1.4.7,<2",
+    "langchain>=1.0,<2",
+    "langgraph>=1.2,<2",
+    "langgraph-checkpoint-sqlite>=3.0",
+    "langchain-openai>=1.0",
+    "langchain-community>=0.4",
+    "langchain-text-splitters>=1.0",
     "customtkinter>=5.2",
     "pywebview>=5.0",
     "pyyaml>=6.0",
@@ -27,6 +28,11 @@ dependencies = [
     "winrt-Windows.Media.SpeechRecognition>=3.2.1; sys_platform == 'win32'",
     "winrt-Windows.Globalization>=3.2.1; sys_platform == 'win32'",
     "winrt-Windows.Foundation>=3.2.1; sys_platform == 'win32'",
+    "winrt-Windows.Media.Ocr>=3.2.1; sys_platform == 'win32'",
+    "winrt-Windows.Graphics.Imaging>=3.2.1; sys_platform == 'win32'",
+    "winrt-Windows.Storage>=3.2.1; sys_platform == 'win32'",
+    "winrt-Windows.Storage.Streams>=3.2.1; sys_platform == 'win32'",
+    "pywin32>=306; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]

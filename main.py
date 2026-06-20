@@ -19,6 +19,9 @@ from src.ui.app import run_app
 
 
 def main() -> None:
+    import multiprocessing
+
+    multiprocessing.freeze_support()
     setup_logger()
     run_app()
 

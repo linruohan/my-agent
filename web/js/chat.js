@@ -16,9 +16,38 @@ window.ChatUI = (() => {
     return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   }
 
+  function formatElapsed(ms) {
+    const n = Number(ms);
+    if (!Number.isFinite(n) || n < 0) return "";
+    if (n < 1000) return `${(n / 1000).toFixed(1)}s`;
+    const totalSec = Math.round(n / 1000);
+    if (totalSec < 60) return `${totalSec}s`;
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return s ? `${m}m${s}s` : `${m}m`;
+  }
+
+  function appendBubbleElapsed(bubble, elapsedMs) {
+    if (!bubble || elapsedMs == null) return;
+    const elapsed = formatElapsed(elapsedMs);
+    if (!elapsed) return;
+    bubble.querySelector(".bubble-elapsed")?.remove();
+    const footer = document.createElement("div");
+    footer.className = "bubble-elapsed";
+    footer.textContent = `耗时 ${elapsed}`;
+    bubble.appendChild(footer);
+  }
+
   function scrollBottom() {
     const el = scrollEl();
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+      const last = el.lastElementChild;
+      if (last && typeof last.scrollIntoView === "function") {
+        last.scrollIntoView({ block: "end", behavior: "auto" });
+      }
+    });
   }
 
   async function copyText(text, btn) {
@@ -204,6 +233,82 @@ window.ChatUI = (() => {
     enhanceBubble(bubble, text || "");
   }
 
+  function ensureLightbox() {
+    if (document.getElementById("image-lightbox")) return;
+    const dlg = document.createElement("dialog");
+    dlg.id = "image-lightbox";
+    dlg.className = "image-lightbox";
+    dlg.innerHTML = `
+      <button type="button" class="lightbox-close" aria-label="关闭">✕</button>
+      <figure class="lightbox-figure">
+        <img id="lightbox-img" alt="" />
+        <figcaption id="lightbox-caption"></figcaption>
+      </figure>
+    `;
+    dlg.querySelector(".lightbox-close").addEventListener("click", () => dlg.close());
+    dlg.addEventListener("click", (e) => {
+      if (e.target === dlg) dlg.close();
+    });
+    document.body.appendChild(dlg);
+  }
+
+  function openImageLightbox(src, caption) {
+    ensureLightbox();
+    const dlg = document.getElementById("image-lightbox");
+    const img = document.getElementById("lightbox-img");
+    const cap = document.getElementById("lightbox-caption");
+    if (!dlg || !img) return;
+    img.src = src;
+    img.alt = caption || "图片";
+    if (cap) {
+      cap.textContent = caption || "";
+      cap.classList.toggle("hidden", !caption);
+    }
+    dlg.showModal();
+  }
+
+  function renderUserBubble(bubble, ev) {
+    bubble.classList.remove("streaming");
+    bubble.innerHTML = "";
+
+    if (ev.images && ev.images.length) {
+      const gallery = document.createElement("div");
+      gallery.className = "msg-images";
+      ev.images.forEach((imgMeta) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "msg-image-btn";
+        btn.title = imgMeta.name || "点击查看大图";
+        const img = document.createElement("img");
+        img.src = imgMeta.data_url;
+        img.alt = imgMeta.name || "图片";
+        img.className = "msg-image";
+        btn.appendChild(img);
+        img.addEventListener("load", scrollBottom);
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openImageLightbox(imgMeta.data_url, imgMeta.name);
+        });
+        gallery.appendChild(btn);
+      });
+      bubble.appendChild(gallery);
+    }
+
+    if (ev.content) {
+      const md = document.createElement("div");
+      md.className = "md-content";
+      md.innerHTML = marked.parse(ev.content);
+      md.querySelectorAll("a").forEach((a) => {
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+      });
+      bubble.appendChild(md);
+    }
+
+    enhanceBubble(bubble, ev.content || "");
+  }
+
   function addMeta(text, accent) {
     clearToolStatus();
     const wrap = document.createElement("div");
@@ -218,6 +323,10 @@ window.ChatUI = (() => {
   function setToolStatus(text, accent) {
     const el = toolStatusEl();
     if (!el) return;
+    if (!text) {
+      clearToolStatus();
+      return;
+    }
     el.classList.remove("hidden");
     el.textContent = text;
     el.style.color =
@@ -256,14 +365,19 @@ window.ChatUI = (() => {
         break;
       case "user": {
         const userBubble = createRow("user");
-        renderMarkdown(userBubble, ev.content, "user");
+        renderUserBubble(userBubble, ev);
         break;
       }
       case "assistant_start":
-        streamText = "";
+        streamText = ev.content || "";
         assistantNode = createRow("assistant");
         assistantNode.classList.add("streaming");
-        assistantNode.textContent = "";
+        if (streamText) {
+          assistantNode.textContent = streamText;
+        } else {
+          assistantNode.textContent = "";
+        }
+        scrollBottom();
         break;
       case "assistant_token":
         if (!assistantNode) {
@@ -278,18 +392,21 @@ window.ChatUI = (() => {
         }
         scrollBottom();
         break;
-      case "assistant_end":
-        if (assistantNode) {
-          renderMarkdown(assistantNode, ev.content || streamText, "assistant");
+      case "assistant_end": {
+        let replyBubble = assistantNode;
+        if (replyBubble) {
+          renderMarkdown(replyBubble, ev.content || streamText, "assistant");
         } else if (ev.content) {
-          const b = createRow("assistant");
-          renderMarkdown(b, ev.content, "assistant");
+          replyBubble = createRow("assistant");
+          renderMarkdown(replyBubble, ev.content, "assistant");
         }
+        appendBubbleElapsed(replyBubble, ev.elapsed_ms);
         assistantNode = null;
         streamText = "";
         clearToolStatus();
         scrollBottom();
         break;
+      }
       case "assistant_reset":
         if (assistantNode) {
           const row = assistantNode.closest(".msg-row");

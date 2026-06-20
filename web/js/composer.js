@@ -4,6 +4,7 @@ window.Composer = (() => {
   let voiceListening = false;
   let lastVoiceResultKey = "";
   let attachMenuOpen = false;
+  let actionRunning = false;
 
   function api() {
     return window.pywebview && window.pywebview.api;
@@ -80,27 +81,58 @@ window.Composer = (() => {
   }
 
   async function send() {
-    if (!api() || !window.ChatApp) return;
+    if (!api() || !window.ChatApp) return false;
     const payload = getPayload();
-    if (!payload.text && !payload.attachments.length) return;
+    if (!payload.text && !payload.attachments.length) {
+      window.ChatApp.setComposerHint("输入不能为空");
+      return false;
+    }
     try {
       const ok = await api().send_message(payload);
-      if (ok !== false) {
-        clearInput();
-        window.ChatApp.setRunning(true);
+      if (ok === false) {
+        window.ChatApp.setComposerHint("请等待当前任务完成");
+        return false;
       }
+      clearInput();
+      return true;
     } catch (e) {
       console.error(e);
+      return false;
     }
+  }
+
+  async function toggleAction() {
+    if (!api() || !window.ChatApp) return;
+    if (actionRunning || window.ChatApp.isRunning()) {
+      await api().stop_agent();
+      return;
+    }
+    await send();
+  }
+
+  function setRunning(isRunning) {
+    actionRunning = isRunning;
   }
 
   async function pickImage() {
     if (!api()) return;
     const res = await api().pick_input_image();
     closeAttachMenu();
-    (res.paths || []).forEach((path) => {
-      addAttachment({ type: "image", path, name: path.split(/[/\\]/).pop() });
-    });
+    for (const path of res.paths || []) {
+      let preview;
+      try {
+        const imgData = await api().read_image_data_url(path);
+        if (imgData.ok) preview = imgData.data_url;
+      } catch {
+        preview = undefined;
+      }
+      addAttachment({
+        type: "image",
+        path,
+        name: path.split(/[/\\]/).pop(),
+        preview,
+      });
+    }
   }
 
   async function pickFile() {
@@ -233,15 +265,21 @@ window.Composer = (() => {
         window.ChatApp?.setComposerHint(info.error || "当前平台不支持语音输入");
         return;
       }
-      window.ChatApp?.setComposerHint("正在聆听… 请说话（说完停顿即可）");
+      window.ChatApp?.setComposerHint("正在检查本地语音…");
       voiceLog("start_voice_input …");
       const started = await api().start_voice_input();
       voiceLog("start_voice_input", started);
-      if (started && started.ok === false && started.error) {
+      if (!started || started.ok === false) {
         voiceListening = false;
         el("btn-voice")?.classList.remove("listening");
-        window.ChatApp?.setComposerHint(started.error);
+        if (started?.needs_speech_settings) {
+          window.ChatApp?.setComposerHint(started.error || "请先开启系统在线语音识别");
+        } else if (started?.error) {
+          window.ChatApp?.setComposerHint(started.error);
+        }
+        return;
       }
+      window.ChatApp?.setComposerHint("正在聆听… 本地语音识别（无需在线语音）");
     } catch (err) {
       voiceLog("startVoice error", err);
       voiceListening = false;
@@ -280,6 +318,8 @@ window.Composer = (() => {
       window.ChatApp?.setComposerHint("已取消语音输入");
     } else if (result.error) {
       window.ChatApp?.setComposerHint(result.error);
+    } else if (result.needs_speech_settings) {
+      window.ChatApp?.setComposerHint(result.error || "请先开启系统在线语音识别");
     } else {
       window.ChatApp?.setComposerHint("未识别到语音，请重试");
     }
@@ -293,7 +333,7 @@ window.Composer = (() => {
     box?.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        send();
+        toggleAction();
       }
     });
     box?.addEventListener("paste", handlePaste);
@@ -306,9 +346,7 @@ window.Composer = (() => {
     el("attach-pick-file")?.addEventListener("click", pickFile);
     el("attach-add-link")?.addEventListener("click", promptLink);
     el("btn-voice")?.addEventListener("click", startVoice);
-    el("btn-stop-inline")?.addEventListener("click", async () => {
-      if (api()) await api().stop_agent();
-    });
+    el("btn-action")?.addEventListener("click", toggleAction);
 
     document.addEventListener("click", () => closeAttachMenu());
 
@@ -323,8 +361,6 @@ window.Composer = (() => {
   function init(meta) {
     bind();
     if (meta) {
-      const sessionEl = el("meta-session");
-      if (sessionEl) sessionEl.textContent = `会话 ${meta.session_short || "—"}`;
       const voiceBtn = el("btn-voice");
       if (voiceBtn && meta.voice_supported === false) {
         voiceBtn.title = "语音输入仅 Windows 可用";
@@ -337,6 +373,8 @@ window.Composer = (() => {
   return {
     init,
     send,
+    toggleAction,
+    setRunning,
     clearInput,
     onVoiceResult,
     getPayload,

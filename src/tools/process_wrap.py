@@ -1,0 +1,30 @@
+"""将 LangChain 工具包装为子进程执行。"""
+
+from __future__ import annotations
+
+from langchain_core.tools import BaseTool, StructuredTool
+
+from src.tools.tool_worker import invoke_tool_in_process, tool_process_enabled
+
+
+def wrap_tools_for_process(tools: list[BaseTool]) -> list[BaseTool]:
+    if not tool_process_enabled():
+        return tools
+    return [_wrap_tool(tool) for tool in tools]
+
+
+def _wrap_tool(tool: BaseTool) -> BaseTool:
+    name = tool.name
+    description = tool.description or ""
+
+    def _invoke(**kwargs: object) -> str:
+        return invoke_tool_in_process(name, dict(kwargs))
+
+    kwargs: dict = {
+        "name": name,
+        "description": description,
+        "func": _invoke,
+    }
+    if getattr(tool, "args_schema", None) is not None:
+        kwargs["args_schema"] = tool.args_schema
+    return StructuredTool.from_function(**kwargs)

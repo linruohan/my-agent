@@ -18,7 +18,8 @@ from src.infra.paths import PROJECT_ROOT
 from src.infra.user_settings import has_stored_api_key, persist_provider_choice
 from src.llm.factory import create_llm
 from src.llm.providers import ProviderConfig
-from src.memory.rag import get_knowledge_stats, ingest_files, set_rag_provider
+from src.memory.rag import get_knowledge_stats, set_rag_provider
+from src.memory.rag_worker import ingest_files_in_process
 from src.memory.search_cache import SearchCache
 from src.ui.clipboard import copy_to_clipboard as sys_copy_to_clipboard
 from src.ui.font_prefs import (
@@ -27,9 +28,20 @@ from src.ui.font_prefs import (
     list_font_catalog,
     persist_font_prefs,
 )
-from src.ui.input_compose import compose_user_message, save_temp_image_b64
+from src.ui.input_compose import (
+    build_image_previews,
+    compose_user_message,
+    format_ocr_reply,
+    has_sendable_content,
+    save_temp_image_b64,
+)
+from src.ui.message_utils import normalize_user_message
+from src.ui.ocr_worker import ocr_progress_text
+from src.infra.process_executor import shutdown_process_pools
+from src.ui.speech_win import ensure_speech_privacy_ready
 from src.ui.speech_win import get_voice_info as speech_voice_info
 from src.ui.speech_win import is_supported as voice_is_supported
+from src.ui.speech_win import open_speech_privacy_settings
 from src.ui.speech_win import recognize_once
 from src.ui.theme_loader import (
     build_css_variables,
@@ -72,11 +84,19 @@ class AppApi:
     def save_pasted_image(self, data_b64: str) -> dict[str, Any]:
         return save_temp_image_b64(data_b64)
 
+    def read_image_data_url(self, path: str) -> dict[str, Any]:
+        from src.ui.input_compose import image_to_data_url
+
+        return image_to_data_url(path)
+
     def get_voice_info(self) -> dict[str, Any]:
         return self._ctrl.get_voice_info()
 
     def start_voice_input(self) -> dict[str, Any]:
         return self._ctrl.start_voice_input()
+
+    def open_speech_settings(self) -> dict[str, Any]:
+        return self._ctrl.open_speech_settings()
 
     def stop_agent(self) -> None:
         self._ctrl.stop_agent()
@@ -122,6 +142,8 @@ class AssistantController:
         self._collecting_assistant = False
         self._poll_stop = threading.Event()
         self._voice_running = False
+        self._compose_busy = False
+        self._compose_cancel = threading.Event()
 
         self._init_agent()
 
@@ -211,12 +233,12 @@ class AssistantController:
         self._current_provider = p
         self._providers[name] = p
         self._init_agent()
-        self.chat.append_system(f"已切换 Provider: {name} / {p.model}")
+        self.chat.set_status(self._status_text("设置已更新"))
 
         return {
             "ok": True,
             "theme_variables": vars_,
-            "status_text": self._status_text("就绪"),
+            "status_text": self._status_text("设置已更新"),
         }
 
     def _init_agent(self) -> None:
@@ -234,35 +256,102 @@ class AssistantController:
             self.chat.append_error(f"Agent 初始化失败: {exc}")
             self.runner = AgentRunner(graph=None)
 
+    def _is_busy(self) -> bool:
+        return self._running or self._compose_busy
+
     def send_message(self, payload: dict[str, Any]) -> bool:
-        if self._running:
+        if self._is_busy():
             return False
 
-        composed = compose_user_message(
-            str(payload.get("text", "")),
-            payload.get("attachments") or [],
-        )
-        if not composed.get("ok"):
-            self.chat.append_error(composed.get("error", "无法发送空消息"))
+        text = str(payload.get("text", ""))
+        attachments = list(payload.get("attachments") or [])
+
+        if not has_sendable_content(text, attachments):
+            self.chat.append_error("请输入内容或添加附件")
             return False
 
-        message = composed["message"]
-        for warn in composed.get("errors") or []:
-            self.chat.append_system(warn)
+        display_text = normalize_user_message(text)
+        images = build_image_previews(attachments)
+        self.chat.append_user(display_text, images=images)
 
-        if not self.runner.graph:
-            self.chat.append_error("Agent 未就绪，请检查 LLM 配置与 API Key。")
-            return False
+        self._compose_cancel.clear()
+        self._compose_busy = True
+        self.chat.set_running(True)
 
-        self.chat.append_user(message)
-
-        cached = self._search_cache.lookup(message)
-        if cached:
-            self._deliver_cached_search(message, cached)
-            return False
-
-        self._start_agent_turn(message)
+        threading.Thread(
+            target=self._process_send_message,
+            args=(text, attachments),
+            daemon=True,
+            name="compose-send",
+        ).start()
         return True
+
+    def _process_send_message(self, text: str, attachments: list[dict[str, Any]]) -> None:
+        try:
+            if self._compose_cancel.is_set():
+                return
+
+            has_images = any(att.get("type") == "image" for att in attachments)
+            ocr_progress = False
+            if has_images:
+                ocr_progress = True
+                self.chat.begin_assistant_progress(ocr_progress_text())
+
+            if self._compose_cancel.is_set():
+                return
+
+            composed = compose_user_message(text, attachments)
+            if self._compose_cancel.is_set():
+                return
+
+            if not composed.get("ok"):
+                if ocr_progress:
+                    self.chat.append_assistant_complete(f"识别失败：{composed.get('error', '消息处理失败')}")
+                else:
+                    self.chat.append_error(composed.get("error", "消息处理失败"))
+                return
+
+            for warn in composed.get("errors") or []:
+                self.chat.append_system(warn)
+
+            if self._compose_cancel.is_set():
+                return
+
+            if composed.get("ocr_only"):
+                if composed.get("errors") and not composed.get("ocr_results"):
+                    err = "；".join(composed.get("errors") or []) or "识别失败"
+                    self.chat.append_assistant_complete(f"识别失败：{err}")
+                else:
+                    reply = format_ocr_reply(composed.get("ocr_results") or [])
+                    self.chat.append_assistant_complete(reply)
+                self.chat.set_status(self._status_text("就绪"))
+                return
+
+            message = composed["message"]
+            if not self.runner.graph:
+                if ocr_progress:
+                    self.chat.append_assistant_complete("Agent 未就绪，请检查 LLM 配置与 API Key。")
+                else:
+                    self.chat.append_error("Agent 未就绪，请检查 LLM 配置与 API Key。")
+                return
+
+            if ocr_progress:
+                self.chat.reset_assistant_for_tool()
+
+            if self._compose_cancel.is_set():
+                return
+
+            cached = self._search_cache.lookup(message)
+            if cached:
+                self._deliver_cached_search(message, cached)
+                return
+
+            self._start_agent_turn(message)
+        finally:
+            if not self._running:
+                self._compose_busy = False
+                if not self._compose_cancel.is_set():
+                    self.chat.set_running(False)
 
     def pick_input_image(self) -> dict[str, Any]:
         window = self._get_window()
@@ -304,6 +393,11 @@ class AssistantController:
             logger.warning("[voice] 拒绝：平台/依赖不支持")
             return {"ok": False, "error": "仅 Windows 支持语音输入"}
 
+        privacy_block = ensure_speech_privacy_ready()
+        if privacy_block is not None:
+            logger.warning("[voice] 语音隐私未就绪，已引导打开系统设置")
+            return privacy_block
+
         def worker() -> None:
             logger.info("[voice] worker 线程开始 tid={}", threading.get_ident())
             result: dict[str, Any]
@@ -336,7 +430,12 @@ class AssistantController:
         logger.info("[voice] voice-input 后台线程已启动")
         return {"ok": True}
 
+    def open_speech_settings(self) -> dict[str, Any]:
+        opened = open_speech_privacy_settings()
+        return {"ok": opened, "settings_opened": opened}
+
     def _start_agent_turn(self, text: str) -> None:
+        self._compose_busy = False
         self._turn_user_query = text
         self._turn_search_query = ""
         self._turn_used_web_search = False
@@ -352,24 +451,29 @@ class AssistantController:
         self.chat.set_status(self._status_text("搜索缓存命中"))
 
     def stop_agent(self) -> None:
-        if self._running:
+        if not self._is_busy():
+            return
+
+        self._compose_cancel.set()
+        self._compose_busy = False
+
+        if self._running and self.runner:
             self.runner.stop()
-            self.chat.append_system("已请求停止。")
+
+        self._running = False
+        self.chat.append_user("用户强制中断", track_turn=False)
+        self.chat.clear_turn_timer()
+        self.chat.reset_assistant_for_tool()
+        self.chat.clear_tool_status()
+        self.chat.set_running(False)
+        self.chat.set_status(self._status_text("就绪"))
+        self._reset_turn_state()
 
     def new_session(self) -> None:
         self._thread_id = str(uuid.uuid4())
         self.chat.clear()
         self.chat.append_system(f"新会话已创建: {self._thread_id[:8]}...")
         self.chat.set_status(self._status_text())
-        window = self._get_window()
-        if window is not None:
-            short = self._thread_id[:8]
-            try:
-                window.evaluate_js(
-                    f"document.getElementById('meta-session')&&(document.getElementById('meta-session').textContent='会话 {short}')"
-                )
-            except Exception:
-                pass
 
     def approval_response(self, approved: bool) -> None:
         if not self._awaiting_approval:
@@ -414,14 +518,19 @@ class AssistantController:
             return {"log": "已取消"}
 
         path_list = [Path(p) for p in paths]
-        try:
-            file_count, chunk_count = ingest_files(path_list, self._current_provider)
-            log = f"完成：{file_count} 个文件，{chunk_count} 个文本块"
-            self.chat.append_system(log)
-            return {"log": log, **self.knowledge_stats_text()}
-        except Exception as exc:
-            logger.exception("知识库导入失败")
-            return {"log": f"导入失败: {exc}"}
+        provider_name = self._current_provider_name
+
+        def _worker() -> None:
+            try:
+                file_count, chunk_count = ingest_files_in_process(path_list, provider_name)
+                log = f"完成：{file_count} 个文件，{chunk_count} 个文本块"
+                self.chat.append_system(log)
+            except Exception as exc:
+                logger.exception("知识库导入失败")
+                self.chat.append_system(f"导入失败: {exc}")
+
+        threading.Thread(target=_worker, daemon=True, name="knowledge-import").start()
+        return {"log": "已在后台开始导入，完成后会在会话中提示。", **self.knowledge_stats_text()}
 
     def _maybe_save_search_cache(self, response: str) -> None:
         if self._turn_used_web_search and response.strip():
@@ -587,5 +696,6 @@ def run_app() -> None:
         webview.start(debug=webview_debug)
     finally:
         stop.set()
+        shutdown_process_pools(wait=False)
         if controller._graph_bundle:
             controller._graph_bundle.close()

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from typing import Any, Callable
 
 WindowGetter = Callable[[], Any]
@@ -16,6 +17,7 @@ class WebChatBridge:
         self._get_window = get_window
         self._stream_buffer = ""
         self._streaming = False
+        self._turn_started_at: float | None = None
 
     @property
     def assistant_stream_buffer(self) -> str:
@@ -31,13 +33,38 @@ class WebChatBridge:
         except Exception:
             pass
 
-    def append_user(self, content: str) -> None:
-        self._emit({"type": "user", "content": content})
+    def _elapsed_ms(self) -> int | None:
+        if self._turn_started_at is None:
+            return None
+        return max(0, int((time.perf_counter() - self._turn_started_at) * 1000))
 
-    def begin_assistant(self) -> None:
+    def clear_turn_timer(self) -> None:
+        self._turn_started_at = None
+
+    def append_user(
+        self,
+        content: str,
+        *,
+        images: list[dict[str, Any]] | None = None,
+        track_turn: bool = True,
+    ) -> None:
+        if track_turn:
+            self._turn_started_at = time.perf_counter()
+        event: dict[str, Any] = {"type": "user", "content": content}
+        if images:
+            event["images"] = images
+        self._emit(event)
+
+    def begin_assistant(self, *, initial: str = "") -> None:
         self._streaming = True
-        self._stream_buffer = ""
-        self._emit({"type": "assistant_start"})
+        self._stream_buffer = initial
+        event: dict[str, Any] = {"type": "assistant_start"}
+        if initial:
+            event["content"] = initial
+        self._emit(event)
+
+    def begin_assistant_progress(self, text: str) -> None:
+        self.begin_assistant(initial=text)
 
     def append_token(self, token: str) -> None:
         self._stream_buffer += token
@@ -46,9 +73,14 @@ class WebChatBridge:
         self._emit({"type": "assistant_token", "content": token})
 
     def end_assistant(self) -> None:
-        self._emit({"type": "assistant_end", "content": self._stream_buffer})
+        event: dict[str, Any] = {"type": "assistant_end", "content": self._stream_buffer}
+        elapsed = self._elapsed_ms()
+        if elapsed is not None:
+            event["elapsed_ms"] = elapsed
+        self._emit(event)
         self._streaming = False
         self._stream_buffer = ""
+        self._turn_started_at = None
 
     def reset_assistant_for_tool(self) -> None:
         self._streaming = False
@@ -112,9 +144,14 @@ class WebChatBridge:
                 }
             )
         self._stream_buffer = content
-        self._emit({"type": "assistant_end", "content": content})
+        event: dict[str, Any] = {"type": "assistant_end", "content": content}
+        elapsed = self._elapsed_ms()
+        if elapsed is not None:
+            event["elapsed_ms"] = elapsed
+        self._emit(event)
         self._stream_buffer = ""
         self._streaming = False
+        self._turn_started_at = None
 
     def append_system(self, content: str) -> None:
         self._emit({"type": "meta", "content": f"⚙️ {content}"})
@@ -122,9 +159,19 @@ class WebChatBridge:
     def append_error(self, content: str) -> None:
         self._emit({"type": "meta", "content": f"❌ 错误: {content}", "accent": "error"})
 
+    def set_tool_status(self, content: str, *, accent: str | None = None) -> None:
+        event: dict[str, Any] = {"type": "tool_status", "content": content}
+        if accent:
+            event["accent"] = accent
+        self._emit(event)
+
+    def clear_tool_status(self) -> None:
+        self._emit({"type": "tool_status", "content": ""})
+
     def clear(self) -> None:
         self._streaming = False
         self._stream_buffer = ""
+        self._turn_started_at = None
         self._emit({"type": "clear"})
 
     def set_status(self, text: str) -> None:

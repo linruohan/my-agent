@@ -34,8 +34,17 @@ window.ChatApp = (() => {
 
   function setRunning(isRunning) {
     running = isRunning;
-    const stopBtn = document.getElementById("btn-stop-inline");
-    if (stopBtn) stopBtn.disabled = !isRunning;
+    const actionBtn = document.getElementById("btn-action");
+    if (!actionBtn) return;
+    actionBtn.classList.toggle("running", isRunning);
+    actionBtn.title = isRunning ? "停止" : "发送";
+    actionBtn.querySelector(".icon-send")?.classList.toggle("hidden", isRunning);
+    actionBtn.querySelector(".icon-stop")?.classList.toggle("hidden", !isRunning);
+    window.Composer?.setRunning?.(isRunning);
+  }
+
+  function isRunning() {
+    return running;
   }
 
   function bindComposer() {
@@ -217,13 +226,6 @@ window.ChatApp = (() => {
     }
     if (ev.type === "status") {
       setStatus(ev.text);
-      if (ev.text) {
-        const sessionEl = document.getElementById("meta-session");
-        const parts = ev.text.split("|");
-        if (sessionEl && parts.length > 1) {
-          sessionEl.textContent = parts[1].trim();
-        }
-      }
       return;
     }
     if (ev.type === "approval") {
@@ -257,5 +259,5 @@ window.ChatApp = (() => {
 
   window.addEventListener("pywebviewready", bootstrap);
 
-  return { handleEvent, applyTheme, setRunning, setComposerHint, setStatus };
+  return { handleEvent, applyTheme, setRunning, isRunning, setComposerHint, setStatus };
 })();

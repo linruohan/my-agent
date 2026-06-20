@@ -10,6 +10,7 @@ from langgraph.prebuilt import create_react_agent
 from src.infra.config import load_app_config
 from src.infra.time_context import current_date_context, current_year
 from src.tools import get_enabled_tools
+from src.tools.process_wrap import wrap_tools_for_process
 
 
 class AgentGraphBundle:
@@ -53,7 +54,7 @@ def build_agent_graph(llm: BaseChatModel, checkpoint_path: str | Path) -> AgentG
 
     app_cfg = load_app_config()
     base_prompt = app_cfg.get("agent", {}).get("system_prompt", "").strip()
-    tools = get_enabled_tools()
+    tools = wrap_tools_for_process(get_enabled_tools())
     prompt = build_system_prompt(base_prompt)
 
     graph = create_react_agent(

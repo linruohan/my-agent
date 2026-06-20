@@ -1,8 +1,9 @@
-"""Windows 11 语音识别（WinRT / winrt 包，SpeechRecognizer）。"""
+"""Windows 语音识别：默认 SAPI 本地听写；可选 WinRT 在线听写。"""
 
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 import threading
 from collections.abc import Coroutine
@@ -10,6 +11,38 @@ from datetime import timedelta
 from typing import Any
 
 from loguru import logger
+
+from src.ui import speech_sapi
+
+# WinRT: 0x80045509 — 未接受语音隐私策略 / 在线语音识别未开启
+SPEECH_PRIVACY_WINERROR = -2147199735
+SPEECH_PRIVACY_HINT = (
+    "系统「在线语音识别」未开启。请前往：设置 → 隐私和安全性 → 语音 → "
+    "开启「在线语音识别」，完成后再次点击话筒。"
+)
+SPEECH_SETTINGS_URIS = (
+    "ms-settings:privacy-speech",
+    "ms-settings:privacy-speechtyping",
+    "ms-settings:speech",
+)
+
+
+def _voice_engine() -> str:
+    return os.environ.get("AGENT_VOICE_ENGINE", "local").strip().lower()
+
+
+def _use_local_sapi() -> bool:
+    return _voice_engine() in ("", "local", "sapi", "offline")
+
+
+def _winrt_available() -> bool:
+    if sys.platform != "win32":
+        return False
+    try:
+        _import_winrt()
+        return True
+    except ImportError:
+        return False
 
 # 全局：WinRT 专用线程 + 事件循环（避免 pywebview 后台线程 apartment 问题）
 _winrt_loop: asyncio.AbstractEventLoop | None = None
@@ -21,13 +54,14 @@ def is_supported() -> bool:
     if sys.platform != "win32":
         logger.debug("[voice] is_supported=False platform={}", sys.platform)
         return False
-    try:
-        _import_winrt()
-        logger.debug("[voice] is_supported=True winrt import ok")
+    if _use_local_sapi() and speech_sapi.is_sapi_supported():
+        logger.debug("[voice] is_supported=True engine=sapi-local")
         return True
-    except ImportError as exc:
-        logger.debug("[voice] is_supported=False import error: {}", exc)
-        return False
+    if _voice_engine() in ("winrt", "online") and _winrt_available():
+        logger.debug("[voice] is_supported=True engine=winrt")
+        return True
+    logger.debug("[voice] is_supported=False no engine")
+    return False
 
 
 def _import_winrt() -> None:
@@ -48,6 +82,42 @@ def _status_label(status: int) -> str:
     except Exception:
         pass
     return str(status)
+
+
+def _is_speech_privacy_error(exc: BaseException) -> bool:
+    if isinstance(exc, OSError) and getattr(exc, "winerror", None) == SPEECH_PRIVACY_WINERROR:
+        return True
+    msg = str(exc).lower()
+    return "speech privacy policy" in msg or "privacy policy was not accepted" in msg
+
+
+def _privacy_not_ready_result(*, settings_opened: bool) -> dict[str, Any]:
+    hint = SPEECH_PRIVACY_HINT
+    if settings_opened:
+        hint = f"{hint}（已打开系统设置页）"
+    return {
+        "ok": False,
+        "error": hint,
+        "needs_speech_settings": True,
+        "settings_opened": settings_opened,
+    }
+
+
+def open_speech_privacy_settings() -> bool:
+    """打开语音相关设置（本地模式优先语言/麦克风，在线模式打开隐私页）。"""
+    if _use_local_sapi():
+        return speech_sapi.open_local_speech_settings()
+    import os
+
+    for uri in SPEECH_SETTINGS_URIS:
+        try:
+            os.startfile(uri)  # noqa: S606
+            logger.info("[voice] 已打开系统语音设置: {}", uri)
+            return True
+        except OSError as exc:
+            logger.debug("[voice] 打开设置失败 {}: {}", uri, exc)
+    logger.warning("[voice] 无法打开系统语音设置页")
+    return False
 
 
 def _ensure_winrt_thread() -> asyncio.AbstractEventLoop:
@@ -135,12 +205,47 @@ def _join_unique_phrases(phrases: list[str]) -> str:
     return " ".join(out).strip()
 
 
+async def _verify_speech_privacy_ready() -> bool:
+    """探测语音隐私策略是否已接受（未接受时 recognize_async 会立即失败）。"""
+    recognizer = await _create_recognizer()
+    try:
+        from winrt.windows.media.speechrecognition import SpeechRecognitionResultStatus
+
+        compile_result = await recognizer.compile_constraints_async()
+        if compile_result.status != SpeechRecognitionResultStatus.SUCCESS:
+            logger.debug("[voice] 隐私探测：约束编译非 SUCCESS，跳过探测")
+            return True
+
+        timeouts = recognizer.timeouts
+        if timeouts is not None:
+            timeouts.initial_silence_timeout = timedelta(milliseconds=300)
+            timeouts.end_silence_timeout = timedelta(milliseconds=200)
+            timeouts.babble_timeout = timedelta(seconds=0)
+
+        logger.debug("[voice] 隐私探测：调用 recognize_async")
+        await recognizer.recognize_async()
+    except OSError as exc:
+        if _is_speech_privacy_error(exc):
+            logger.warning("[voice] 语音隐私策略未接受: {}", exc)
+            return False
+        raise
+    finally:
+        recognizer.close()
+    return True
+
+
 async def _recognize_dictation(recognizer) -> tuple[str, str | None]:
     """单次听写（recognize_async），返回 (text, cancel_flag)。"""
     from winrt.windows.media.speechrecognition import SpeechRecognitionResultStatus
 
     logger.info("[voice] 开始单次听写 recognize_async")
-    result = await recognizer.recognize_async()
+    try:
+        result = await recognizer.recognize_async()
+    except OSError as exc:
+        if _is_speech_privacy_error(exc):
+            logger.warning("[voice] recognize_async 语音隐私未接受")
+            return "", "privacy_denied"
+        raise
     status = _status_label(result.status)
     logger.debug("[voice] recognize_async status={}", status)
     if result.status == SpeechRecognitionResultStatus.SUCCESS:
@@ -185,6 +290,10 @@ async def _recognize_once_async(*, listen_seconds: float = 18.0) -> dict[str, An
     mode = "dictation"
     try:
         text, cancel = await _recognize_dictation(recognizer)
+        if cancel == "privacy_denied":
+            recognizer.close()
+            opened = open_speech_privacy_settings()
+            return _privacy_not_ready_result(settings_opened=opened)
         if cancel == "canceled":
             recognizer.close()
             return {"ok": True, "text": "", "canceled": True, "language": lang, "mode": mode}
@@ -226,19 +335,63 @@ async def _recognize_once_async(*, listen_seconds: float = 18.0) -> dict[str, An
     }
 
 
+def ensure_speech_privacy_ready() -> dict[str, Any] | None:
+    """识别前检查。本地 SAPI 无需在线语音；WinRT 需在线语音识别。"""
+    if _use_local_sapi():
+        return None
+    if not _winrt_available():
+        return None
+    try:
+        ready = _run_coro(_verify_speech_privacy_ready())
+    except Exception as exc:
+        if _is_speech_privacy_error(exc):
+            ready = False
+        else:
+            logger.exception("[voice] 语音隐私探测异常")
+            return {"ok": False, "error": str(exc)}
+    if ready:
+        return None
+    opened = open_speech_privacy_settings()
+    return _privacy_not_ready_result(settings_opened=opened)
+
+
 def recognize_once(*, listen_seconds: float = 18.0) -> dict[str, Any]:
-    """单次语音听写（Win11 WinRT SpeechRecognizer）。"""
-    logger.info("[voice] recognize_once 调用 listen_seconds={} thread={}", listen_seconds, threading.current_thread().name)
+    """单次语音听写。默认本地 SAPI，无需开启在线语音识别。"""
+    logger.info(
+        "[voice] recognize_once engine={} listen_seconds={} thread={}",
+        _voice_engine(),
+        listen_seconds,
+        threading.current_thread().name,
+    )
     if not is_supported():
-        logger.warning("[voice] recognize_once 不支持当前平台/依赖")
         return {
             "ok": False,
-            "error": "语音输入仅支持 Windows，且需安装 winrt 包",
+            "error": "语音输入仅支持 Windows，且需 pywin32（本地）或 winrt 包（在线）",
+        }
+
+    if _use_local_sapi():
+        if speech_sapi.is_sapi_supported():
+            return speech_sapi.recognize_once_sapi(listen_seconds=listen_seconds)
+        return {
+            "ok": False,
+            "error": "本地 SAPI 不可用，请运行: pip install pywin32",
+            "engine": "sapi-local",
+        }
+
+    return _recognize_once_winrt(listen_seconds=listen_seconds)
+
+
+def _recognize_once_winrt(*, listen_seconds: float = 18.0) -> dict[str, Any]:
+    """WinRT 在线听写（需开启系统「在线语音识别」）。"""
+    if not _winrt_available():
+        return {
+            "ok": False,
+            "error": "WinRT 语音不可用，请安装 winrt 包或改用本地模式（默认）",
         }
 
     try:
         result = _run_coro(_recognize_once_async(listen_seconds=listen_seconds))
-        logger.info("[voice] recognize_once 返回 ok={} error={}", result.get("ok"), result.get("error", ""))
+        logger.info("[voice] recognize_once winrt 返回 ok={} error={}", result.get("ok"), result.get("error", ""))
         return result
     except ImportError:
         logger.exception("[voice] WinRT 依赖缺失")
@@ -247,24 +400,29 @@ def recognize_once(*, listen_seconds: float = 18.0) -> dict[str, Any]:
             "error": "缺少 WinRT 依赖，请运行: pip install winrt-runtime winrt-Windows.Media.SpeechRecognition winrt-Windows.Globalization winrt-Windows.Foundation",
         }
     except Exception as exc:
+        if _is_speech_privacy_error(exc):
+            opened = open_speech_privacy_settings()
+            return _privacy_not_ready_result(settings_opened=opened)
         logger.exception("[voice] recognize_once 异常")
         return {"ok": False, "error": str(exc)}
 
 
 def get_voice_info() -> dict[str, Any]:
-    logger.debug("[voice] get_voice_info 调用 thread={}", threading.current_thread().name)
+    logger.debug("[voice] get_voice_info engine={}", _voice_engine())
     if sys.platform != "win32":
         info = {"supported": False, "error": "语音输入仅支持 Windows", "platform": sys.platform}
-        logger.debug("[voice] get_voice_info -> {}", info)
         return info
-    if not is_supported():
-        info = {
+
+    if _use_local_sapi() and speech_sapi.is_sapi_supported():
+        return speech_sapi.get_sapi_voice_info()
+
+    if not _winrt_available():
+        return {
             "supported": False,
-            "error": "未安装 WinRT 语音依赖（winrt-Windows.Media.SpeechRecognition）",
+            "error": "未安装本地语音 pywin32，也未安装 WinRT 语音依赖",
             "platform": sys.platform,
         }
-        logger.debug("[voice] get_voice_info -> {}", info)
-        return info
+
     try:
         loop = _ensure_winrt_thread()
 
@@ -275,9 +433,22 @@ def get_voice_info() -> dict[str, Any]:
             return tag
 
         lang = asyncio.run_coroutine_threadsafe(_lang(), loop).result(timeout=10)
-        info = {"supported": True, "platform": sys.platform, "language": lang, "engine": "winrt"}
-        logger.info("[voice] get_voice_info -> supported lang={}", lang)
+        info = {
+            "supported": True,
+            "platform": sys.platform,
+            "language": lang,
+            "engine": "winrt",
+            "online_required": True,
+        }
+        logger.info("[voice] get_voice_info -> winrt lang={}", lang)
         return info
     except Exception as exc:
         logger.exception("[voice] get_voice_info 探测语言失败")
-        return {"supported": True, "platform": sys.platform, "engine": "winrt", "language": "", "warn": str(exc)}
+        return {
+            "supported": True,
+            "platform": sys.platform,
+            "engine": "winrt",
+            "language": "",
+            "online_required": True,
+            "warn": str(exc),
+        }
