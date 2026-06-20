@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import re
+import webbrowser
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -30,6 +31,7 @@ _INLINE_RE = re.compile(
 )
 _LINK_RE = re.compile(r"\[(.+?)\]\((.+?)\)")
 _IMAGE_INLINE_RE = re.compile(r"!\[(.+?)\]\((.+?)\)")
+_URL_INLINE_RE = re.compile(r"https?://[^\s\])<>\"']+")
 
 _MAX_IMAGE_WIDTH = 380
 _IMAGE_LINE_HEIGHT = 20
@@ -53,6 +55,7 @@ class MarkdownContext:
     images: list[Any] = field(default_factory=list)
     extra_lines: int = 0
     host: Any | None = None
+    link_id: int = 0
 
 
 def _configure_tags(tb: Text) -> None:
@@ -86,6 +89,47 @@ def _configure_tags(tb: Text) -> None:
     }
     for name, opts in tags.items():
         tb.tag_configure(name, **opts)
+
+
+def _open_url(url: str) -> None:
+    try:
+        webbrowser.open(url)
+    except Exception as exc:
+        logger.warning("打开链接失败 {}: {}", url, exc)
+
+
+def _insert_link(ctx: MarkdownContext, label: str, url: str) -> None:
+    """插入可点击链接（独立 tag + Button-1 绑定）。"""
+    tb = ctx.tb
+    url = url.strip()
+    if not url:
+        tb.insert("end", label, "link")
+        return
+
+    tag = f"md_link_{ctx.link_id}"
+    ctx.link_id += 1
+    tb.insert("end", label, ("link", tag))
+    if ctx.host is not None:
+        urls = getattr(ctx.host, "_md_link_urls", None)
+        if urls is not None:
+            urls[tag] = url
+    else:
+        tb.tag_bind(tag, "<Button-1>", lambda _e, u=url: _open_url(u))
+    tb.tag_bind(tag, "<Enter>", lambda _e: tb.configure(cursor="hand2"))
+    tb.tag_bind(tag, "<Leave>", lambda _e: tb.configure(cursor="arrow"))
+
+
+def _insert_plain_with_urls(ctx: MarkdownContext, text: str) -> None:
+    tb = ctx.tb
+    pos = 0
+    for m in _URL_INLINE_RE.finditer(text):
+        if m.start() > pos:
+            tb.insert("end", text[pos : m.start()])
+        url = m.group(0).rstrip(".,;:!?)")
+        _insert_link(ctx, url, url)
+        pos = m.end()
+    if pos < len(text):
+        tb.insert("end", text[pos:])
 
 
 def _is_table_row(line: str) -> bool:
@@ -177,7 +221,8 @@ def _render_image(ctx: MarkdownContext, alt: str, src: str) -> None:
     photo, _w, h = _load_image(src)
     if photo is None:
         tb.insert("end", f"[图片: {alt or 'image'}] ", "image_alt")
-        tb.insert("end", f"({src})\n", "link")
+        _insert_link(ctx, src, src)
+        tb.insert("end", "\n")
         return
 
     ctx.images.append(photo)
@@ -193,7 +238,7 @@ def _insert_inline(ctx: MarkdownContext, text: str) -> None:
     pos = 0
     for m in _INLINE_RE.finditer(text):
         if m.start() > pos:
-            tb.insert("end", text[pos : m.start()])
+            _insert_plain_with_urls(ctx, text[pos : m.start()])
         chunk = m.group(0)
 
         img = _IMAGE_INLINE_RE.match(chunk)
@@ -214,12 +259,12 @@ def _insert_inline(ctx: MarkdownContext, text: str) -> None:
         else:
             link = _LINK_RE.match(chunk)
             if link:
-                tb.insert("end", link.group(1), "link")
+                _insert_link(ctx, link.group(1), link.group(2))
             else:
                 tb.insert("end", chunk)
         pos = m.end()
     if pos < len(text):
-        tb.insert("end", text[pos:])
+        _insert_plain_with_urls(ctx, text[pos:])
 
 
 def _render_paragraph(ctx: MarkdownContext, text: str) -> None:
@@ -233,6 +278,28 @@ def _get_text_widget(target: Any):
     if hasattr(target, "_textbox"):
         return target._textbox
     return target
+
+
+def set_plain_text_content(target: Any, content: str, *, text_color: str | None = None) -> None:
+    """写入纯文本，并自动识别可点击 URL。"""
+    tb = _get_text_widget(target)
+    if hasattr(target, "set_editable"):
+        target.set_editable()
+    else:
+        tb.configure(state="normal")
+    tb.delete("1.0", "end")
+    _configure_tags(tb)
+    if text_color:
+        tb.configure(fg=text_color)
+    ctx = MarkdownContext(tb=tb, host=target if hasattr(target, "_md_images") else None)
+    host = ctx.host
+    if host is not None:
+        host._md_link_urls = {}
+    _insert_plain_with_urls(ctx, content)
+    if hasattr(target, "set_readonly"):
+        target.set_readonly()
+    else:
+        tb.configure(state="disabled")
 
 
 def render_markdown(target: Any, content: str, *, text_color: str | None = None) -> None:
@@ -254,6 +321,7 @@ def render_markdown(target: Any, content: str, *, text_color: str | None = None)
     if host is not None:
         host._md_images = ctx.images
         host._md_extra_lines = 0
+        host._md_link_urls = {}
 
     lines = content.splitlines()
     i = 0

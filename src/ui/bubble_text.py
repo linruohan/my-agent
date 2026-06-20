@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tkinter as tk
 import tkinter.font as tkfont
+import webbrowser
 from typing import Any
 
 import customtkinter as ctk
@@ -56,6 +57,8 @@ class BubbleText(ctk.CTkFrame):
         self._text.pack(fill="both", expand=True)
         self._md_images: list[Any] = []
         self._md_extra_lines = 0
+        self._md_link_urls: dict[str, str] = {}
+        self._readonly_guard = False
         self.set_readonly()
 
     @property
@@ -84,7 +87,33 @@ class BubbleText(ctk.CTkFrame):
         self.configure(width=target)
 
     def set_readonly(self) -> None:
-        self._text.configure(state="disabled")
+        """保持 normal 状态以便链接可点击，通过按键拦截实现只读。"""
+        tb = self._text
+        tb.configure(state="normal", cursor="arrow")
+        if not self._readonly_guard:
+            tb.bind("<Key>", self._block_edit, add="+")
+            tb.bind("<Button-1>", self._on_link_click, add="+")
+            self._readonly_guard = True
 
     def set_editable(self) -> None:
         self._text.configure(state="normal")
+        self._md_link_urls.clear()
+
+    @staticmethod
+    def _block_edit(_event: tk.Event) -> str:
+        return "break"
+
+    def _on_link_click(self, event: tk.Event) -> str | None:
+        try:
+            index = self._text.index(f"@{event.x},{event.y}")
+        except tk.TclError:
+            return "break"
+        for tag in self._text.tag_names(index):
+            url = self._md_link_urls.get(tag)
+            if url:
+                try:
+                    webbrowser.open(url)
+                except Exception:
+                    pass
+                return "break"
+        return "break"

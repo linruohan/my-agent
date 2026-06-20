@@ -5,7 +5,7 @@ import re
 import customtkinter as ctk
 
 from src.ui.bubble_text import BubbleText
-from src.ui.markdown_render import render_markdown, schedule_fit_text_height
+from src.ui.markdown_render import render_markdown, schedule_fit_text_height, set_plain_text_content
 
 
 class ChatPanel(ctk.CTkFrame):
@@ -208,13 +208,7 @@ class ChatPanel(ctk.CTkFrame):
     ) -> None:
         if bubble is None:
             return
-        tb = bubble.text_widget
-        bubble.set_editable()
-        tb.delete("1.0", "end")
-        if text_color:
-            tb.configure(fg=text_color)
-        tb.insert("1.0", content)
-        bubble.set_readonly()
+        set_plain_text_content(bubble, content, text_color=text_color)
         schedule_fit_text_height(bubble, max_width=self._max_width)
         self._scroll_to_bottom()
 
