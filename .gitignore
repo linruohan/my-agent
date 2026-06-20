@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+*.log
+data/secrets.json
+data/user_settings.yaml
+data/vectorstore/*
+!data/vectorstore/.gitkeep
+!data/checkpoints/.gitkeep
+!data/workspace/.gitkeep
+dist/
+build/
+*.spec

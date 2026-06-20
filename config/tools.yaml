@@ -1,0 +1,25 @@
+tools:
+  web_search:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
+  read_calendar:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
+  create_calendar_event:
+    enabled: true
+    risk: medium
+    requires_confirmation: true
+
+  create_todo:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
+  list_todos:
+    enabled: true
+    risk: low
+    requires_confirmation: false

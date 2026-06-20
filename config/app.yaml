@@ -1,0 +1,16 @@
+app:
+  title: "个人助理 Agent"
+  theme: "dark"
+  window_width: 1100
+  window_height: 720
+
+paths:
+  checkpoints: "data/checkpoints"
+  workspace: "data/workspace"
+  vectorstore: "data/vectorstore"
+
+agent:
+  system_prompt: |
+    你是一个高效、友好的个人助理。你可以帮用户管理待办、查询日程、搜索信息。
+    回答简洁准确；调用工具前简要说明意图；工具返回结果后整合成自然语言回复。
+  max_history_messages: 40
