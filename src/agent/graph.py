@@ -8,6 +8,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.prebuilt import create_react_agent
 
 from src.infra.config import load_app_config
+from src.infra.time_context import current_date_context, current_year
 from src.tools import get_enabled_tools
 
 
@@ -23,8 +24,25 @@ class AgentGraphBundle:
         self._conn.close()
 
 
+def build_system_prompt(base_prompt: str) -> str:
+    """在基础 Prompt 上注入当前日期与搜索行为约束。"""
+    date_ctx = current_date_context()
+    year = current_year()
+    time_block = f"""
+【当前时间】今天是 {date_ctx}。当前年份是 {year} 年。所有涉及版本、发布、新闻的判断必须以此为准。
+
+【搜索回答规则】
+1. 用户询问时事、软件版本、新特性等时效性内容时，必须先调用 web_search，再基于工具返回的摘要回答。
+2. 严禁用训练数据中的旧信息（如「某版本尚未发布」）覆盖搜索结果；若搜索摘要与训练记忆冲突，以搜索结果为准并说明差异。
+3. web_search 返回的内容带有「搜索时间」和过时警告，务必认真阅读并遵循。
+4. 若搜索结果明显过时或不足，如实告知用户并建议换个关键词重搜。
+"""
+    base = base_prompt.strip() or "你是一个 helpful 的个人助理。"
+    return base + "\n" + time_block.strip()
+
+
 def build_agent_graph(llm: BaseChatModel, checkpoint_path: str | Path) -> AgentGraphBundle:
-    """构建带 SQLite Checkpoint 的 ReAct Agent 图。"""
+    """构建带 SQLite Checkpoint 与 Human-in-the-loop 的 ReAct Agent 图。"""
     path = Path(checkpoint_path)
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -32,14 +50,15 @@ def build_agent_graph(llm: BaseChatModel, checkpoint_path: str | Path) -> AgentG
     checkpointer = SqliteSaver(conn)
 
     app_cfg = load_app_config()
-    system_prompt = app_cfg.get("agent", {}).get("system_prompt", "").strip()
+    base_prompt = app_cfg.get("agent", {}).get("system_prompt", "").strip()
     tools = get_enabled_tools()
-    prompt = system_prompt or "你是一个 helpful 的个人助理。"
+    prompt = build_system_prompt(base_prompt)
 
     graph = create_react_agent(
         llm,
         tools,
         prompt=prompt,
         checkpointer=checkpointer,
+        interrupt_before=["tools"],
     )
     return AgentGraphBundle(graph, conn, checkpointer)

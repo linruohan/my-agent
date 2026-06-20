@@ -12,7 +12,10 @@ from src.infra.config import ensure_data_dirs, load_app_config, load_merged_prov
 from src.llm.factory import create_llm
 from src.llm.providers import ProviderConfig
 from src.ui.chat_panel import ChatPanel
+from src.ui.confirm_dialog import ConfirmDialog
+from src.ui.knowledge_dialog import KnowledgeDialog
 from src.ui.settings_dialog import SettingsDialog
+from src.memory.rag import set_rag_provider
 
 
 class AssistantApp(ctk.CTk):
@@ -33,6 +36,7 @@ class AssistantApp(ctk.CTk):
         self._thread_id = str(uuid.uuid4())
         self._running = False
         self._graph_bundle: AgentGraphBundle | None = None
+        self._awaiting_approval = False
 
         self._build_layout()
         self._init_agent()
@@ -58,8 +62,11 @@ class AssistantApp(ctk.CTk):
         self.session_list.insert("1.0", "当前会话\n")
         self.session_list.configure(state="disabled")
 
+        ctk.CTkButton(sidebar, text="📚 导入文档", command=self._open_knowledge).grid(
+            row=3, column=0, padx=16, pady=4, sticky="ew"
+        )
         ctk.CTkButton(sidebar, text="⚙ 设置", command=self._open_settings).grid(
-            row=3, column=0, padx=16, pady=16, sticky="ew"
+            row=4, column=0, padx=16, pady=16, sticky="ew"
         )
 
         # 主区域
@@ -107,6 +114,7 @@ class AssistantApp(ctk.CTk):
         try:
             if self._graph_bundle:
                 self._graph_bundle.close()
+            set_rag_provider(self._current_provider)
             llm = create_llm(self._current_provider)
             ckpt = Path(self.app_cfg["paths"]["checkpoints"]) / "agent.db"
             self._graph_bundle = build_agent_graph(llm, ckpt)
@@ -116,6 +124,13 @@ class AssistantApp(ctk.CTk):
             logger.exception("Agent 初始化失败")
             self.chat.append_error(f"Agent 初始化失败: {exc}")
             self.runner = AgentRunner(graph=None)
+
+    def _open_knowledge(self) -> None:
+        KnowledgeDialog(
+            self,
+            self._current_provider,
+            on_done=lambda msg: self.chat.append_system(msg),
+        )
 
     def _open_settings(self) -> None:
         SettingsDialog(
@@ -159,6 +174,30 @@ class AssistantApp(ctk.CTk):
             self.runner.stop()
             self.chat.append_system("已请求停止。")
 
+    def _handle_approval(self, payload: dict) -> None:
+        if self._awaiting_approval:
+            return
+        self._awaiting_approval = True
+        description = payload.get("description", "确认执行敏感操作？")
+
+        def on_confirm() -> None:
+            self._awaiting_approval = False
+            self.runner.resume_after_approval(True)
+            self.chat.append_system("已批准操作，正在执行...")
+
+        def on_cancel() -> None:
+            self._awaiting_approval = False
+            self.runner.resume_after_approval(False)
+            self.chat.append_system("已拒绝操作。")
+
+        ConfirmDialog(
+            self,
+            title="敏感操作确认",
+            description=description,
+            on_confirm=on_confirm,
+            on_cancel=on_cancel,
+        )
+
     def _poll_agent_events(self) -> None:
         if self.runner and self.runner.graph:
 
@@ -171,6 +210,8 @@ class AssistantApp(ctk.CTk):
                 elif event.kind == "tool_result":
                     p = event.payload
                     self.chat.append_tool_result(p["name"], p["content"])
+                elif event.kind == "approval_required":
+                    self._handle_approval(event.payload)
                 elif event.kind == "done":
                     self.chat.end_assistant()
                     self._running = False

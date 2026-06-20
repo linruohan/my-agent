@@ -31,6 +31,10 @@ def load_tools_config() -> dict[str, Any]:
     return _load_yaml(CONFIG_DIR / "tools.yaml")
 
 
+def load_search_config() -> dict[str, Any]:
+    return _load_yaml(CONFIG_DIR / "search.yaml")
+
+
 def ensure_data_dirs() -> None:
     for sub in ("checkpoints", "workspace", "vectorstore"):
         (DATA_DIR / sub).mkdir(parents=True, exist_ok=True)

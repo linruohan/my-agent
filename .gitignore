@@ -9,6 +9,8 @@ data/secrets.json
 data/user_settings.yaml
 data/vectorstore/*
 !data/vectorstore/.gitkeep
+data/vectorstore/faiss_index/**
+data/workspace/knowledge/*
 !data/checkpoints/.gitkeep
 !data/workspace/.gitkeep
 dist/

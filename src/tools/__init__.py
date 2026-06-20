@@ -1,14 +1,22 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from langchain_core.tools import tool
 
 from src.infra.config import load_tools_config
 from src.infra.paths import DATA_DIR
+from src.memory.rag import search_knowledge_base
+from src.tools.files import (
+    find_files_impl,
+    grep_files_impl,
+    list_directory_impl,
+    read_local_file_impl,
+)
+from src.tools.search import SearchEngine, web_search_impl
 
 _TODOS_FILE = DATA_DIR / "workspace" / "todos.json"
 _CALENDAR_FILE = DATA_DIR / "workspace" / "calendar.json"
@@ -28,17 +36,91 @@ def _save_json(path: Path, data: Any) -> None:
 
 
 @tool
-def web_search(query: str) -> str:
-    """搜索网页信息。适用于查询新闻、天气、百科等实时或通用信息。
+def search_tools_status() -> str:
+    """查看本地文件搜索 CLI 工具（fd、ripgrep）的安装状态，并给出安装建议。"""
+    return cli_tools_status_text()
+
+
+@tool
+def find_files(
+    pattern: str,
+    root: str = "",
+    file_type: str = "any",
+    max_results: int = 50,
+) -> str:
+    """按文件名或通配符查找本地文件/文件夹（类似 Everything / fd）。
+
+    Args:
+        pattern: 文件名模式，支持通配符如 *.py、*config*、README.md
+        root: 搜索根目录，留空则使用默认允许目录（用户主目录等）
+        file_type: any（默认）/ file / dir
+        max_results: 最大返回条数，默认 50
+    """
+    return find_files_impl(pattern, root, file_type, max_results)
+
+
+@tool
+def grep_files(
+    pattern: str,
+    root: str = "",
+    glob: str = "*",
+    max_results: int = 30,
+    context_lines: int = 2,
+) -> str:
+    """在本地文件内容中搜索文本或正则表达式（类似 ripgrep / grep）。
+
+    Args:
+        pattern: 搜索词或正则表达式
+        root: 搜索根目录，留空则使用默认允许目录
+        glob: 文件名过滤，如 *.py、*.txt，默认 * 表示所有文本类文件
+        max_results: 最大匹配条数
+        context_lines: 匹配行前后显示的上下文行数
+    """
+    return grep_files_impl(pattern, root, glob, max_results, context_lines)
+
+
+@tool
+def list_directory(path: str = "", max_entries: int = 100) -> str:
+    """列出本地目录下的文件和子文件夹。
+
+    Args:
+        path: 目录路径，留空则列出默认根目录
+        max_entries: 最大显示条目数
+    """
+    return list_directory_impl(path, max_entries)
+
+
+@tool
+def read_local_file(path: str, max_lines: int = 200, offset: int = 1) -> str:
+    """读取本地文本文件的内容（需在允许目录范围内）。
+
+    Args:
+        path: 文件绝对或相对路径
+        max_lines: 最多读取行数，默认 200
+        offset: 起始行号（从 1 开始）
+    """
+    return read_local_file_impl(path, max_lines, offset)
+
+
+@tool
+def web_search(query: str, engine: SearchEngine = "auto") -> str:
+    """搜索网页信息（Bing / 百度）。适用于查询新闻、百科、实时信息等。
 
     Args:
         query: 搜索关键词或问题
+        engine: 搜索引擎 bing / baidu / auto（默认 auto，先 Bing 后百度）
     """
-    # MVP 占位实现；Phase 2 可接入 Tavily / DuckDuckGo
-    return (
-        f"[搜索占位] 关于「{query}」的模拟结果："
-        "请配置真实搜索 API 或在 Phase 2 接入 langchain-community 搜索工具。"
-    )
+    return web_search_impl(query, engine)
+
+
+@tool
+def search_notes(query: str) -> str:
+    """在个人知识库中检索相关文档片段，用于回答基于用户上传资料的问题。
+
+    Args:
+        query: 检索问题或关键词
+    """
+    return search_knowledge_base(query)
 
 
 @tool
@@ -127,7 +209,13 @@ def list_todos(include_done: bool = False) -> str:
 
 
 ALL_TOOLS = [
+    search_tools_status,
+    find_files,
+    grep_files,
+    list_directory,
+    read_local_file,
     web_search,
+    search_notes,
     read_calendar,
     create_calendar_event,
     create_todo,
@@ -150,3 +238,7 @@ def get_enabled_tools() -> list:
 def get_tool_meta(name: str) -> dict[str, Any]:
     cfg = load_tools_config().get("tools", {})
     return cfg.get(name, {"risk": "low", "requires_confirmation": False})
+
+
+def requires_confirmation(tool_name: str) -> bool:
+    return bool(get_tool_meta(tool_name).get("requires_confirmation"))

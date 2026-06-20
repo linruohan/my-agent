@@ -1,0 +1,39 @@
+filesystem:
+  # 允许搜索的根目录（Agent 只能在这些目录下查找/读取）
+  search_roots:
+    - "~"
+    - "~/Desktop"
+    - "~/Documents"
+    - "D:/codehub"
+    - "data/workspace"
+  max_results: 80
+  max_depth: 12
+  max_file_size_mb: 5
+  grep_context_lines: 2
+  prefer_cli: true              # 优先使用 rg / fd（若已安装）
+  exclude_dirs:
+    - .git
+    - node_modules
+    - __pycache__
+    - .venv
+    - venv
+    - AppData
+    - "$RECYCLE.BIN"
+  grep_globs:
+    - "*.txt"
+    - "*.md"
+    - "*.py"
+    - "*.json"
+    - "*.yaml"
+    - "*.yml"
+    - "*.js"
+    - "*.ts"
+    - "*.tsx"
+    - "*.jsx"
+    - "*.html"
+    - "*.css"
+    - "*.xml"
+    - "*.csv"
+    - "*.log"
+    - "*.ini"
+    - "*.toml"

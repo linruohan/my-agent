@@ -1,0 +1,19 @@
+search:
+  default_engine: auto          # bing | baidu | auto
+  max_results: 5
+  timeout: 15
+  auto_enrich_query: true       # 自动为查询补充当前年份/「最新」
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+
+rag:
+  embedding_mode: local          # local | api | auto（推荐 local，无需 Embedding API）
+  embedding_model: text-embedding-3-small
+  local_embedding_model: BAAI/bge-small-zh-v1.5
+  chunk_size: 500
+  chunk_overlap: 80
+  top_k: 4
+  supported_extensions:
+    - .txt
+    - .md
+    - .pdf
+    - .docx

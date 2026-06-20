@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import json
 
+from unittest.mock import MagicMock, patch
+
 from src.tools import create_todo, list_todos, read_calendar, web_search
 
 
 def test_web_search_returns_text():
-    result = web_search.invoke({"query": "Python"})
+    with patch("src.tools.search.web_search_impl", return_value="关于 Python 的搜索结果"):
+        result = web_search.invoke({"query": "Python"})
     assert "Python" in result
 
 

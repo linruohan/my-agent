@@ -1,5 +1,35 @@
 tools:
+  search_tools_status:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
+  find_files:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
+  grep_files:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
+  list_directory:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
+  read_local_file:
+    enabled: true
+    risk: medium
+    requires_confirmation: false
+
   web_search:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
+  search_notes:
     enabled: true
     risk: low
     requires_confirmation: false
