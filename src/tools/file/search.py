@@ -5,13 +5,13 @@ import re
 import shutil
 import subprocess
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 
 from loguru import logger
 
 from src.infra.files_config import get_fs_option, get_search_roots
-from src.tools.cli_hints import append_fallback_hint, cli_tools_status_text
+from src.tools.file.hints import append_fallback_hint
+from src.tools.file.path import PathNotAllowedError, assert_allowed, fmt_time, resolve_path
 
 _TEXT_SUFFIXES = {
     ".txt", ".md", ".py", ".json", ".yaml", ".yml", ".js", ".ts", ".tsx",
@@ -37,10 +37,6 @@ class GrepHit:
     context_after: list[str]
 
 
-class PathNotAllowedError(PermissionError):
-    pass
-
-
 def _exclude_dirs() -> set[str]:
     return set(get_fs_option("exclude_dirs", [".git", "node_modules", "__pycache__"]))
 
@@ -55,22 +51,10 @@ def _resolve_root(root: str) -> Path:
     if not p.is_absolute():
         p = Path.cwd() / p
     p = p.resolve()
-    _assert_allowed(p)
+    assert_allowed(p)
     if not p.exists():
         raise FileNotFoundError(f"路径不存在: {p}")
     return p
-
-
-def _assert_allowed(path: Path) -> None:
-    resolved = path.resolve()
-    for root in get_search_roots():
-        try:
-            resolved.relative_to(root.resolve())
-            return
-        except ValueError:
-            continue
-    allowed = ", ".join(str(r) for r in get_search_roots())
-    raise PathNotAllowedError(f"路径不在允许范围内: {path}\n允许目录: {allowed}")
 
 
 def _should_skip_dir(name: str) -> bool:
@@ -78,19 +62,12 @@ def _should_skip_dir(name: str) -> bool:
     return name in excludes or any(name.lower() == e.lower().lstrip("$") for e in excludes)
 
 
-def _fmt_time(ts: float) -> str:
-    return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
-
-
 def _match_name(name: str, pattern: str, case_sensitive: bool) -> bool:
     if not pattern or pattern in ("*", "*.*"):
         return True
-    flags = 0 if case_sensitive else re.IGNORECASE
-    # glob 风格
     if any(c in pattern for c in "*?[]"):
         return fnmatch.fnmatch(name if case_sensitive else name.lower(),
                                pattern if case_sensitive else pattern.lower())
-    # 子串
     if case_sensitive:
         return pattern in name
     return pattern.lower() in name.lower()
@@ -131,7 +108,7 @@ def _find_with_fd(root: Path, pattern: str, file_type: str, max_results: int) ->
                     name=p.name,
                     is_dir=p.is_dir(),
                     size=stat.st_size if p.is_file() else 0,
-                    modified=_fmt_time(stat.st_mtime),
+                    modified=fmt_time(stat.st_mtime),
                 )
             )
         return hits
@@ -173,7 +150,7 @@ def _find_python(
                                 name=entry.name,
                                 is_dir=True,
                                 size=0,
-                                modified=_fmt_time(stat.st_mtime),
+                                modified=fmt_time(stat.st_mtime),
                             )
                         )
                     except OSError:
@@ -189,7 +166,7 @@ def _find_python(
                                 name=entry.name,
                                 is_dir=False,
                                 size=stat.st_size,
-                                modified=_fmt_time(stat.st_mtime),
+                                modified=fmt_time(stat.st_mtime),
                             )
                         )
                     except OSError:
@@ -263,10 +240,33 @@ def _grep_with_rg(
         if proc.returncode not in (0, 1):
             logger.warning("rg 失败: {}", proc.stderr)
             return None
-        return _parse_rg_output(proc.stdout, context)
+        hits = _parse_rg_output(proc.stdout, context)
+        if not hits and proc.stdout.strip():
+            logger.warning("rg 有输出但解析失败，回退 Python 引擎")
+            return None
+        return hits
     except Exception as exc:
         logger.warning("rg 不可用: {}", exc)
         return None
+
+
+_RG_CONTEXT_LINE = re.compile(r"^(.+)-(\d+)-(.*)$")
+
+
+def _parse_rg_match_line(line: str) -> tuple[str, int, str] | None:
+    """解析 rg 匹配行 path:line:content。Windows 盘符 D: 含冒号，须从右侧拆分。"""
+    last = line.rfind(":")
+    if last <= 0:
+        return None
+    content = line[last + 1 :]
+    head = line[:last]
+    sep = head.rfind(":")
+    if sep <= 0:
+        return None
+    line_no_str = head[sep + 1 :]
+    if not line_no_str.isdigit():
+        return None
+    return head[:sep], int(line_no_str), content
 
 
 def _parse_rg_output(text: str, context: int) -> list[GrepHit]:
@@ -277,28 +277,24 @@ def _parse_rg_output(text: str, context: int) -> list[GrepHit]:
         if line.startswith("--"):
             pending_before = []
             continue
-        if ":" not in line:
-            continue
-        path_str, rest = line.split(":", 1)
-        if rest and rest[0].isdigit():
-            parts = rest.split(":", 1)
-            if len(parts) == 2 and parts[0].isdigit():
-                current_file = Path(path_str)
-                line_no = int(parts[0])
-                content = parts[1]
-                hits.append(
-                    GrepHit(
-                        path=current_file,
-                        line_no=line_no,
-                        line=content,
-                        context_before=list(pending_before),
-                        context_after=[],
-                    )
+        match = _parse_rg_match_line(line)
+        if match:
+            path_str, line_no, content = match
+            current_file = Path(path_str)
+            hits.append(
+                GrepHit(
+                    path=current_file,
+                    line_no=line_no,
+                    line=content,
+                    context_before=list(pending_before),
+                    context_after=[],
                 )
-                pending_before = []
-                continue
-        if current_file and line.strip():
-            pending_before.append(line)
+            )
+            pending_before = []
+            continue
+        ctx = _RG_CONTEXT_LINE.match(line)
+        if ctx:
+            pending_before.append(ctx.group(3))
             if len(pending_before) > context:
                 pending_before.pop(0)
     return hits
@@ -412,10 +408,7 @@ def grep_files_impl(
 
 def read_local_file_impl(path: str, max_lines: int = 200, offset: int = 1) -> str:
     """读取本地文本文件内容（需在允许目录内）。"""
-    p = Path(path.strip()).expanduser().resolve()
-    _assert_allowed(p)
-    if not p.exists():
-        raise FileNotFoundError(f"文件不存在: {p}")
+    p = resolve_path(path)
     if not p.is_file():
         raise IsADirectoryError(f"是目录而非文件: {p}")
 
@@ -440,7 +433,7 @@ def list_directory_impl(path: str = "", max_entries: int = 100) -> str:
     """列出目录内容（类似资源管理器浏览）。"""
     if path:
         root = Path(path.strip()).expanduser().resolve()
-        _assert_allowed(root)
+        assert_allowed(root)
     else:
         root = get_search_roots()[0]
     if not root.exists():
@@ -466,7 +459,7 @@ def list_directory_impl(path: str = "", max_entries: int = 100) -> str:
     for icon, entry in entries:
         try:
             stat = entry.stat()
-            extra = _fmt_time(stat.st_mtime)
+            extra = fmt_time(stat.st_mtime)
             if entry.is_file():
                 extra += f" | {stat.st_size:,} B"
         except OSError:

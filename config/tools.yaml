@@ -21,8 +21,83 @@ tools:
 
   read_local_file:
     enabled: true
-    risk: medium
+    risk: low
     requires_confirmation: false
+
+  get_path_info:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
+  get_disk_usage:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
+  read_file_bytes:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
+  stream_read_file:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
+  create_file:
+    enabled: true
+    risk: medium
+    requires_confirmation: true
+
+  write_local_file:
+    enabled: true
+    risk: high
+    requires_confirmation: true
+
+  write_local_file_locked:
+    enabled: true
+    risk: high
+    requires_confirmation: true
+
+  delete_path:
+    enabled: true
+    risk: high
+    requires_confirmation: true
+
+  copy_path:
+    enabled: true
+    risk: medium
+    requires_confirmation: true
+
+  move_path:
+    enabled: true
+    risk: high
+    requires_confirmation: true
+
+  rename_path:
+    enabled: true
+    risk: medium
+    requires_confirmation: true
+
+  create_directory:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
+  remove_directory:
+    enabled: true
+    risk: high
+    requires_confirmation: true
+
+  set_file_attributes:
+    enabled: true
+    risk: medium
+    requires_confirmation: true
+
+  create_symlink:
+    enabled: true
+    risk: medium
+    requires_confirmation: true
 
   web_search:
     enabled: true

@@ -3,21 +3,17 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from langchain_core.tools import tool
 
 from src.infra.config import load_tools_config
 from src.infra.paths import DATA_DIR
 from src.memory.rag import search_knowledge_base
-from src.tools.files import (
-    find_files_impl,
-    grep_files_impl,
-    list_directory_impl,
-    read_local_file_impl,
-)
+from src.tools.file.tools import FILE_TOOLS
 from src.tools.search import SearchEngine, web_search_impl
 
+# 工具注册约定：按类别分包（如 file/、web/），各包导出 *_TOOLS 列表，在此汇总。
 _TODOS_FILE = DATA_DIR / "workspace" / "todos.json"
 _CALENDAR_FILE = DATA_DIR / "workspace" / "calendar.json"
 
@@ -33,73 +29,6 @@ def _save_json(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-
-
-@tool
-def search_tools_status() -> str:
-    """查看本地文件搜索 CLI 工具（fd、ripgrep）的安装状态，并给出安装建议。"""
-    return cli_tools_status_text()
-
-
-@tool
-def find_files(
-    pattern: str,
-    root: str = "",
-    file_type: str = "any",
-    max_results: int = 50,
-) -> str:
-    """按文件名或通配符查找本地文件/文件夹（类似 Everything / fd）。
-
-    Args:
-        pattern: 文件名模式，支持通配符如 *.py、*config*、README.md
-        root: 搜索根目录，留空则使用默认允许目录（用户主目录等）
-        file_type: any（默认）/ file / dir
-        max_results: 最大返回条数，默认 50
-    """
-    return find_files_impl(pattern, root, file_type, max_results)
-
-
-@tool
-def grep_files(
-    pattern: str,
-    root: str = "",
-    glob: str = "*",
-    max_results: int = 30,
-    context_lines: int = 2,
-) -> str:
-    """在本地文件内容中搜索文本或正则表达式（类似 ripgrep / grep）。
-
-    Args:
-        pattern: 搜索词或正则表达式
-        root: 搜索根目录，留空则使用默认允许目录
-        glob: 文件名过滤，如 *.py、*.txt，默认 * 表示所有文本类文件
-        max_results: 最大匹配条数
-        context_lines: 匹配行前后显示的上下文行数
-    """
-    return grep_files_impl(pattern, root, glob, max_results, context_lines)
-
-
-@tool
-def list_directory(path: str = "", max_entries: int = 100) -> str:
-    """列出本地目录下的文件和子文件夹。
-
-    Args:
-        path: 目录路径，留空则列出默认根目录
-        max_entries: 最大显示条目数
-    """
-    return list_directory_impl(path, max_entries)
-
-
-@tool
-def read_local_file(path: str, max_lines: int = 200, offset: int = 1) -> str:
-    """读取本地文本文件的内容（需在允许目录范围内）。
-
-    Args:
-        path: 文件绝对或相对路径
-        max_lines: 最多读取行数，默认 200
-        offset: 起始行号（从 1 开始）
-    """
-    return read_local_file_impl(path, max_lines, offset)
 
 
 @tool
@@ -208,12 +137,7 @@ def list_todos(include_done: bool = False) -> str:
     return "待办列表：\n" + "\n".join(lines)
 
 
-ALL_TOOLS = [
-    search_tools_status,
-    find_files,
-    grep_files,
-    list_directory,
-    read_local_file,
+OTHER_TOOLS = [
     web_search,
     search_notes,
     read_calendar,
@@ -221,6 +145,8 @@ ALL_TOOLS = [
     create_todo,
     list_todos,
 ]
+
+ALL_TOOLS = FILE_TOOLS + OTHER_TOOLS
 
 TOOL_BY_NAME = {t.name: t for t in ALL_TOOLS}
 

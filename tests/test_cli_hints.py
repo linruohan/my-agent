@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from src.tools.cli_hints import (
+from src.tools.file.hints import (
     append_fallback_hint,
     cli_tools_status_text,
     install_hint_fd,
@@ -23,8 +23,8 @@ def test_install_hint_rg_mentions_winget():
 
 
 def test_cli_tools_status_when_missing():
-    with patch("src.tools.cli_hints.is_fd_installed", return_value=False), patch(
-        "src.tools.cli_hints.is_rg_installed", return_value=False
+    with patch("src.tools.file.hints.is_fd_installed", return_value=False), patch(
+        "src.tools.file.hints.is_rg_installed", return_value=False
     ):
         text = cli_tools_status_text()
     assert "未安装" in text
@@ -32,8 +32,8 @@ def test_cli_tools_status_when_missing():
 
 
 def test_cli_tools_status_when_all_installed():
-    with patch("src.tools.cli_hints.is_fd_installed", return_value=True), patch(
-        "src.tools.cli_hints.is_rg_installed", return_value=True
+    with patch("src.tools.file.hints.is_fd_installed", return_value=True), patch(
+        "src.tools.file.hints.is_rg_installed", return_value=True
     ):
         text = cli_tools_status_text()
     assert "已安装" in text
@@ -41,8 +41,8 @@ def test_cli_tools_status_when_all_installed():
 
 
 def test_append_fallback_hint_on_python_engine():
-    with patch("src.tools.cli_hints.is_fd_installed", return_value=False), patch(
-        "src.tools.cli_hints.get_fs_option_prefer_cli", return_value=True
+    with patch("src.tools.file.hints.is_fd_installed", return_value=False), patch(
+        "src.tools.file.hints.get_fs_option_prefer_cli", return_value=True
     ):
         out = append_fallback_hint("搜索结果", "python", "fd")
     assert "加速建议" in out

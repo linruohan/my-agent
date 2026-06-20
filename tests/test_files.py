@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
-from src.tools.files import (
-    PathNotAllowedError,
+from src.tools.file.path import PathNotAllowedError
+from src.tools.file.search import (
+    _parse_rg_match_line,
+    _parse_rg_output,
     find_files_impl,
     grep_files_impl,
     list_directory_impl,
@@ -13,41 +13,31 @@ from src.tools.files import (
 )
 
 
-@pytest.fixture
-def fs_env(tmp_path, monkeypatch):
-    import src.infra.files_config as fc
-    import src.tools.files as files_mod
-
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    (workspace / "hello.py").write_text('print("hello")\n# TODO: fix\n', encoding="utf-8")
-    (workspace / "readme.md").write_text("# Project\nsearch keyword here\n", encoding="utf-8")
-    (workspace / "data").mkdir()
-    (workspace / "data" / "notes.txt").write_text("local search test content\n", encoding="utf-8")
-
-    monkeypatch.setattr(fc, "get_search_roots", lambda: [workspace])
-    monkeypatch.setattr(files_mod, "get_search_roots", lambda: [workspace])
-
-    def fake_option(key, default):
-        opts = {
-            "max_results": 80,
-            "max_depth": 12,
-            "max_file_size_mb": 5,
-            "grep_context_lines": 2,
-            "prefer_cli": False,
-            "exclude_dirs": [".git"],
-            "grep_globs": ["*.txt", "*.md", "*.py"],
-        }
-        return opts.get(key, default)
-
-    monkeypatch.setattr(files_mod, "get_fs_option", fake_option)
-    return workspace
-
-
 def test_find_files_by_pattern(fs_env):
     result = find_files_impl("*.py", str(fs_env))
     assert "hello.py" in result
     assert "文件搜索" in result
+
+
+def test_parse_rg_match_line_windows_path():
+    line = r"D:\codehub\my-agent\tests\conftest.py:8:    可写的隔离文件系统环境。"
+    parsed = _parse_rg_match_line(line)
+    assert parsed is not None
+    path, line_no, content = parsed
+    assert path == r"D:\codehub\my-agent\tests\conftest.py"
+    assert line_no == 8
+    assert "文件系统" in content
+
+
+def test_parse_rg_output_with_context():
+    stdout = (
+        r"D:\proj\tests\conftest.py-6-@pytest.fixture" + "\n"
+        r"D:\proj\tests\conftest.py:8:    文件系统"
+    )
+    hits = _parse_rg_output(stdout, context=2)
+    assert len(hits) == 1
+    assert hits[0].line_no == 8
+    assert hits[0].context_before == ["@pytest.fixture"]
 
 
 def test_grep_files_content(fs_env):
@@ -70,12 +60,12 @@ def test_read_local_file(fs_env):
 
 def test_path_not_allowed(tmp_path, monkeypatch):
     import src.infra.files_config as fc
-    import src.tools.files as files_mod
+    import src.tools.file.path as path_mod
 
     allowed = tmp_path / "allowed"
     allowed.mkdir()
     monkeypatch.setattr(fc, "get_search_roots", lambda: [allowed])
-    monkeypatch.setattr(files_mod, "get_search_roots", lambda: [allowed])
+    monkeypatch.setattr(path_mod, "get_search_roots", lambda: [allowed])
 
     outside = tmp_path / "outside.txt"
     outside.write_text("secret", encoding="utf-8")

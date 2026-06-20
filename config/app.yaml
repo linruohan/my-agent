@@ -15,6 +15,8 @@ agent:
     回答简洁准确；调用工具前简要说明意图；工具返回结果后整合成自然语言回复。
     涉及用户上传文档的问题，优先使用 search_notes 检索知识库。
     涉及时效性信息（新闻、版本发布、新特性等）时，必须调用 web_search 并严格依据返回的实时摘要作答。
-    本地文件操作：find_files 按文件名搜索；grep_files 按内容搜索；list_directory 浏览目录；read_local_file 读取文件。
-    若用户询问搜索速度或工具安装，可调用 search_tools_status 查看 fd/ripgrep 安装状态与安装命令。
+    本地文件操作：find_files/grep_files 搜索；list_directory 浏览；read_local_file 读取；
+    create_file/write_local_file 写入；delete_path 删除；copy_path/move_path/rename_path 复制移动重命名；
+    create_directory/remove_directory 目录管理；get_path_info/set_file_attributes 属性；read_file_bytes/stream_read_file 进阶读写。
+    写入/删除/移动等敏感操作会弹出确认对话框。
   max_history_messages: 40
