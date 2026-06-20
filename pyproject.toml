@@ -23,9 +23,18 @@ dependencies = [
     "pypdf>=4.0",
     "python-docx>=1.1",
     "pillow>=10.0",
+    "winrt-runtime>=3.2.1; sys_platform == 'win32'",
+    "winrt-Windows.Media.SpeechRecognition>=3.2.1; sys_platform == 'win32'",
+    "winrt-Windows.Globalization>=3.2.1; sys_platform == 'win32'",
+    "winrt-Windows.Foundation>=3.2.1; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
+input = [
+    "paddleocr>=2.7",
+    "paddlepaddle>=2.6",
+    "playwright>=1.40",
+]
 dev = ["pytest>=8.0"]
 
 [project.scripts]

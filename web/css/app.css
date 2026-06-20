@@ -112,41 +112,263 @@ body {
   -webkit-user-select: text;
 }
 
-.composer {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-  align-items: end;
-  padding: 8px;
-  background: var(--composer-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-input);
-}
-
-.input-box {
-  width: 100%;
-  resize: none;
-  border: 1px solid var(--input-border, var(--border));
-  border-radius: var(--radius-input);
-  padding: 10px 12px;
-  font: inherit;
-  color: var(--fg);
-  background: var(--bg-input);
-  outline: none;
-}
-
-.input-box:focus {
-  border-color: var(--ring, var(--primary-bg));
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring, var(--primary-bg)) 25%, transparent);
-}
-
-.composer-actions {
+.composer-dock {
   display: flex;
   flex-direction: column;
+  gap: 8px;
+  padding: 0 4px 4px;
+}
+
+.composer-pill {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px 10px 8px 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--input-border, var(--border));
+  border-radius: 999px;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--border) 40%, transparent);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.composer-pill:focus-within {
+  border-color: var(--ring, var(--primary-bg));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring, var(--primary-bg)) 18%, transparent);
+}
+
+.composer-pill.drag-over {
+  border-color: var(--info);
+  background: color-mix(in srgb, var(--info) 8%, var(--bg-input));
+}
+
+.pill-left {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.pill-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pill-btn:hover {
+  background: var(--bg-muted);
+  color: var(--fg);
+}
+
+.attach-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  min-width: 140px;
+  background: var(--bg-popover);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 6px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.attach-menu.hidden {
+  display: none;
+}
+
+.attach-menu button {
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 6px;
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.attach-menu button:hover {
+  background: var(--bg-list-hover);
+}
+
+.pill-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  line-height: 1.45;
+  min-height: 24px;
+  max-height: 160px;
+  padding: 6px 0;
+}
+
+.pill-mode {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--font-meta);
+  padding: 4px 6px;
+  cursor: pointer;
+  appearance: none;
+}
+
+.pill-voice {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: var(--primary-bg, #111);
+  color: var(--primary-fg, #fff);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s, background 0.15s;
+}
+
+.pill-voice:hover {
+  transform: scale(1.04);
+}
+
+.pill-voice.listening {
+  animation: pulse-mic 1.2s infinite;
+  background: var(--danger);
+}
+
+.pill-voice.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@keyframes pulse-mic {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--danger) 40%, transparent); }
+  50% { box-shadow: 0 0 0 8px transparent; }
+}
+
+.attachment-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 8px;
+}
+
+.attachment-strip.hidden {
+  display: none;
+}
+
+.attach-chip {
+  display: inline-flex;
+  align-items: center;
   gap: 6px;
+  max-width: 280px;
+  padding: 4px 8px 4px 4px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-muted);
+  font-size: var(--font-caption);
+}
+
+.attach-chip img {
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.attach-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-muted);
+}
+
+.attach-remove {
+  border: none;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 2px;
+}
+
+.composer-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  font-size: var(--font-caption);
+  color: var(--fg-muted);
+}
+
+.composer-meta-left,
+.composer-meta-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.meta-hint {
+  color: var(--info);
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta-stop {
+  border: none;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--font-caption);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.meta-stop:hover {
+  background: var(--bg-muted);
+  color: var(--fg);
+}
+
+.status-bar.hidden {
+  display: none;
 }
 
 .status-bar {
+  font-size: var(--font-meta);
+  color: var(--fg-muted);
+  padding: 0 4px;
+}
+
+/* legacy composer removed */
+.composer,
+.input-box,
+.composer-actions {
+  display: none;
+}
   font-size: var(--font-meta);
   color: var(--fg-muted);
   padding: 0 4px;

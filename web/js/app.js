@@ -21,45 +21,25 @@ window.ChatApp = (() => {
 
   function setStatus(text) {
     const el = document.getElementById("status-bar");
+    if (el) {
+      el.textContent = text || "";
+      el.classList.toggle("hidden", !text);
+    }
+  }
+
+  function setComposerHint(text) {
+    const el = document.getElementById("composer-hint");
     if (el) el.textContent = text || "";
   }
 
   function setRunning(isRunning) {
     running = isRunning;
-    const sendBtn = document.getElementById("btn-send");
-    const stopBtn = document.getElementById("btn-stop");
-    if (sendBtn) sendBtn.disabled = isRunning;
+    const stopBtn = document.getElementById("btn-stop-inline");
     if (stopBtn) stopBtn.disabled = !isRunning;
   }
 
-  async function sendMessage() {
-    if (running || !api()) return;
-    const box = document.getElementById("input-box");
-    const text = (box.value || "").trim();
-    if (!text) return;
-    box.value = "";
-    try {
-      const ok = await api().send_message(text);
-      if (ok === false) return;
-      setRunning(true);
-    } catch (e) {
-      console.error(e);
-    }
-  }
-
   function bindComposer() {
-    const box = document.getElementById("input-box");
-    box.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && e.ctrlKey) {
-        e.preventDefault();
-        sendMessage();
-      }
-    });
-    document.getElementById("btn-send").addEventListener("click", sendMessage);
-    document.getElementById("btn-stop").addEventListener("click", async () => {
-      if (api()) await api().stop_agent();
-    });
-    document.getElementById("btn-new-session").addEventListener("click", async () => {
+    document.getElementById("btn-new-session")?.addEventListener("click", async () => {
       if (api()) await api().new_session();
     });
   }
@@ -237,6 +217,13 @@ window.ChatApp = (() => {
     }
     if (ev.type === "status") {
       setStatus(ev.text);
+      if (ev.text) {
+        const sessionEl = document.getElementById("meta-session");
+        const parts = ev.text.split("|");
+        if (sessionEl && parts.length > 1) {
+          sessionEl.textContent = parts[1].trim();
+        }
+      }
       return;
     }
     if (ev.type === "approval") {
@@ -262,6 +249,7 @@ window.ChatApp = (() => {
     applyTheme(state.theme_variables);
     setStatus(state.status_text);
     setRunning(false);
+    window.Composer?.init(state.composer_meta);
     if (state.welcome) {
       window.ChatUI.handleEvent({ type: "meta", content: "⚙️ " + state.welcome });
     }
@@ -269,5 +257,5 @@ window.ChatApp = (() => {
 
   window.addEventListener("pywebviewready", bootstrap);
 
-  return { handleEvent, applyTheme };
+  return { handleEvent, applyTheme, setRunning, setComposerHint, setStatus };
 })();

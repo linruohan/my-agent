@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import queue
+import sys
 import threading
 import uuid
 from pathlib import Path
@@ -18,13 +20,17 @@ from src.llm.factory import create_llm
 from src.llm.providers import ProviderConfig
 from src.memory.rag import get_knowledge_stats, ingest_files, set_rag_provider
 from src.memory.search_cache import SearchCache
-from src.ui.message_utils import normalize_user_message
+from src.ui.clipboard import copy_to_clipboard as sys_copy_to_clipboard
 from src.ui.font_prefs import (
     build_font_variables,
     get_font_prefs,
     list_font_catalog,
     persist_font_prefs,
 )
+from src.ui.input_compose import compose_user_message, save_temp_image_b64
+from src.ui.speech_win import get_voice_info as speech_voice_info
+from src.ui.speech_win import is_supported as voice_is_supported
+from src.ui.speech_win import recognize_once
 from src.ui.theme_loader import (
     build_css_variables,
     get_theme_prefs,
@@ -32,7 +38,6 @@ from src.ui.theme_loader import (
     persist_theme_prefs,
 )
 from src.ui.web_bridge import WebChatBridge
-from src.ui.clipboard import copy_to_clipboard as sys_copy_to_clipboard
 
 WEB_DIR = PROJECT_ROOT / "web"
 WEB_INDEX = WEB_DIR / "index.html"
@@ -53,8 +58,25 @@ class AppApi:
     def save_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self._ctrl.save_settings(payload)
 
-    def send_message(self, text: str) -> bool:
-        return self._ctrl.send_message(text)
+    def send_message(self, payload: dict[str, Any] | str) -> bool:
+        if isinstance(payload, str):
+            payload = {"text": payload, "attachments": []}
+        return self._ctrl.send_message(payload)
+
+    def pick_input_image(self) -> dict[str, Any]:
+        return self._ctrl.pick_input_image()
+
+    def pick_input_file(self) -> dict[str, Any]:
+        return self._ctrl.pick_input_file()
+
+    def save_pasted_image(self, data_b64: str) -> dict[str, Any]:
+        return save_temp_image_b64(data_b64)
+
+    def get_voice_info(self) -> dict[str, Any]:
+        return self._ctrl.get_voice_info()
+
+    def start_voice_input(self) -> dict[str, Any]:
+        return self._ctrl.start_voice_input()
 
     def stop_agent(self) -> None:
         self._ctrl.stop_agent()
@@ -99,6 +121,7 @@ class AssistantController:
         self._turn_search_ok = False
         self._collecting_assistant = False
         self._poll_stop = threading.Event()
+        self._voice_running = False
 
         self._init_agent()
 
@@ -127,7 +150,11 @@ class AssistantController:
             "appearance": self._appearance,
             "font_id": self._font_id,
             "status_text": self._status_text("就绪"),
-            "welcome": "欢迎使用个人助理 Agent。配置 API Key 后即可开始对话（Ctrl+Enter 发送）。",
+            "welcome": "欢迎使用个人助理 Agent。Enter 发送，Shift+Enter 换行。",
+            "composer_meta": {
+                "session_short": self._thread_id[:8],
+                "voice_supported": voice_is_supported(),
+            },
         }
 
     def _provider_payload(self) -> dict[str, dict[str, Any]]:
@@ -207,25 +234,107 @@ class AssistantController:
             self.chat.append_error(f"Agent 初始化失败: {exc}")
             self.runner = AgentRunner(graph=None)
 
-    def send_message(self, text: str) -> bool:
+    def send_message(self, payload: dict[str, Any]) -> bool:
         if self._running:
             return False
-        text = normalize_user_message(text)
-        if not text:
+
+        composed = compose_user_message(
+            str(payload.get("text", "")),
+            payload.get("attachments") or [],
+        )
+        if not composed.get("ok"):
+            self.chat.append_error(composed.get("error", "无法发送空消息"))
             return False
+
+        message = composed["message"]
+        for warn in composed.get("errors") or []:
+            self.chat.append_system(warn)
+
         if not self.runner.graph:
             self.chat.append_error("Agent 未就绪，请检查 LLM 配置与 API Key。")
             return False
 
-        self.chat.append_user(text)
+        self.chat.append_user(message)
 
-        cached = self._search_cache.lookup(text)
+        cached = self._search_cache.lookup(message)
         if cached:
-            self._deliver_cached_search(text, cached)
+            self._deliver_cached_search(message, cached)
             return False
 
-        self._start_agent_turn(text)
+        self._start_agent_turn(message)
         return True
+
+    def pick_input_image(self) -> dict[str, Any]:
+        window = self._get_window()
+        if window is None:
+            return {"ok": False, "paths": []}
+        file_types = ("图片 (*.png;*.jpg;*.jpeg;*.webp;*.bmp;*.gif)", "All files (*.*)")
+        try:
+            paths = window.create_file_dialog(
+                webview.OPEN_DIALOG,
+                allow_multiple=True,
+                file_types=file_types,
+            )
+            return {"ok": True, "paths": list(paths or [])}
+        except Exception as exc:
+            return {"ok": False, "paths": [], "error": str(exc)}
+
+    def pick_input_file(self) -> dict[str, Any]:
+        window = self._get_window()
+        if window is None:
+            return {"ok": False, "paths": []}
+        try:
+            paths = window.create_file_dialog(webview.OPEN_DIALOG, allow_multiple=True)
+            return {"ok": True, "paths": list(paths or [])}
+        except Exception as exc:
+            return {"ok": False, "paths": [], "error": str(exc)}
+
+    def get_voice_info(self) -> dict[str, Any]:
+        logger.debug("[voice] AppApi.get_voice_info")
+        info = speech_voice_info()
+        logger.debug("[voice] AppApi.get_voice_info -> {}", info)
+        return info
+
+    def start_voice_input(self) -> dict[str, Any]:
+        logger.info("[voice] AppApi.start_voice_input voice_running={}", self._voice_running)
+        if self._voice_running:
+            logger.warning("[voice] 拒绝：已有识别任务进行中")
+            return {"ok": False, "error": "语音识别进行中"}
+        if not voice_is_supported():
+            logger.warning("[voice] 拒绝：平台/依赖不支持")
+            return {"ok": False, "error": "仅 Windows 支持语音输入"}
+
+        def worker() -> None:
+            logger.info("[voice] worker 线程开始 tid={}", threading.get_ident())
+            result: dict[str, Any]
+            try:
+                result = recognize_once(listen_seconds=18.0)
+            except Exception as exc:
+                logger.exception("[voice] worker 语音识别异常")
+                result = {"ok": False, "error": str(exc)}
+            self._voice_running = False
+            logger.info(
+                "[voice] worker 完成 ok={} text_len={} error={}",
+                result.get("ok"),
+                len(result.get("text") or ""),
+                result.get("error", ""),
+            )
+            window = self._get_window()
+            if window is None:
+                logger.error("[voice] window 为空，无法回传 UI")
+                return
+            payload = json.dumps(result, ensure_ascii=False)
+            logger.debug("[voice] evaluate_js payload={}", payload[:500])
+            try:
+                window.evaluate_js(f"window.Composer.onVoiceResult({payload})")
+                logger.debug("[voice] evaluate_js 已调用")
+            except Exception:
+                logger.exception("[voice] 语音结果回传 UI 失败")
+
+        self._voice_running = True
+        threading.Thread(target=worker, daemon=True, name="voice-input").start()
+        logger.info("[voice] voice-input 后台线程已启动")
+        return {"ok": True}
 
     def _start_agent_turn(self, text: str) -> None:
         self._turn_user_query = text
@@ -252,6 +361,15 @@ class AssistantController:
         self.chat.clear()
         self.chat.append_system(f"新会话已创建: {self._thread_id[:8]}...")
         self.chat.set_status(self._status_text())
+        window = self._get_window()
+        if window is not None:
+            short = self._thread_id[:8]
+            try:
+                window.evaluate_js(
+                    f"document.getElementById('meta-session')&&(document.getElementById('meta-session').textContent='会话 {short}')"
+                )
+            except Exception:
+                pass
 
     def approval_response(self, approved: bool) -> None:
         if not self._awaiting_approval:
@@ -430,6 +548,8 @@ def _poll_loop(controller: AssistantController, stop: threading.Event) -> None:
 
 
 def run_app() -> None:
+    import os
+
     if not WEB_INDEX.exists():
         raise FileNotFoundError(f"Web UI 未找到: {WEB_INDEX}")
 
@@ -439,6 +559,9 @@ def run_app() -> None:
     w = int(app_cfg.get("window_width", 1100))
     h = int(app_cfg.get("window_height", 720))
     title = app_cfg.get("title", "个人助理 Agent")
+    webview_debug = os.environ.get("AGENT_WEBVIEW_DEBUG", "").lower() in ("1", "true", "yes")
+    if webview_debug:
+        logger.info("[voice] WebView debug 已开启（F12 可开开发者工具）")
 
     window = webview.create_window(
         title,
@@ -459,8 +582,9 @@ def run_app() -> None:
     )
     poll_thread.start()
 
+    logger.info("WebView 窗口启动中…")
     try:
-        webview.start(debug=False)
+        webview.start(debug=webview_debug)
     finally:
         stop.set()
         if controller._graph_bundle:
