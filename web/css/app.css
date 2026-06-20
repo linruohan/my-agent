@@ -707,20 +707,37 @@ body {
   border: 1px solid var(--assistant-bubble-border);
 }
 
+.msg-row.weather-reply {
+  width: 100%;
+}
+
+.msg-row.weather-reply .msg-col {
+  flex: 0 1 auto;
+  width: auto;
+  max-width: min(620px, calc(100% - 42px));
+}
+
+.bubble.weather-bubble {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 .weather-html {
   width: 100%;
   max-width: 100%;
   overflow: hidden;
-  border-radius: calc(var(--bubble-radius) - 4px);
+  border-radius: calc(var(--radius-bubble) - 4px);
 }
 
 .weather-iframe {
   display: block;
-  width: 100%;
+  width: 100% !important;
+  min-width: 100%;
   min-height: 320px;
   max-height: 900px;
   border: none;
-  border-radius: calc(var(--bubble-radius) - 4px);
+  border-radius: calc(var(--radius-bubble) - 4px);
   background: #fff;
 }
 

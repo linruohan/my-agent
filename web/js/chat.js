@@ -232,8 +232,45 @@ window.ChatUI = (() => {
     enhanceBubble(bubble, text || "");
   }
 
+  const WEATHER_MAX_WIDTH = 620;
+
+  function chatContentWidth() {
+    const scroll = scrollEl();
+    if (!scroll) return WEATHER_MAX_WIDTH;
+    const available = Math.max(360, scroll.clientWidth - 48);
+    return Math.min(WEATHER_MAX_WIDTH, available);
+  }
+
+  function layoutWeatherBubble(bubble, iframe) {
+    const width = chatContentWidth();
+    const row = bubble.closest(".msg-row");
+    const col = bubble.closest(".msg-col");
+    if (row) row.classList.add("weather-reply");
+    if (col) {
+      col.style.maxWidth = `${width}px`;
+      col.style.width = `${width}px`;
+    }
+    bubble.style.width = "100%";
+    if (iframe) {
+      iframe.style.width = "100%";
+    }
+  }
+
+  function resizeWeatherIframe(iframe, bubble) {
+    layoutWeatherBubble(bubble, iframe);
+    try {
+      const doc = iframe.contentDocument;
+      const height = doc?.documentElement?.scrollHeight || doc?.body?.scrollHeight || 520;
+      iframe.style.height = `${Math.min(Math.max(height + 16, 320), 900)}px`;
+    } catch {
+      iframe.style.height = "520px";
+    }
+    scrollBottom();
+  }
+
   function renderHtml(bubble, html) {
     bubble.classList.remove("streaming");
+    bubble.classList.add("weather-bubble");
     bubble.innerHTML = "";
     const wrap = document.createElement("div");
     wrap.className = "html-content weather-html";
@@ -241,16 +278,8 @@ window.ChatUI = (() => {
     iframe.className = "weather-iframe";
     iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-popups");
     iframe.srcdoc = html || "";
-    iframe.addEventListener("load", () => {
-      try {
-        const doc = iframe.contentDocument;
-        const height = doc?.documentElement?.scrollHeight || doc?.body?.scrollHeight || 520;
-        iframe.style.height = `${Math.min(Math.max(height + 16, 320), 900)}px`;
-      } catch {
-        iframe.style.height = "520px";
-      }
-      scrollBottom();
-    });
+    layoutWeatherBubble(bubble, iframe);
+    iframe.addEventListener("load", () => resizeWeatherIframe(iframe, bubble));
     wrap.appendChild(iframe);
     bubble.appendChild(wrap);
     scrollBottom();
