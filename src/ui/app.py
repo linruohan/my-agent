@@ -44,6 +44,7 @@ class AssistantApp(ctk.CTk):
         self._turn_user_query = ""
         self._turn_search_query = ""
         self._turn_used_web_search = False
+        self._turn_search_ok = False
         self._turn_assistant_text = ""
         self._collecting_assistant = False
 
@@ -186,6 +187,7 @@ class AssistantApp(ctk.CTk):
         self._turn_user_query = text
         self._turn_search_query = ""
         self._turn_used_web_search = False
+        self._turn_search_ok = False
         self._turn_assistant_text = ""
         self._collecting_assistant = False
         self._running = True
@@ -198,15 +200,27 @@ class AssistantApp(ctk.CTk):
         self.chat.append_assistant_complete(response, from_cache=True)
         self.status_bar.configure(text=self._status_text() + "  |  搜索缓存命中")
 
-    def _maybe_save_search_cache(self) -> None:
-        if self._turn_used_web_search and self._turn_assistant_text.strip():
-            user_q = self._turn_user_query
-            search_q = self._turn_search_query or self._turn_user_query
-            response = self._turn_assistant_text
-            self._search_cache.save_async(user_q, search_q, response)
+    def _maybe_save_search_cache(self, response: str) -> None:
+        if self._turn_used_web_search and response.strip():
+            self._search_cache.save_async(
+                self._turn_user_query,
+                self._turn_search_query or self._turn_user_query,
+                response,
+                search_ok=self._turn_search_ok,
+                finished=True,
+            )
         self._turn_user_query = ""
         self._turn_search_query = ""
         self._turn_used_web_search = False
+        self._turn_search_ok = False
+        self._turn_assistant_text = ""
+        self._collecting_assistant = False
+
+    def _reset_turn_state(self) -> None:
+        self._turn_user_query = ""
+        self._turn_search_query = ""
+        self._turn_used_web_search = False
+        self._turn_search_ok = False
         self._turn_assistant_text = ""
         self._collecting_assistant = False
 
@@ -294,26 +308,33 @@ class AssistantApp(ctk.CTk):
         elif event.kind == "tool_result":
             p = event.payload
             if p["name"] == "web_search":
+                raw = str(p.get("content", ""))
+                self._turn_search_ok = (
+                    "搜索失败" not in raw
+                    and "未找到" not in raw
+                    and "未返回有效" not in raw
+                )
                 self._collecting_assistant = True
                 self._turn_assistant_text = ""
             self.chat.append_tool_result(p["name"], p["content"])
         elif event.kind == "approval_required":
             self._handle_approval(event.payload)
         elif event.kind == "done":
+            response = self.chat.assistant_stream_buffer
             self.chat.end_assistant()
-            self._maybe_save_search_cache()
+            self._maybe_save_search_cache(response)
             self._running = False
             self.send_btn.configure(state="normal")
             self.status_bar.configure(text=self._status_text() + "  |  就绪")
             return False
         elif event.kind == "error":
             self.chat.append_error(event.payload)
-            self._maybe_save_search_cache()
+            self._reset_turn_state()
             self._running = False
             self.send_btn.configure(state="normal")
             return False
         elif event.kind == "stopped":
-            self._maybe_save_search_cache()
+            self._reset_turn_state()
             self._running = False
             self.send_btn.configure(state="normal")
             return False

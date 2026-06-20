@@ -102,6 +102,10 @@ class ChatPanel(ctk.CTkFrame):
         self._stream_buffer = ""
         self._assistant_bubble = None
 
+    @property
+    def assistant_stream_buffer(self) -> str:
+        return self._stream_buffer
+
     def reset_assistant_for_tool(self) -> None:
         """工具调用前移除规划语气泡，后续 token 将开启新的汇总回复。"""
         if self._stream_update_job is not None:

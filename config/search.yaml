@@ -7,8 +7,12 @@ search:
 
 cache:
   enabled: true
-  text_similarity_threshold: 0.65   # 文本近似匹配阈值（不使用 Embedding）
+  db_path: "data/search_cache.db"
+  text_similarity_threshold: 0.65
+  min_response_chars: 100
+  ttl_days: 7
   max_entries: 100
+  max_user_queries_per_entry: 5
 
 rag:
   embedding_mode: local          # local | api | auto（推荐 local，无需 Embedding API）

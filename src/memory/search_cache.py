@@ -1,12 +1,10 @@
-"""搜索回复缓存：文本近似匹配命中后直接返回历史汇总，跳过工具与 LLM。"""
+"""搜索回复缓存：文本近似匹配 + SQLite 持久化。"""
 
 from __future__ import annotations
 
-import json
 import re
 import threading
-from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
@@ -14,9 +12,10 @@ from typing import Any
 from loguru import logger
 
 from src.infra.config import load_search_config
-from src.infra.paths import DATA_DIR
+from src.infra.paths import DATA_DIR, PROJECT_ROOT
+from src.memory.search_cache_db import CacheRow, SearchCacheStore
 
-_CACHE_PATH = DATA_DIR / "search_cache.json"
+_LEGACY_JSON = DATA_DIR / "search_cache.json"
 _STRIP_PREFIX = re.compile(
     r"^(搜索|查找|查询|帮我|请|麻烦|search|find|look up)\s*",
     re.IGNORECASE,
@@ -25,19 +24,12 @@ _STRIP_PREFIX = re.compile(
 
 @dataclass
 class SearchCacheEntry:
+    """兼容旧测试/调用方。"""
+
     user_query: str
     search_query: str
     response: str
     created_at: str = ""
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> SearchCacheEntry:
-        return cls(
-            user_query=str(data.get("user_query", "")),
-            search_query=str(data.get("search_query", "")),
-            response=str(data.get("response", "")),
-            created_at=str(data.get("created_at", "")),
-        )
 
 
 def _normalize_query(text: str) -> str:
@@ -49,6 +41,11 @@ def _normalize_query(text: str) -> str:
     return s
 
 
+def make_cache_key(search_query: str, user_query: str = "") -> str:
+    base = search_query.strip() or user_query.strip()
+    return _normalize_query(base)
+
+
 def text_similarity(a: str, b: str) -> float:
     na, nb = _normalize_query(a), _normalize_query(b)
     if not na or not nb:
@@ -56,7 +53,6 @@ def text_similarity(a: str, b: str) -> float:
     if na == nb:
         return 1.0
     ratio = SequenceMatcher(None, na, nb).ratio()
-    # 一方包含另一方时给予额外分数（如「python 3.14」⊂「搜索 python 3.14 新特性」）
     if na in nb or nb in na:
         shorter, longer = (na, nb) if len(na) <= len(nb) else (nb, na)
         contain = len(shorter) / max(len(longer), 1)
@@ -65,93 +61,169 @@ def text_similarity(a: str, b: str) -> float:
 
 
 class SearchCache:
-    def __init__(self, path: Path | None = None) -> None:
+    def __init__(self, db_path: Path | None = None) -> None:
         cfg = load_search_config().get("cache", {})
         self.enabled = bool(cfg.get("enabled", True))
         self.text_threshold = float(cfg.get("text_similarity_threshold", 0.65))
+        self.min_response_chars = int(cfg.get("min_response_chars", 100))
+        self.ttl_days = int(cfg.get("ttl_days", 7))
         self.max_entries = int(cfg.get("max_entries", 100))
-        self.path = path or _CACHE_PATH
-        self.entries: list[SearchCacheEntry] = []
+        self.max_user_queries = int(cfg.get("max_user_queries_per_entry", 5))
+        if db_path is not None:
+            self.db_path = db_path
+        else:
+            rel = cfg.get("db_path", "data/search_cache.db")
+            self.db_path = (PROJECT_ROOT / rel).resolve()
+        self._store = SearchCacheStore(self.db_path)
         self._lock = threading.Lock()
-        self._load()
+        self._migrate_legacy()
 
-    def _load(self) -> None:
-        if not self.path.is_file():
-            return
-        try:
-            raw = json.loads(self.path.read_text(encoding="utf-8"))
-            with self._lock:
-                self.entries = [SearchCacheEntry.from_dict(item) for item in raw.get("entries", [])]
-        except Exception as exc:
-            logger.warning("读取搜索缓存失败: {}", exc)
-            with self._lock:
-                self.entries = []
+    def _migrate_legacy(self) -> None:
+        if _LEGACY_JSON.is_file():
+            from src.memory.search_cache_db import SearchCacheStore
 
-    def _persist(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self._lock:
-            payload = {"entries": [asdict(e) for e in self.entries]}
-        self.path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            rows = []
+            try:
+                import json
+
+                raw = json.loads(_LEGACY_JSON.read_text(encoding="utf-8"))
+                rows = raw.get("entries", [])
+            except Exception:
+                pass
+            for item in rows:
+                user_q = str(item.get("user_query", "")).strip()
+                search_q = str(item.get("search_query", "")).strip() or user_q
+                response = str(item.get("response", "")).strip()
+                if user_q and search_q and response:
+                    self.save(
+                        user_q,
+                        search_q,
+                        response,
+                        search_ok=True,
+                        finished=True,
+                        skip_quality=False,
+                    )
+            if rows:
+                backup = _LEGACY_JSON.with_suffix(".json.bak")
+                try:
+                    _LEGACY_JSON.rename(backup)
+                    logger.info("JSON 缓存已迁移至 {} 并备份", self.db_path.name)
+                except Exception as exc:
+                    logger.warning("JSON 备份失败: {}", exc)
 
     @property
     def entry_count(self) -> int:
-        with self._lock:
-            return len(self.entries)
+        return self._store.count()
 
-    def _best_text_match(self, query: str) -> tuple[float, str | None]:
-        best_score = 0.0
-        best_response: str | None = None
-        with self._lock:
-            entries = list(self.entries)
-        for entry in entries:
-            score = max(
-                text_similarity(query, entry.user_query),
-                text_similarity(query, entry.search_query),
+    @property
+    def entries(self) -> list[SearchCacheEntry]:
+        """只读视图，供测试/debug。"""
+        rows = self._store.list_active()
+        result: list[SearchCacheEntry] = []
+        for row in rows:
+            uq = row.user_queries[0] if row.user_queries else row.search_query
+            result.append(
+                SearchCacheEntry(
+                    user_query=uq,
+                    search_query=row.search_query,
+                    response=row.response,
+                    created_at=row.created_at,
+                )
             )
-            if score > best_score:
-                best_score = score
-                best_response = entry.response
-        return best_score, best_response
+        return result
+
+    def _score_row(self, query: str, row: CacheRow) -> float:
+        candidates = [row.cache_key, row.search_query, *row.user_queries]
+        return max(text_similarity(query, c) for c in candidates if c)
 
     def lookup(self, user_query: str) -> str | None:
-        """纯文本近似匹配（同步、毫秒级，不加载 Embedding）。"""
         if not self.enabled or not user_query.strip():
             return None
-        with self._lock:
-            if not self.entries:
-                return None
-        score, response = self._best_text_match(user_query.strip())
-        if response and score >= self.text_threshold:
-            logger.info("搜索缓存文本命中 score={:.3f} query={}", score, user_query[:60])
-            return response
+
+        query = user_query.strip()
+        self._store.prune_expired()
+
+        best_score = 0.0
+        best_row: CacheRow | None = None
+        for row in self._store.list_active():
+            if not row.search_ok:
+                continue
+            score = self._score_row(query, row)
+            if score > best_score:
+                best_score = score
+                best_row = row
+
+        if best_row and best_score >= self.text_threshold:
+            logger.info(
+                "搜索缓存命中 score={:.3f} key={} query={}",
+                best_score,
+                best_row.cache_key[:40],
+                query[:60],
+            )
+            self._store.record_hit(best_row.cache_key)
+            return best_row.response
         return None
 
-    def save(self, user_query: str, search_query: str, response: str) -> None:
+    def save(
+        self,
+        user_query: str,
+        search_query: str,
+        response: str,
+        *,
+        search_ok: bool = True,
+        finished: bool = True,
+        skip_quality: bool = False,
+    ) -> None:
+        if not self.enabled:
+            return
         user_query = user_query.strip()
+        search_query = (search_query or user_query).strip()
         response = response.strip()
-        if not self.enabled or not user_query or not response:
+        if not finished or not user_query or not response:
+            return
+        if not skip_quality:
+            if not search_ok:
+                return
+            if len(response) < self.min_response_chars:
+                logger.debug("缓存跳过：回复过短 ({} < {})", len(response), self.min_response_chars)
+                return
+
+        cache_key = make_cache_key(search_query, user_query)
+        if not cache_key:
             return
 
-        entry = SearchCacheEntry(
-            user_query=user_query,
-            search_query=search_query.strip() or user_query,
-            response=response,
-            created_at=datetime.now(timezone.utc).isoformat(),
-        )
-
-        norm = _normalize_query(user_query)
         with self._lock:
-            self.entries = [e for e in self.entries if _normalize_query(e.user_query) != norm]
-            self.entries.append(entry)
-            if len(self.entries) > self.max_entries:
-                self.entries = self.entries[-self.max_entries :]
-        self._persist()
-        logger.info("已写入搜索缓存: {}", user_query[:60])
+            self._store.upsert(
+                cache_key=cache_key,
+                search_query=search_query,
+                response=response,
+                user_query=user_query,
+                search_ok=search_ok,
+                ttl_days=self.ttl_days,
+                max_user_queries=self.max_user_queries,
+            )
+            self._store.prune_expired()
+            self._store.prune_overflow(self.max_entries)
+        logger.info("已写入搜索缓存 [{}]: {}", cache_key[:40], user_query[:60])
 
-    def save_async(self, user_query: str, search_query: str, response: str) -> None:
+    def save_async(
+        self,
+        user_query: str,
+        search_query: str,
+        response: str,
+        *,
+        search_ok: bool = True,
+        finished: bool = True,
+    ) -> None:
         threading.Thread(
             target=self.save,
-            args=(user_query, search_query, response),
+            kwargs={
+                "user_query": user_query,
+                "search_query": search_query,
+                "response": response,
+                "search_ok": search_ok,
+                "finished": finished,
+            },
             daemon=True,
             name="search-cache-save",
         ).start()

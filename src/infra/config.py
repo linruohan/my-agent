@@ -36,6 +36,7 @@ def load_search_config() -> dict[str, Any]:
 
 
 def ensure_data_dirs() -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     for sub in ("checkpoints", "workspace", "vectorstore"):
         (DATA_DIR / sub).mkdir(parents=True, exist_ok=True)
 
