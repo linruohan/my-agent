@@ -153,6 +153,29 @@
     </div>
   </dialog>
 
+  <!-- 会话重命名 -->
+  <dialog class="modal session-rename-modal" id="session-rename-modal">
+    <form method="dialog" class="modal-panel session-rename-panel" id="session-rename-form">
+      <div class="modal-body session-rename-body">
+        <label class="field session-rename-field">
+          <span>会话名称</span>
+          <input
+            type="text"
+            id="session-rename-input"
+            maxlength="64"
+            autocomplete="off"
+            placeholder="输入会话名称…"
+          />
+        </label>
+        <p class="session-rename-hint">按 Enter 保存，Esc 取消</p>
+      </div>
+      <footer class="modal-footer session-rename-footer">
+        <button type="button" class="btn btn-muted" id="session-rename-cancel">取消</button>
+        <button type="submit" class="btn btn-primary" id="session-rename-save">保存</button>
+      </footer>
+    </form>
+  </dialog>
+
   <!-- 知识库 -->
   <dialog class="modal" id="knowledge-modal">
     <div class="modal-panel">

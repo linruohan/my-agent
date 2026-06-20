@@ -1,6 +1,8 @@
 /** 左侧会话列表管理 */
 window.SessionUI = (() => {
   let activeId = "";
+  let renameResolve = null;
+  let renameSessionId = null;
 
   function api() {
     return window.pywebview && window.pywebview.api;
@@ -8,6 +10,65 @@ window.SessionUI = (() => {
 
   function el(id) {
     return document.getElementById(id);
+  }
+
+  function finishRename(value) {
+    renameResolve?.(value);
+    renameResolve = null;
+    renameSessionId = null;
+    el("session-rename-modal")?.close();
+  }
+
+  function openRenameDialog(sessionId, currentTitle) {
+    return new Promise((resolve) => {
+      const modal = el("session-rename-modal");
+      const input = el("session-rename-input");
+      if (!modal || !input) {
+        resolve(null);
+        return;
+      }
+      renameResolve = resolve;
+      renameSessionId = sessionId;
+      input.value = currentTitle || "";
+      input.classList.remove("is-invalid");
+      modal.showModal();
+      requestAnimationFrame(() => {
+        input.focus();
+        input.select();
+      });
+    });
+  }
+
+  function bindRenameDialog() {
+    const modal = el("session-rename-modal");
+    const input = el("session-rename-input");
+    const form = el("session-rename-form");
+    if (!modal || !input || !form) return;
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const title = input.value.trim();
+      if (!title) {
+        input.classList.add("is-invalid");
+        input.focus();
+        return;
+      }
+      input.classList.remove("is-invalid");
+      if (!api() || !renameSessionId) return;
+      const res = await api().rename_session(renameSessionId, title);
+      if (res?.ok) {
+        renderSessions(res.sessions);
+        finishRename(title);
+      }
+    });
+
+    input.addEventListener("input", () => input.classList.remove("is-invalid"));
+
+    el("session-rename-cancel")?.addEventListener("click", () => finishRename(null));
+    modal.addEventListener("cancel", (e) => {
+      e.preventDefault();
+      finishRename(null);
+    });
   }
 
   function renderSessions(sessions) {
@@ -35,10 +96,7 @@ window.SessionUI = (() => {
       btnRename.title = "重命名";
       btnRename.addEventListener("click", async (e) => {
         e.stopPropagation();
-        const title = window.prompt("会话名称", s.title);
-        if (!title || !title.trim() || !api()) return;
-        const res = await api().rename_session(s.id, title.trim());
-        if (res?.ok) renderSessions(res.sessions);
+        await openRenameDialog(s.id, s.title);
       });
 
       const btnDel = document.createElement("button");
@@ -82,6 +140,7 @@ window.SessionUI = (() => {
   }
 
   function init(state) {
+    bindRenameDialog();
     activeId = (state.sessions || []).find((s) => s.active)?.id || "";
     renderSessions(state.sessions || []);
     el("btn-new-session")?.addEventListener("click", async () => {
@@ -94,9 +153,11 @@ window.SessionUI = (() => {
         if (res.events) {
           res.events.forEach((ev) => window.ChatApp.handleEvent(ev));
         }
+        const newSession = (res.sessions || []).find((s) => s.id === activeId);
+        await openRenameDialog(activeId, newSession?.title || "新会话");
       }
     });
   }
 
-  return { init, renderSessions };
+  return { init, renderSessions, openRenameDialog };
 })();

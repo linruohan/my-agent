@@ -1,4 +1,5 @@
 [
+"/tsk list",
 "/weather 今天",
 "/note 天气",
 "/note list",
@@ -20,7 +21,6 @@
 "/note 第一",
 "/note add 测试1  第二个note",
 "/note add 测试  第一个note",
-"/tsk list",
 "/tsk add 测试任务：明天完成笔记代码实现，重复2次，1分种后提醒我  #测试 #重复",
 "/note rm 2",
 "/note rm 1",
