@@ -1,336 +1,557 @@
-# 个人助理Agent —— 可行设计方案
+# 个人助理 Agent —— 设计方案（v2）
 
-## 1 一、项目概述
+> 技术栈：**LangChain + LangGraph** | **CustomTkinter** | **可插拔外部 LLM API**
+
+---
+
+## 一、项目概述
 
 ### 1.1 项目目标
 
-构建一个以LLM为“大脑”的个人助理Agent，能够理解用户的自然语言指令，自主完成**任务管理、日程规划、信息查询、笔记整理、跨软件操作**等日常事务[](https://blog.csdn.net/weixin_58753619/article/details/155379080)。
+构建一个以 LLM 为推理核心的**本地桌面个人助理 Agent**，通过自然语言理解用户意图，自主完成日常事务处理，包括：
+
+- 任务管理（待办创建、提醒、优先级）
+- 日程规划（日历查询、冲突检测）
+- 信息检索（网页搜索、本地文件、知识库问答）
+- 笔记整理（读写、摘要、标签）
+- 跨应用操作（邮件、Notion/飞书等，按需扩展）
 
 ### 1.2 核心能力
 
-|能力域|具体功能|
-|---|---|
-|任务管理|创建/更新/删除待办、设置提醒、任务优先级排序|
-|日程管理|查询/创建/修改日历事件、日程冲突检测|
-|信息检索|网页搜索、本地文件检索、个人知识库问答|
-|笔记整理|读写笔记、内容摘要、标签分类|
-|跨应用操作|发送邮件、操作Notion/飞书文档等|
+| 能力域 | 具体功能 |
+|--------|----------|
+| 任务管理 | 创建/更新/删除待办、设置提醒、优先级排序 |
+| 日程管理 | 查询/创建/修改日历事件、冲突检测 |
+| 信息检索 | 网页搜索、本地文件检索、个人知识库 RAG |
+| 笔记整理 | 读写笔记、内容摘要、标签分类 |
+| 跨应用操作 | 发送邮件、操作 Notion/飞书文档等 |
 
 ### 1.3 非功能性需求
 
-- **响应延迟**：简单任务 < 3秒，复杂任务 < 15秒
-    
-- **可用性**：支持常驻后台运行，定时+事件双触发机制[](https://blog.csdn.net/weixin_58753619/article/details/155379080)
-    
-- **安全性**：敏感操作（删除文件、发送邮件）需二次确认[](https://blog.csdn.net/weixin_58753619/article/details/155379080)
-    
-- **可观测性**：记录任务成功率、响应延迟、工具调用链[](https://blog.csdn.net/weixin_58753619/article/details/155379080)
-    
+| 维度 | 目标 |
+|------|------|
+| 响应延迟 | 简单任务 < 3s，复杂多步任务 < 15s |
+| 可用性 | 桌面常驻、系统托盘、定时 + 事件双触发 |
+| 安全性 | 敏感操作二次确认；API Key 本地加密存储 |
+| 可观测性 | 工具调用链、延迟、成功率日志 |
+| 可扩展性 | LLM 提供商、工具、UI 模块均可独立替换 |
 
-## 2 二、核心架构设计
+---
 
-### 2.1 整体架构图
+## 二、技术选型
 
-text
+### 2.1 核心框架：LangChain + LangGraph
 
-┌─────────────────────────────────────────────────────────────────┐
-│                         用户交互层                              │
-│           (Web UI / 命令行 / 即时通讯机器人)                    │
-└─────────────────────────┬───────────────────────────────────────┘
-                          │
-┌─────────────────────────▼───────────────────────────────────────┐
-│                       编排与调度层                              │
-│  ┌─────────────┐  ┌─────────────┐  ┌───────────────────────┐  │
-│  │  主Agent    │  │  规划引擎   │  │   反思与校验模块       │  │
-│  │ (决策中枢)  │──│ (任务分解)  │──│   (自我修正)          │  │
-│  └─────────────┘  └─────────────┘  └───────────────────────┘  │
-└─────────────────────────┬───────────────────────────────────────┘
-                          │
-┌─────────────────────────▼───────────────────────────────────────┐
-│                        记忆层                                   │
-│  ┌─────────────┐  ┌─────────────┐  ┌───────────────────────┐  │
-│  │  短期记忆   │  │  长期记忆   │  │   向量知识库           │  │
-│  │ (会话上下文) │  │ (用户偏好)  │  │   (RAG检索)           │  │
-│  └─────────────┘  └─────────────┘  └───────────────────────┘  │
-└─────────────────────────┬───────────────────────────────────────┘
-                          │
-┌─────────────────────────▼───────────────────────────────────────┐
-│                        工具层                                   │
-│  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────────┐  │
-│  │搜索引擎│ │日历API│ │邮件API│ │文件系统│ │Notion │ │浏览器控制│  │
-│  └──────┘ └──────┘ └──────┘ └──────┘ └──────┘ └──────────┘  │
-└─────────────────────────────────────────────────────────────────┘
+| 层级 | 技术 | 职责 |
+|------|------|------|
+| 模型集成 | LangChain | LLM 统一接口、Tool 定义、Prompt、RAG 组件 |
+| 编排运行时 | LangGraph | 有状态 Agent 图、Checkpoint、Human-in-the-loop |
+| 预构建 Agent | `langgraph.prebuilt.create_react_agent` | ReAct 循环（思考→行动→观察） |
+| 持久化 | `langgraph.checkpoint.sqlite.SqliteSaver` | 会话状态持久化、断点恢复 |
 
-### 2.2 核心模块说明
+**选型理由**
 
-**（1）主Agent（决策中枢）**
+- LangChain 提供成熟的 Tool / Retriever / Embedding 生态
+- LangGraph 原生支持**有状态图**、**流式输出**、**中断等待用户确认**，适合桌面助理场景
+- 不再使用已弃用的 `AgentExecutor`，统一走 LangGraph 图编排
 
-以LLM为核心引擎，负责理解用户意图、制定行动计划、协调各模块运作[](https://developer.aliyun.com/article/1685293)。主Agent采用**ReAct（Reason + Act）模式**运作，交替执行“思考→行动→观察”的循环，直至任务完成[](https://developer.aliyun.com/article/1685293)。
+### 2.2 UI 框架：Python + CustomTkinter
 
-**（2）规划引擎**
+| 组件 | 说明 |
+|------|------|
+| CustomTkinter | 现代深色/浅色主题，基于 Tkinter，纯 Python 无浏览器依赖 |
+| 线程模型 | UI 主线程 + Agent 后台线程，通过 `queue` 传递消息 |
+| 流式渲染 | LangGraph `stream()` 事件逐 token / 逐步更新聊天窗口 |
 
-负责将复杂目标分解为可执行的子任务序列[](https://cloud.tencent.cn/developer/article/2581282)。例如“帮我安排下周的团队会议”会被分解为：查询日历空闲时段 → 生成会议邀请 → 发送邮件通知参会人 → 创建会议笔记模板。
+**UI 功能模块**
 
-**（3）反思与校验模块**
+```
+┌─────────────────────────────────────────────────────┐
+│  侧边栏          │  主聊天区                         │
+│  · 会话列表      │  · 消息气泡（用户/助手/工具）      │
+│  · 新建会话      │  · 流式打字效果                   │
+│  · 设置入口      │  · 工具调用卡片（可折叠）          │
+├──────────────────┼───────────────────────────────────┤
+│  底部输入区：文本框 + 发送 + 停止 + 附件              │
+├─────────────────────────────────────────────────────┤
+│  状态栏：当前模型 | Token 用量 | 连接状态              │
+└─────────────────────────────────────────────────────┘
+```
 
-Agent在生成响应或完成任务后，对自身工作进行审查——检测错误、评估质量、考量替代方案[](https://cloud.tencent.cn/developer/article/2581282)。这是一个自我校正的迭代优化过程[](https://cloud.tencent.cn/developer/article/2581282)。
+**设置面板（独立窗口）**
 
-**（4）记忆系统**
+- LLM 提供商配置（API Base URL、API Key、Model Name）
+- 温度 / Max Tokens / 超时 / 重试次数
+- 工具开关与权限级别
+- 知识库目录、向量库路径
 
-采用**分层记忆架构**：
+### 2.3 LLM：可插拔外部 API 架构
 
-- **短期记忆**：存储当前会话的对话历史和临时数据
-    
-- **长期记忆**：通过向量数据库存储用户偏好、日程习惯、常用任务模板等
-    
-- **知识库**：通过RAG技术实现个人文档的语义检索与问答
-    
+**设计原则：业务代码不绑定任何单一厂商，通过配置切换 Provider。**
 
-**（5）工具层**
+#### 2.3.1 Provider 抽象层
 
-Agent与外界交互的“手和脚”[](https://developer.aliyun.com/article/1685293)，每个工具被封装为可调用的函数或API[](https://developer.aliyun.com/article/1685293)。
+```python
+# config/llm_providers.yaml 示例
+default_provider: deepseek
 
-## 3 三、技术选型
+providers:
+  deepseek:
+    type: openai_compatible      # OpenAI 兼容协议
+    base_url: https://api.deepseek.com/v1
+    model: deepseek-chat
+    api_key_env: DEEPSEEK_API_KEY
+    supports_tool_call: true
 
-### 3.1 框架选型
+  openai:
+    type: openai_compatible
+    base_url: https://api.openai.com/v1
+    model: gpt-4o
+    api_key_env: OPENAI_API_KEY
+    supports_tool_call: true
 
-|方案|适用场景|推荐度|
-|---|---|---|
-|**LangChain**|模块化开发、RAG系统、深度定制|★★★★★|
-|**AutoGen**|多Agent协作、动态任务分解|★★★☆☆|
-|**CrewAI**|角色分工明确的团队式任务|★★★☆☆|
-|**Coze/Dify**|快速原型、低代码/无代码[](https://developer.aliyun.com/article/1678031)|★★★☆☆|
+  qwen:
+    type: openai_compatible
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    model: qwen-plus
+    api_key_env: DASHSCOPE_API_KEY
+    supports_tool_call: true
 
-**推荐方案：LangChain + LangGraph**
+  ollama:
+    type: ollama                   # 本地部署
+    base_url: http://localhost:11434
+    model: qwen2.5:7b
+    supports_tool_call: true
 
-理由：
+  custom:
+    type: openai_compatible      # 任意自建/第三方网关
+    base_url: https://your-gateway.com/v1
+    model: your-model-name
+    api_key_env: CUSTOM_API_KEY
+    supports_tool_call: true
+```
 
-- LangChain提供完善的模块化组件（Prompt模板、Memory、Retriever、Tool集成）[](https://peliqan.io/blog/autogen-vs-langchain/#content)
-    
-- LangGraph支持有状态的多智能体工作流设计
-    
-- 社区生态成熟，文档丰富，适合个人开发者快速上手
-    
-- 对RAG和工具调用的支持最为全面[](https://peliqan.io/blog/autogen-vs-langchain/#content)
-    
+#### 2.3.2 统一工厂方法
 
-### 3.2 LLM选型
+```python
+from langchain.chat_models import init_chat_model
 
-|模型|优势|适用场景|
-|---|---|---|
-|**DeepSeek-V3 (Function Call版)**|工具调用优化、低延迟|主力推理与工具调用|
-|**GPT-4o**|综合能力强、生态完善|复杂推理与高质量生成|
-|**Qwen2.5**|本地部署可行、中文优化|隐私敏感场景|
+def create_llm(provider_cfg: dict):
+    """根据配置创建 LLM 实例，支持所有 OpenAI 兼容 API。"""
+    if provider_cfg["type"] == "openai_compatible":
+        return init_chat_model(
+            model=provider_cfg["model"],
+            model_provider="openai",
+            base_url=provider_cfg["base_url"],
+            api_key=resolve_api_key(provider_cfg),
+            temperature=provider_cfg.get("temperature", 0.7),
+            timeout=provider_cfg.get("timeout", 60),
+        )
+    elif provider_cfg["type"] == "ollama":
+        return init_chat_model(
+            model=f"ollama:{provider_cfg['model']}",
+            base_url=provider_cfg["base_url"],
+        )
+    # 可扩展 anthropic / google 等原生 Provider
+    raise ValueError(f"Unknown provider type: {provider_cfg['type']}")
+```
 
-**推荐：DeepSeek-V3 Function Call版** 作为主力模型，搭配开源模型（如Qwen）做本地备选。
+#### 2.3.3 Provider 能力矩阵
 
-### 3.3 基础设施选型
+| Provider 类型 | 接入方式 | Tool Call | 适用场景 |
+|---------------|----------|-----------|----------|
+| OpenAI 兼容 API | `base_url` + `api_key` | ✅ | DeepSeek、Qwen、Moonshot、自建网关 |
+| OpenAI 官方 | `openai:gpt-4o` | ✅ | 高质量推理 |
+| Ollama 本地 | `ollama:model` | ✅（视模型） | 隐私敏感、离线 |
+| Anthropic | `claude-sonnet-4-6` | ✅ | 长上下文 |
+| OpenRouter | `openrouter:provider/model` | ✅ | 多模型统一入口 |
 
-|组件|推荐技术|说明|
-|---|---|---|
-|向量数据库|**FAISS**（轻量）/ **Milvus**（生产）|存储知识库向量|
-|关系数据库|**SQLite**（开发）/ **PostgreSQL**（生产）|存储用户配置、任务数据|
-|消息队列|**Redis**|任务队列与缓存|
-|前端框架|**Streamlit**（快速原型）/ **React + AG-UI**|用户交互界面|
-|部署方式|**Docker**|容器化部署|
+> **重要**：优先选用**原生支持 Function Calling / Tool Use** 的模型；通用推理模型（如部分 R1 系列）在多工具连续调用场景下延迟高、成功率低。
 
-## 4 四、详细设计
+---
 
-### 4.1 工作流设计
+## 三、系统架构
 
-采用**ReAct循环**作为核心工作模式[](https://developer.aliyun.com/article/1685293)：
+### 3.1 分层架构
 
-text
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    表现层 (CustomTkinter)                     │
+│   ChatWindow │ SettingsDialog │ ConfirmDialog │ SystemTray   │
+└────────────────────────────┬─────────────────────────────────┘
+                             │ queue / callback
+┌────────────────────────────▼─────────────────────────────────┐
+│                    应用层 (Application Service)               │
+│   SessionManager │ AgentRunner │ StreamHandler │ ConfigMgr    │
+└────────────────────────────┬─────────────────────────────────┘
+                             │ invoke / stream
+┌────────────────────────────▼─────────────────────────────────┐
+│                 编排层 (LangGraph StateGraph)                 │
+│   create_react_agent │ Human-in-the-loop │ Checkpoint         │
+└──────────┬─────────────────────────────┬─────────────────────┘
+           │                             │
+┌──────────▼──────────┐       ┌──────────▼──────────────────────┐
+│   记忆层             │       │   工具层 (LangChain @tool)       │
+│ Short: messages[]   │       │ search │ calendar │ file │ todo  │
+│ Long:  Store/Vector │       │ email  │ rag    │ browser       │
+└─────────────────────┘       └─────────────────────────────────┘
+           │
+┌──────────▼──────────────────────────────────────────────────────┐
+│              基础设施层                                         │
+│   SQLite │ FAISS/Chroma │ keyring │ loguru │ APScheduler      │
+└───────────────────────────────────────────────────────────────┘
+```
 
-用户输入 → [思考] 分析意图 → [行动] 调用工具 → [观察] 获取结果
-    ↑                                                      │
-    └────────────── 未完成则继续循环 ──────────────────────┘
+### 3.2 LangGraph Agent 工作流
 
-具体流程：
+```mermaid
+graph TD
+    START([用户输入]) --> ROUTER{意图路由}
+    ROUTER -->|简单问答| AGENT[ReAct Agent]
+    ROUTER -->|知识问答| RAG[RAG 检索] --> AGENT
+    ROUTER -->|复杂任务| PLAN[任务规划] --> AGENT
 
-1. **意图识别**：LLM分析用户输入，识别任务类型（任务管理/日程/搜索/文件操作等）
-    
-2. **任务规划**：规划引擎将任务拆解为步骤序列[](https://blog.csdn.net/weixin_58753619/article/details/155379080)
-    
-3. **工具选择**：LLM根据任务类型从工具列表中选择合适的工具[](https://developer.aliyun.com/article/1685293)
-    
-4. **工具执行**：执行器调用对应工具API，获取结果
-    
-5. **结果评估**：反思模块评估执行结果，判断是否需要调整方案[](https://cloud.tencent.cn/developer/article/2581282)
-    
-6. **响应生成**：整合所有结果，生成最终回复
-    
+    AGENT --> LLM[调用 LLM]
+    LLM -->|有 tool_calls| CHECK{敏感操作?}
+    LLM -->|无 tool_calls| RESPOND[生成回复]
 
-### 4.2 状态机设计
+    CHECK -->|是| HITL[interrupt 等待用户确认]
+    CHECK -->|否| TOOLS[ToolNode 执行工具]
+    HITL -->|批准| TOOLS
+    HITL -->|拒绝| AGENT
+    TOOLS --> AGENT
 
-参考个人工作助理Agent的状态机设计[](https://blog.csdn.net/weixin_58753619/article/details/155379080)，定义三大主状态：
+    RESPOND --> END([返回 UI])
+```
 
-text
+**核心节点说明**
 
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│  待办管理   │────▶│  日程管理   │────▶│  信息整理   │
-│ (Todo)      │     │ (Calendar)  │     │ (Note)      │
-└─────────────┘     └─────────────┘     └─────────────┘
-      │                    │                    │
-      └────────────────────┴────────────────────┘
-                           │
-                    ┌──────▼──────┐
-                    │  空闲状态   │
-                    │  (Idle)    │
-                    └─────────────┘
+| 节点 | 实现 | 说明 |
+|------|------|------|
+| ReAct Agent | `create_react_agent(model, tools, checkpointer=...)` | 标准推理-行动循环 |
+| ToolNode | `langgraph.prebuilt.ToolNode(tools)` | 批量执行工具调用 |
+| Human-in-the-loop | `langgraph.types.interrupt()` | 敏感操作暂停，等待 UI 确认 |
+| Checkpoint | `SqliteSaver` | 会话持久化，支持多轮恢复 |
 
-每个状态包含对应的子状态（如“待办管理”包含：创建→确认→执行→完成）。
+### 3.3 Agent 状态定义
 
-### 4.3 记忆系统设计
+```python
+from typing import Annotated
+from typing_extensions import TypedDict
+from langgraph.graph.message import add_messages
 
-**短期记忆**：
+class AgentState(TypedDict):
+    messages: Annotated[list, add_messages]   # 对话历史（短期记忆）
+    pending_action: dict | None               # 待确认的操作
+    task_plan: list[str] | None               # 复杂任务步骤
+    retrieved_docs: list | None               # RAG 检索结果
+    metadata: dict                            # token 用量、耗时等
+```
 
-- 存储最近N轮对话（可配置，建议20-50轮）
-    
-- 使用LangChain的`ConversationBufferMemory`或`ConversationSummaryMemory`
-    
+### 3.4 UI ↔ Agent 通信
 
-**长期记忆**：
+```python
+# 伪代码：UI 线程安全调用 Agent
+class AgentRunner:
+    def __init__(self, graph, event_queue: queue.Queue):
+        self.graph = graph
+        self.queue = event_queue
 
-- 用户偏好：存储用户的常用设置、偏好的回复风格、常用任务模板
-    
-- 历史交互：通过向量数据库存储重要交互的embedding，支持语义检索
-    
-- 知识库：个人文档经解析→分块→向量化→存入向量数据库
-    
+    def run_async(self, user_input: str, thread_id: str):
+        def _worker():
+            config = {"configurable": {"thread_id": thread_id}}
+            for event in self.graph.stream(
+                {"messages": [{"role": "user", "content": user_input}]},
+                config=config,
+                stream_mode="messages",
+            ):
+                self.queue.put(("stream", event))
+            self.queue.put(("done", None))
+        threading.Thread(target=_worker, daemon=True).start()
+```
 
-**记忆检索策略**：
+UI 主线程通过 `after(50, poll_queue)` 轮询队列，更新聊天界面；遇到 `interrupt` 事件时弹出确认对话框，用户响应后调用 `graph.invoke(Command(resume=...))` 恢复执行。
 
-1. 新任务到来时，先检索短期记忆（当前会话上下文）
-    
-2. 若信息不足，检索长期记忆（用户偏好、历史模式）
-    
-3. 若涉及知识问答，检索向量知识库（RAG）
-    
+---
 
-### 4.4 工具定义规范
+## 四、模块详细设计
 
-每个工具需定义以下元数据（便于LLM理解和调用）：
+### 4.1 记忆系统
 
-python
+| 类型 | 存储 | 实现 | 用途 |
+|------|------|------|------|
+| 短期记忆 | LangGraph State `messages` | Checkpoint 自动持久化 | 当前会话上下文 |
+| 长期记忆 | `langgraph.store` | `InMemoryStore` → SQLite Store | 用户偏好、常用模板 |
+| 知识库 | FAISS / Chroma | LangChain `VectorStoreRetriever` | 个人文档 RAG |
 
-# 工具定义示例
-{
-    "name": "create_calendar_event",
-    "description": "在用户日历中创建新事件",
-    "parameters": {
-        "title": {"type": "string", "description": "事件标题"},
-        "start_time": {"type": "string", "description": "开始时间(ISO格式)"},
-        "end_time": {"type": "string", "description": "结束时间(ISO格式)"},
-        "attendees": {"type": "array", "description": "参会人邮箱列表"}
-    },
-    "requires_confirmation": True  # 敏感操作标记
+**检索策略（每次用户输入前）**
+
+1. 加载 Checkpoint 中的 `messages`（短期）
+2. 从 Store 检索用户偏好（长期）
+3. 若检测到知识问答意图，执行 RAG 检索，将结果注入 System Prompt
+
+### 4.2 工具层规范
+
+每个工具使用 LangChain `@tool` 装饰器，包含清晰 docstring（LLM 靠此选择工具）：
+
+```python
+from langchain.tools import tool
+
+@tool
+def create_todo(title: str, due_date: str = "", priority: str = "normal") -> str:
+    """创建一条待办事项。
+
+    Args:
+        title: 待办标题
+        due_date: 截止日期，ISO 8601 格式，如 2026-06-20
+        priority: 优先级，可选 low / normal / high
+    """
+    ...
+
+@tool
+def send_email(to: str, subject: str, body: str) -> str:
+    """发送电子邮件。此操作需要用户确认后才会执行。"""
+    ...
+```
+
+**工具元数据扩展**
+
+```python
+TOOL_META = {
+    "send_email":       {"risk": "high",  "requires_confirmation": True},
+    "write_file":       {"risk": "high",  "requires_confirmation": True},
+    "create_calendar_event": {"risk": "medium", "requires_confirmation": True},
+    "web_search":       {"risk": "low",   "requires_confirmation": False},
+    "read_file":        {"risk": "low",   "requires_confirmation": False},
+    "create_todo":      {"risk": "low",   "requires_confirmation": False},
+    "search_notes":     {"risk": "low",   "requires_confirmation": False},
 }
+```
 
-**核心工具清单**：
+**MVP 工具清单**
 
-|工具|功能|敏感性|
-|---|---|---|
-|`web_search`|网页搜索|低|
-|`read_calendar`|读取日程|低|
-|`create_calendar_event`|创建日程|中|
-|`send_email`|发送邮件|高|
-|`read_file`|读取文件|中|
-|`write_file`|写入文件|高|
-|`search_notes`|搜索笔记（RAG）|低|
-|`create_todo`|创建待办|低|
-|`browser_control`|浏览器操作|中|
+| 工具 | 功能 | 阶段 |
+|------|------|------|
+| `web_search` | 网页搜索 | MVP |
+| `read_calendar` / `create_calendar_event` | 日程读写 | MVP |
+| `create_todo` / `list_todos` | 待办管理 | MVP |
+| `read_file` / `write_file` | 文件读写 | Phase 2 |
+| `send_email` | 邮件发送 | Phase 2 |
+| `search_notes` | 知识库 RAG | Phase 2 |
+| `browser_control` | 浏览器自动化 | Phase 3 |
 
-### 0.1 安全设计
+### 4.3 安全设计
 
-**敏感操作审查机制**[](https://blog.csdn.net/weixin_58753619/article/details/155379080)：
+**敏感操作 Human-in-the-loop 流程**
 
-- 高风险操作（删除文件、发送邮件、修改系统配置）执行前需用户二次确认
-    
-- 实现方式：Agent生成操作预览 → 推送给用户审批 → 用户确认后执行
-    
+```
+Agent 生成 tool_call
+    → LangGraph interrupt() 暂停图执行
+    → UI 弹出 ConfirmDialog（展示操作预览）
+    → 用户 [批准] / [编辑参数] / [拒绝]
+    → graph.invoke(Command(resume=user_response)) 恢复
+    → 批准则执行工具，拒绝则让 Agent 重新规划
+```
 
-**输入输出过滤**：
+**其他安全措施**
 
-- 用户输入：SQL注入、命令注入检测
-    
-- 模型输出：敏感信息脱敏、有害内容过滤
-    
+- API Key 通过 `keyring` 存入系统密钥链，不写明文配置文件
+- 文件工具限制在 `~/AssistantWorkspace` 沙箱目录
+- 工具调用日志审计（操作类型、参数摘要、时间戳）
+- 输入校验：拒绝 shell 注入模式（如 `; rm -rf`）
 
-**权限控制**：
+### 4.4 RAG 知识库（Phase 2）
 
-- 工具级权限：不同工具可设置不同访问级别
-    
-- 文件操作限制在指定目录范围内
-    
+```
+文档导入 → RecursiveCharacterTextSplitter 分块
+         → Embedding（与 LLM 同 Provider 或本地模型）
+         → 存入 FAISS/Chroma
+         → 检索时 top-k + MMR 去重
+         → 注入 Prompt 上下文
+```
 
-## 1 五、实施路线
+---
 
-### 1.1 第一阶段：MVP（最小可行产品）—— 2周
+## 五、项目结构
 
-|任务|产出|
-|---|---|
-|环境搭建|Python环境 + LangChain + 选定LLM API|
-|基础对话|实现最简单的对话Agent|
-|2-3个核心工具|搜索引擎 + 日历读取 + 待办管理|
-|命令行交互|通过命令行与Agent对话|
+```
+my-agent/
+├── main.py                      # 入口：启动 CustomTkinter 应用
+├── pyproject.toml               # 依赖管理
+├── config/
+│   ├── llm_providers.yaml       # LLM 提供商配置
+│   ├── tools.yaml               # 工具开关与权限
+│   └── app.yaml                 # 应用全局配置
+├── src/
+│   ├── ui/
+│   │   ├── app.py               # 主窗口
+│   │   ├── chat_panel.py        # 聊天面板
+│   │   ├── settings_dialog.py   # 设置对话框
+│   │   ├── confirm_dialog.py    # 敏感操作确认
+│   │   └── widgets/             # 自定义组件
+│   ├── agent/
+│   │   ├── graph.py             # LangGraph 图构建
+│   │   ├── nodes.py             # 自定义节点（规划、RAG）
+│   │   ├── state.py             # AgentState 定义
+│   │   └── runner.py            # AgentRunner（线程 + 流式）
+│   ├── llm/
+│   │   ├── factory.py           # create_llm() 工厂
+│   │   └── providers.py         # Provider 配置解析
+│   ├── tools/
+│   │   ├── __init__.py          # 工具注册表
+│   │   ├── search.py
+│   │   ├── calendar.py
+│   │   ├── todo.py
+│   │   ├── file.py
+│   │   └── email.py
+│   ├── memory/
+│   │   ├── store.py             # 长期记忆 Store
+│   │   └── rag.py               # RAG 管线
+│   └── infra/
+│       ├── config.py            # 配置加载
+│       ├── logger.py            # 日志
+│       └── scheduler.py         # 定时任务
+├── data/
+│   ├── checkpoints/             # LangGraph SQLite Checkpoint
+│   ├── vectorstore/             # FAISS 索引
+│   └── workspace/               # 文件操作沙箱
+└── tests/
+    ├── test_llm_factory.py
+    ├── test_tools.py
+    └── test_agent_graph.py
+```
 
-### 1.2 第二阶段：核心功能 —— 3周
+---
 
-|任务|产出|
-|---|---|
-|扩展工具集|邮件、文件读写、Notion集成|
-|记忆系统|短期记忆 + 长期记忆（向量数据库）|
-|RAG知识库|个人文档上传 + 语义检索|
-|Web UI|简单的Web聊天界面|
+## 六、核心依赖
 
-### 1.3 第三阶段：智能化提升 —— 2周
+```toml
+[project]
+dependencies = [
+    "langchain>=0.3",
+    "langgraph>=0.3",
+    "langchain-openai",          # OpenAI 兼容 API
+    "langchain-community",       # 社区工具集成
+    "customtkinter>=5.2",
+    "pyyaml",
+    "keyring",                   # API Key 安全存储
+    "loguru",                    # 日志
+    "apscheduler",               # 定时提醒
+    "faiss-cpu",                 # 向量检索（轻量）
+    "chromadb",                  # 向量库（可选）
+]
+```
 
-|任务|产出|
-|---|---|
-|规划引擎|复杂任务自动分解|
-|反思机制|自我校验与修正[](https://cloud.tencent.cn/developer/article/2581282)|
-|多轮对话优化|上下文理解与记忆管理|
+---
 
-### 1.4 第四阶段：生产就绪 —— 2周
+## 七、实施路线
 
-|任务|产出|
-|---|---|
-|安全审查|敏感操作确认机制|
-|可观测性|日志、监控、工具调用链追踪[](https://blog.csdn.net/weixin_58753619/article/details/155379080)|
-|Docker部署|容器化 + 常驻运行|
-|触发机制|定时任务 + 事件触发[](https://blog.csdn.net/weixin_58753619/article/details/155379080)|
+### Phase 1 — MVP（2 周）
 
-## 2 六、关键技术要点
+| 任务 | 产出 |
+|------|------|
+| 项目脚手架 + 依赖 | `pyproject.toml`、目录结构 |
+| LLM 工厂 + 配置 | 支持 ≥2 个 OpenAI 兼容 Provider 切换 |
+| LangGraph ReAct Agent | `create_react_agent` + 3 个基础工具 |
+| CustomTkinter 聊天 UI | 消息收发、流式显示、设置面板 |
+| SQLite Checkpoint | 会话持久化、多会话管理 |
 
-### 2.1 LLM选型建议
+**MVP 验收标准**：用户在桌面 UI 中切换 LLM Provider，通过自然语言完成搜索、查日程、建待办。
 
-**优先选择对Function Call（工具调用）优化过的模型**，如DeepSeek-V3 Function Call版。避免选择为通用对话设计的模型（如DeepSeek-R1），它们在多工具连续调用场景下可能表现不佳且延迟较高。
+### Phase 2 — 核心功能（3 周）
 
-### 2.2 ReAct循环实现要点
+| 任务 | 产出 |
+|------|------|
+| 扩展工具集 | 文件读写、邮件、笔记 RAG |
+| 长期记忆 Store | 用户偏好持久化 |
+| Human-in-the-loop | 敏感操作确认对话框 |
+| 知识库导入 UI | 拖拽上传文档、自动索引 |
 
-在LangChain中，ReAct模式通过`create_react_agent`或`AgentExecutor`实现。关键是将工具的`description`写清楚，让LLM能准确判断何时调用哪个工具[](https://developer.aliyun.com/article/1685293)。
+### Phase 3 — 智能化（2 周）
 
-### 2.3 记忆系统实现
+| 任务 | 产出 |
+|------|------|
+| 复杂任务规划节点 | 多步骤任务自动分解 |
+| 反思节点 | 执行结果自检与重试 |
+| 系统托盘 + 定时触发 | 后台提醒、定时任务 |
 
-- 短期记忆：使用LangChain的`ConversationBufferWindowMemory`（只保留最近K轮）
-    
-- 长期记忆：使用向量数据库 + 自定义检索逻辑
-    
-- 可参考SQLite存储交互历史 + 向量检索的方案
-    
+### Phase 4 — 生产就绪（2 周）
 
-### 2.4 性能优化
+| 任务 | 产出 |
+|------|------|
+| 日志与追踪 | 工具调用链可视化（UI 面板） |
+| 异常恢复 | 网络超时重试、Provider 降级 |
+| 打包发布 | PyInstaller 单文件 exe |
+| 测试覆盖 | 核心模块单元测试 |
 
-- 高频查询使用Redis缓存
-    
-- 大文件处理使用异步I/O
-    
-- LLM调用设置超时和重试机制
-    
+---
 
-## 3 七、总结
+## 八、关键技术要点
 
-本设计方案的核心思想是**将LLM的推理能力与丰富的工具调用能力相结合**，通过ReAct循环实现自主规划与执行[](https://developer.aliyun.com/article/1685293)。建议从**LangChain + DeepSeek-V3**的技术栈起步，按照**MVP → 核心功能 → 智能化 → 生产就绪**的四阶段路线推进，每个阶段都有明确的交付物，确保持续可交付的进展。
+### 8.1 LangGraph vs 旧版 AgentExecutor
 
-如果在实施过程中对某个具体模块（如工具定义、记忆配置、RAG实现）有疑问，可以随时深入探讨。
+| 对比项 | AgentExecutor（已弃用） | LangGraph |
+|--------|------------------------|-----------|
+| 状态管理 | 无原生持久化 | Checkpoint 原生支持 |
+| 人工介入 | 难以实现 | `interrupt()` 一等公民 |
+| 流式输出 | 有限 | `stream()` 多模式 |
+| 自定义流程 | 受限 | StateGraph 任意编排 |
+
+### 8.2 流式输出集成
+
+```python
+# stream_mode="messages" 逐 token 推送至 UI
+for msg, metadata in graph.stream(input, stream_mode="messages"):
+    if msg.content:
+        ui.append_token(msg.content)
+```
+
+### 8.3 多 Provider 降级策略
+
+```python
+PROVIDER_FALLBACK_CHAIN = ["deepseek", "qwen", "ollama"]
+
+def invoke_with_fallback(prompt, providers):
+    for name in providers:
+        try:
+            llm = create_llm(load_provider(name))
+            return llm.invoke(prompt)
+        except (TimeoutError, ConnectionError) as e:
+            logger.warning(f"Provider {name} failed: {e}")
+    raise RuntimeError("All LLM providers unavailable")
+```
+
+### 8.4 CustomTkinter 性能注意
+
+- Agent 推理**不可**在主线程执行，否则 UI 冻结
+- 流式 token 更新频率限制（每 50ms 批量刷新一次）
+- 长对话做消息窗口截断（保留最近 N 轮 + Checkpoint 摘要）
+
+---
+
+## 九、风险与应对
+
+| 风险 | 影响 | 应对 |
+|------|------|------|
+| 模型 Tool Call 不稳定 | 工具调用失败 | 选 Function Call 优化模型；加重试 + 降级 |
+| API 限流 / 超时 | 响应中断 | 超时配置 + Provider 降级链 |
+| 敏感操作误执行 | 数据丢失 / 误发 | Human-in-the-loop 强制确认 |
+| UI 线程阻塞 | 界面卡死 | 严格后台线程 + Queue 通信 |
+| 向量库体积膨胀 | 磁盘占用 | 定期清理 + 分库管理 |
+
+---
+
+## 十、总结
+
+本方案以 **LangGraph 有状态 Agent 图**为编排核心，**LangChain** 提供模型与工具集成，**CustomTkinter** 构建本地桌面交互，**可插拔 LLM Provider 层**确保不绑定单一厂商。
+
+推荐实施路径：
+
+```
+MVP（对话 + 3 工具 + UI）
+  → 核心功能（RAG + 安全确认 + 扩展工具）
+    → 智能化（规划 + 反思 + 后台触发）
+      → 生产就绪（打包 + 测试 + 降级）
+```
+
+每个阶段均有明确验收标准，确保持续可交付。
