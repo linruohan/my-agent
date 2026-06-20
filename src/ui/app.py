@@ -23,6 +23,8 @@ from src.memory.rag_worker import ingest_files_in_process
 from src.memory.cache_admin import handle_cache_command
 from src.memory.search_cache import SearchCache
 from src.ui.clipboard import copy_to_clipboard as sys_copy_to_clipboard
+from src.ui.open_local import check_local_paths as sys_check_local_paths
+from src.ui.open_local import open_local_path as sys_open_local_path
 from src.ui.font_prefs import (
     build_font_variables,
     get_font_prefs,
@@ -161,6 +163,12 @@ class AppApi:
 
     def copy_to_clipboard(self, text: str) -> bool:
         return sys_copy_to_clipboard(text)
+
+    def open_local_path(self, path: str) -> dict[str, Any]:
+        return sys_open_local_path(path)
+
+    def check_local_paths(self, paths: list[str]) -> dict[str, bool]:
+        return sys_check_local_paths(paths)
 
 
 class AssistantController:
@@ -549,7 +557,14 @@ class AssistantController:
 
         def worker() -> None:
             try:
-                result = run_skill(skill_name, user_part)
+                self.chat.set_tool_status(f"🧠 正在识别 Skill 意图: {skill_name}…", accent="info")
+                result = run_skill(skill_name, user_part, llm=self._llm)
+                if result.intent_reason and result.intent_reason not in {"raw_cli", "heuristic"}:
+                    self.chat.append_tool_call(
+                        "parse_skill_intent",
+                        {"skill": skill_name, "reason": result.intent_reason},
+                    )
+                self.chat.set_tool_status(f"⚙ 正在执行 Skill: {skill_name}…", accent="info")
                 if result.command:
                     self.chat.append_tool_call(
                         "run_skill",

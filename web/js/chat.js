@@ -99,6 +99,160 @@ window.ChatUI = (() => {
     }, 1500);
   }
 
+  const WIN_ABS_PATH = /[A-Za-z]:[\\/](?:[^\s<>"'`|]+[\\/])*[^\s<>"'`|]+/g;
+
+  function trimPathTail(raw) {
+    let s = raw;
+    while (s.length > 3 && /[.,;，。:!?\u3001\u3002)\]}>]$/.test(s)) {
+      const ext = s.match(/(\.[A-Za-z0-9]{1,8})$/);
+      if (ext && s.endsWith(ext[1])) break;
+      s = s.slice(0, -1);
+    }
+    return s;
+  }
+
+  function splitTextByPaths(text) {
+    const parts = [];
+    WIN_ABS_PATH.lastIndex = 0;
+    let last = 0;
+    let match;
+    while ((match = WIN_ABS_PATH.exec(text)) !== null) {
+      const raw = match[0];
+      const path = trimPathTail(raw);
+      if (path.length < 4) continue;
+      if (match.index > last) {
+        parts.push({ type: "text", value: text.slice(last, match.index) });
+      }
+      parts.push({ type: "path", value: path });
+      last = match.index + raw.length;
+    }
+    if (!parts.length) return [{ type: "text", value: text }];
+    if (last < text.length) parts.push({ type: "text", value: text.slice(last) });
+    return parts;
+  }
+
+  async function openLocalPath(path, btn) {
+    if (!path) return false;
+    const api = window.pywebview && window.pywebview.api;
+    if (!api || !api.open_local_path) {
+      window.alert("当前环境不支持打开本地文件");
+      return false;
+    }
+    try {
+      const res = await api.open_local_path(path);
+      if (!res || !res.ok) {
+        window.alert((res && res.error) || "打开失败");
+        return false;
+      }
+      if (btn) {
+        const orig = btn.textContent;
+        btn.classList.add("opened");
+        btn.textContent = "已打开";
+        setTimeout(() => {
+          btn.classList.remove("opened");
+          btn.textContent = orig;
+        }, 1500);
+      }
+      return true;
+    } catch {
+      window.alert("打开失败");
+      return false;
+    }
+  }
+
+  async function fetchLocalPathExists(paths) {
+    const unique = [...new Set((paths || []).filter(Boolean))];
+    if (!unique.length) return {};
+    const api = window.pywebview && window.pywebview.api;
+    if (!api || !api.check_local_paths) return {};
+    try {
+      return (await api.check_local_paths(unique)) || {};
+    } catch {
+      return {};
+    }
+  }
+
+  function buildLocalPathSpan(path) {
+    const wrap = document.createElement("span");
+    wrap.className = "local-path";
+
+    const text = document.createElement("button");
+    text.type = "button";
+    text.className = "local-path-text";
+    text.textContent = path;
+    text.title = `打开 ${path}`;
+    text.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openLocalPath(path, openBtn);
+    });
+
+    const openBtn = document.createElement("button");
+    openBtn.type = "button";
+    openBtn.className = "local-path-open";
+    openBtn.textContent = "打开";
+    openBtn.title = "用默认应用打开";
+    openBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openLocalPath(path, openBtn);
+    });
+
+    wrap.appendChild(text);
+    wrap.appendChild(openBtn);
+    return wrap;
+  }
+
+  async function enhanceLocalPaths(bubble) {
+    const root = bubble.querySelector(".md-content");
+    if (!root) return;
+
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        const parent = node.parentElement;
+        if (!parent) return NodeFilter.FILTER_REJECT;
+        if (parent.closest("pre")) return NodeFilter.FILTER_REJECT;
+        if (parent.closest(".local-path")) return NodeFilter.FILTER_REJECT;
+        if (!node.textContent || !/[A-Za-z]:[\\/]/.test(node.textContent)) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+
+    const pending = [];
+    const pathSet = new Set();
+    nodes.forEach((node) => {
+      const parts = splitTextByPaths(node.textContent || "");
+      if (parts.length === 1 && parts[0].type === "text") return;
+      parts.forEach((part) => {
+        if (part.type === "path") pathSet.add(part.value);
+      });
+      pending.push({ node, parts });
+    });
+
+    const existsMap = await fetchLocalPathExists([...pathSet]);
+
+    pending.forEach(({ node, parts }) => {
+      const frag = document.createDocumentFragment();
+      parts.forEach((part) => {
+        if (part.type === "path") {
+          if (existsMap[part.value]) {
+            frag.appendChild(buildLocalPathSpan(part.value));
+          } else {
+            frag.appendChild(document.createTextNode(part.value));
+          }
+        } else if (part.value) {
+          frag.appendChild(document.createTextNode(part.value));
+        }
+      });
+      node.parentNode.replaceChild(frag, node);
+    });
+  }
+
   function getBubblePlainText(bubble) {
     const md = bubble.querySelector(".md-content");
     return (md ? md.innerText : bubble.innerText).trim();
@@ -153,6 +307,7 @@ window.ChatUI = (() => {
     }
 
     enhanceCodeBlocks(bubble);
+    void enhanceLocalPaths(bubble);
 
     if (bubble.querySelector(".bubble-toolbar")) return;
 

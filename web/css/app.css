@@ -671,6 +671,56 @@ body {
   border-color: var(--success);
 }
 
+.local-path {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  vertical-align: baseline;
+}
+
+.local-path-text {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  color: var(--primary-bg, var(--link, #6ea8fe));
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  word-break: break-all;
+}
+
+.local-path-text:hover {
+  color: var(--fg);
+}
+
+.local-path-open {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-popover, var(--bg-app)) 88%, transparent);
+  color: var(--fg-muted);
+  font-size: var(--font-caption);
+  padding: 0 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  line-height: 1.6;
+}
+
+.local-path-open:hover {
+  color: var(--fg);
+  border-color: var(--ring, var(--primary-bg));
+}
+
+.local-path-open.opened {
+  color: var(--success);
+  border-color: var(--success);
+}
+
 .bubble.user .bubble-copy-btn {
   background: color-mix(in srgb, var(--user-bubble-bg) 75%, #000);
   color: color-mix(in srgb, var(--user-bubble-fg) 90%, #fff);

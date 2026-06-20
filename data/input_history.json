@@ -1,4 +1,13 @@
 [
+"/docx-py d盘新建一个docx 内容是123",
+"/doc-diff-tool \"D:\\codehub\\skills\\doc-diff-tool\\tests\\test.docx\" 第二章节  输出到桌面 001.xlsx",
+"/docx-py 桌面新建一个docx 内容是123",
+"/doc-diff-tool \"D:\\codehub\\skills\\doc-diff-tool\\tests\\test.docx\" 获取 4.1 章节的表格",
+"/doc-diff-tool \"D:\\codehub\\skills\\doc-diff-tool\\tests\\test.docx\" 获取 2  章节的表格",
+"/doc-diff-tool \"D:\\codehub\\skills\\doc-diff-tool\\tests\\test.docx\" 获取 2.3  章节的表格",
+"/doc-diff-tool \"D:\\codehub\\skills\\doc-diff-tool\\tests\\test.docx\" 获取 2.4  章节的表格",
+"/doc-diff-tool \"D:\\codehub\\skills\\doc-diff-tool\\tests\\test.docx\" 获取 2 技术方案 章节的表格",
+"/doc-diff-tool \"D:\\codehub\\skills\\doc-diff-tool\\tests\\test.docx\" 获取 2 章节的表格",
 "/doc-diff-tool \"D:\\codehub\\skills\\doc-diff-tool\\tests\\test.html\" 获取 2.1 章节的表格",
 "/doc-diff-tool \"D:\\codehub\\skills\\doc-diff-tool\\tests\\test.docx\" 获取 2.1 章节的表格",
 "/note 天气",
