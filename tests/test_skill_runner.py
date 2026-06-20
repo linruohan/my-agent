@@ -13,7 +13,7 @@ def test_extract_section():
 def test_build_argv_doc_diff(tmp_path):
     skill_root = tmp_path / "doc-diff-tool"
     scripts = skill_root / "scripts"
-    scripts.mkdir(parents)
+    scripts.mkdir(parents=True)
     entry = scripts / "doc_diff_tool.py"
     entry.write_text("if __name__ == '__main__': pass", encoding="utf-8")
 

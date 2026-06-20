@@ -10,7 +10,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from src.ui.skill_catalog import load_skill_prompt, resolve_skill
+from src.ui.skill_catalog import resolve_skill
 
 
 @dataclass
@@ -26,8 +26,6 @@ _PATH_RE = re.compile(
     r'"([^"]+)"|\'([^\']+)\'|([A-Za-z]:\\(?:[^"\s]+(?:\\[^"\s]+)*))'
 )
 _SECTION_PATTERNS = [
-    re.compile(r'--section\s+["\']([^"\']+)["\']', re.I),
-    re.compile(r'(?:获取|提取|导出)\s*["\']?(\d+(?:\.\d+)*(?:\s+[\u4e00-\u9fff\w]+)?)', re.I),
     re.compile(r'(?:第\s*)?(\d+(?:\.\d+)+)\s*(?:章节|节|章)?', re.I),
     re.compile(r'章节\s*["\']?([^"\']+?)["\']?(?:\s|$|的)', re.I),
     re.compile(r'section\s+["\']?([^"\']+?)["\']?(?:\s|$)', re.I),
@@ -86,6 +84,31 @@ def _extract_paths(text: str) -> list[str]:
 
 def _extract_section(text: str) -> str:
     body = text or ""
+
+    m = re.search(r'--section\s+["\']([^"\']+)["\']', body, re.I)
+    if m:
+        return m.group(1).strip()
+
+    m = re.search(r'(?:获取|提取|导出)\s*["\']([^"\']+)["\']', body, re.I)
+    if m:
+        return m.group(1).strip()
+
+    m = re.search(
+        r'(?:获取|提取|导出)\s*(\d+(?:\.\d+)*\s+(?!章节(?:的|\s|$)|节(?:的|\s|$)|章(?:的|\s|$))[\u4e00-\u9fff]+(?:[\u4e00-\u9fff\w\s]*?))(?:\s*的)?(?:\s*(?:表格|表))?(?:\s|$)',
+        body,
+        re.I,
+    )
+    if m:
+        return m.group(1).strip()
+
+    m = re.search(
+        r'(?:获取|提取|导出)\s*(\d+(?:\.\d+)*)(?:\s*(?:章节|节|章))?(?:\s*的)?(?:\s*(?:表格|表))?',
+        body,
+        re.I,
+    )
+    if m:
+        return m.group(1).strip()
+
     for pat in _SECTION_PATTERNS:
         m = pat.search(body)
         if m:
