@@ -9,7 +9,7 @@ import httpx
 from loguru import logger
 
 from src.infra.config import load_search_config, load_weather_config
-from src.tools.weather_render import build_weather_page_html
+from src.tools.weather.render import build_weather_page_html
 
 WeatherRange = Literal["1d", "7d"]
 

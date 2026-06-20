@@ -20,8 +20,7 @@ from src.llm.factory import create_llm
 from src.llm.providers import ProviderConfig
 from src.memory.rag import get_knowledge_stats, set_rag_provider
 from src.memory.rag_worker import ingest_files_in_process
-from src.memory.cache_admin import handle_cache_command
-from src.memory.search_cache import SearchCache
+from src.memory.search_cache import SearchCache, handle_cache_command
 from src.ui.clipboard import copy_to_clipboard as sys_copy_to_clipboard
 from src.ui.open_local import check_local_paths as sys_check_local_paths
 from src.ui.open_local import open_local_path as sys_open_local_path
@@ -31,15 +30,15 @@ from src.ui.font_prefs import (
     list_font_catalog,
     persist_font_prefs,
 )
-from src.ui.input_compose import (
+from src.ui.input import (
     build_image_previews,
     compose_ocr_message,
     compose_user_message,
     format_ocr_reply,
     has_sendable_content,
     save_temp_image_b64,
-)
-from src.ui.input_intent import (
+    append_history,
+    list_history,
     INTENT_LINK,
     INTENT_OCR,
     INTENT_SEARCH,
@@ -53,27 +52,27 @@ from src.ui.input_intent import (
     InputIntent,
     resolve_input_intent,
 )
-from src.ui.input_history import append_history, list_history
-from src.ui.session_store import SessionStore
-from src.ui.skill_catalog import build_slash_catalog, get_skill_dirs, load_skill_prompt
-from src.ui.skill_runner import run_skill
-from src.ui.link_summarize import run_link_summarize_turn
+from src.ui.skill import build_slash_catalog, get_skill_dirs, load_skill_prompt, run_skill
+from src.ui.link import run_link_summarize_turn
 from src.ui.message_utils import normalize_user_message
-from src.ui.ocr_worker import ocr_progress_text
+from src.ui.ocr import ocr_progress_text
+from src.ui.speech import (
+    ensure_speech_privacy_ready,
+    get_voice_info as speech_voice_info,
+    is_supported as voice_is_supported,
+    open_speech_privacy_settings,
+    recognize_once,
+)
+from src.ui.session_store import SessionStore
 from src.infra.process_executor import shutdown_process_pools
-from src.ui.speech_win import ensure_speech_privacy_ready
-from src.ui.speech_win import get_voice_info as speech_voice_info
-from src.ui.speech_win import is_supported as voice_is_supported
-from src.ui.speech_win import open_speech_privacy_settings
-from src.ui.speech_win import recognize_once
 from src.ui.theme_loader import (
     build_css_variables,
     get_theme_prefs,
     list_theme_catalog,
     persist_theme_prefs,
 )
-from src.tools.note_store import NoteStore, handle_note_command
-from src.tools.task_store import TaskReminderService, TaskStore, handle_task_command
+from src.tools.note import NoteStore, handle_note_command
+from src.tools.task import TaskReminderService, TaskStore, handle_task_command, migrate_legacy_todos_json
 from src.tools.tool_worker import invoke_tool_in_process
 from src.ui.search_turn import run_web_search_turn
 from src.ui.web_bridge import WebChatBridge
@@ -112,7 +111,7 @@ class AppApi:
         return save_temp_image_b64(data_b64)
 
     def read_image_data_url(self, path: str) -> dict[str, Any]:
-        from src.ui.input_compose import image_to_data_url
+        from src.ui.input import image_to_data_url
 
         return image_to_data_url(path)
 
@@ -191,6 +190,7 @@ class AssistantController:
         self.chat = WebChatBridge(self._get_window, on_event=self._on_chat_event)
         self._note_store = NoteStore()
         self._task_store = TaskStore()
+        migrate_legacy_todos_json(self._task_store)
         self._task_reminder = TaskReminderService(self._task_store)
         self._task_reminder.start()
         self._running = False

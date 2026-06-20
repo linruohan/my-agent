@@ -162,7 +162,7 @@ def _ocr_image_path_paddle(path: Path) -> dict[str, Any]:
 def _try_winrt_ocr(path: Path) -> dict[str, Any] | None:
     if sys.platform != "win32":
         return None
-    from src.ui.ocr_win import is_winrt_ocr_supported, ocr_image_path_win
+    from src.ui.ocr.win import is_winrt_ocr_supported, ocr_image_path_win
 
     if not is_winrt_ocr_supported():
         return None

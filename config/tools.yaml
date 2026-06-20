@@ -124,17 +124,32 @@ tools:
     risk: medium
     requires_confirmation: true
 
-  create_todo:
-    enabled: true
-    risk: low
-    requires_confirmation: false
-
-  list_todos:
-    enabled: true
-    risk: low
-    requires_confirmation: false
-
   get_weather_forecast:
     enabled: true
     risk: low
     requires_confirmation: false
+
+  add_task:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
+  list_tasks:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
+  search_tasks:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
+  complete_task:
+    enabled: true
+    risk: medium
+    requires_confirmation: true
+
+  delete_task:
+    enabled: true
+    risk: high
+    requires_confirmation: true

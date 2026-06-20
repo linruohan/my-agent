@@ -5,7 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from src.ui.skill_runner import run_skill
+from src.ui.skill.runner import run_skill
 
 
 class _FakeLLM:
@@ -56,7 +56,7 @@ scripts/create_docx.py
         f'{{"cli_args":"--output \\"{out_path}\\" --text 123","reason":"解析桌面 docx"}}'
     )
 
-    with patch("src.ui.skill_runner.resolve_skill") as resolve:
+    with patch("src.ui.skill.runner.resolve_skill") as resolve:
         resolve.return_value = (skill_root, skill_root / "SKILL.md")
         result = run_skill("docx-py", "桌面新建一个docx 内容是123", llm=llm)
 

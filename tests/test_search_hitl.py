@@ -59,7 +59,7 @@ def test_search_bing_parse():
       </li>
     </ol>
     """
-    with patch("src.tools.search.httpx.Client") as mock_client:
+    with patch("src.tools.web.core.httpx.Client") as mock_client:
         mock_resp = MagicMock()
         mock_resp.text = html
         mock_resp.raise_for_status = MagicMock()

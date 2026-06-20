@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from langchain_core.tools import BaseTool, StructuredTool
 
-from src.tools.tool_worker import invoke_tool_in_process, tool_process_enabled
+from src.tools import tool_worker
 
 
 def wrap_tools_for_process(tools: list[BaseTool]) -> list[BaseTool]:
-    if not tool_process_enabled():
+    if not tool_worker.tool_process_enabled():
         return tools
     return [_wrap_tool(tool) for tool in tools]
 
@@ -18,7 +18,7 @@ def _wrap_tool(tool: BaseTool) -> BaseTool:
     description = tool.description or ""
 
     def _invoke(**kwargs: object) -> str:
-        return invoke_tool_in_process(name, dict(kwargs))
+        return tool_worker.invoke_tool_in_process(name, dict(kwargs))
 
     kwargs: dict = {
         "name": name,

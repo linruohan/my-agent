@@ -1,4 +1,7 @@
 [
+"/weather 今天",
+"/note 天气",
+"/note list",
 "/docx-py d盘新建一个docx 内容是123",
 "/doc-diff-tool \"D:\\codehub\\skills\\doc-diff-tool\\tests\\test.docx\" 第二章节  输出到桌面 001.xlsx",
 "/docx-py 桌面新建一个docx 内容是123",
@@ -10,9 +13,7 @@
 "/doc-diff-tool \"D:\\codehub\\skills\\doc-diff-tool\\tests\\test.docx\" 获取 2 章节的表格",
 "/doc-diff-tool \"D:\\codehub\\skills\\doc-diff-tool\\tests\\test.html\" 获取 2.1 章节的表格",
 "/doc-diff-tool \"D:\\codehub\\skills\\doc-diff-tool\\tests\\test.docx\" 获取 2.1 章节的表格",
-"/note 天气",
 "/note rime",
-"/note list",
 "/note 天气预报",
 "/note add 西安天气预报 https://www.weather.com.cn/weather1d/101110101.shtml 这是西安天气预报的接口，点进去就能看的天气预报",
 "/note 第二",

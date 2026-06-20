@@ -13,7 +13,7 @@ from loguru import logger
 
 from src.infra.config import load_search_config
 from src.infra.paths import DATA_DIR, PROJECT_ROOT
-from src.memory.search_cache_db import CacheRow, SearchCacheStore
+from src.memory.search_cache.db import CacheRow, SearchCacheStore
 
 _LEGACY_JSON = DATA_DIR / "search_cache.json"
 _STRIP_PREFIX = re.compile(
@@ -80,7 +80,7 @@ class SearchCache:
 
     def _migrate_legacy(self) -> None:
         if _LEGACY_JSON.is_file():
-            from src.memory.search_cache_db import SearchCacheStore
+            from src.memory.search_cache.db import SearchCacheStore
 
             rows = []
             try:
