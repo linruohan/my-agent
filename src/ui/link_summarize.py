@@ -2,17 +2,25 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Callable
+from urllib.parse import urlparse
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from loguru import logger
 
+from src.tools.tool_worker import invoke_tool_in_process
 from src.ui.link_fetch_worker import summarize_url_in_process
-from src.ui.search_turn import _extract_text
+from src.ui.search_turn import _extract_text, search_result_ok
 
 SummarizeFn = Callable[[str], None]
 StatusFn = Callable[[str, str | None], None]
+
+_LIVE_DATA_HINT = re.compile(
+    r"热榜|排行榜|榜单|前\s*\d+\s*条|最新|今日|头条|实时",
+    re.IGNORECASE,
+)
 
 
 def _summarize_system_prompt() -> str:
@@ -22,7 +30,39 @@ def _summarize_system_prompt() -> str:
 1. 严格依据页面内容作答，不要编造页面中不存在的信息。
 2. 若页面是动态加载、需登录或内容不足以完成指令，如实说明并给出可行建议。
 3. 用清晰的中文结构化输出；若用户要求列表/前 N 条，尽量逐条列出。
-4. 不要输出「【页面内容】」等标签，不要描述你的推理过程。"""
+4. 不要输出「【页面内容】」等标签，不要描述你的推理过程。
+5. 若提供了【网页搜索补充】，可结合搜索结果作答；页面与搜索冲突时说明差异。"""
+
+
+def _needs_live_supplement(instruction: str, fetched: dict[str, Any]) -> bool:
+    if not fetched.get("ok"):
+        return True
+    if fetched.get("sparse"):
+        return True
+    if _LIVE_DATA_HINT.search(instruction or ""):
+        return _is_sparse_fetch(fetched)
+    return False
+
+
+def _is_sparse_fetch(fetched: dict[str, Any]) -> bool:
+    if fetched.get("sparse"):
+        return True
+    summary = str(fetched.get("summary", ""))
+    return len(re.sub(r"\s+", "", summary)) < 280
+
+
+def _build_search_query(instruction: str, url: str) -> str:
+    base = (instruction or "").strip()
+    if base:
+        return base
+    return f"site:{urlparse(url).netloc} 最新内容"
+
+
+def _fetch_web_supplement(query: str) -> str:
+    raw = invoke_tool_in_process("web_search", {"query": query})
+    if search_result_ok(raw):
+        return raw
+    return raw or "搜索未返回有效结果"
 
 
 def run_link_summarize_turn(
@@ -55,7 +95,21 @@ def run_link_summarize_turn(
             continue
         summary = str(fetched.get("summary", "")).strip()
         engine = fetched.get("engine", "")
-        page_blocks.append(f"### {url}\n（抓取方式: {engine}）\n\n{summary}")
+        warning = str(fetched.get("warning", "") or "").strip()
+        note = str(fetched.get("note", "") or "").strip()
+        meta = f"（抓取方式: {engine}，约 {fetched.get('char_count', len(summary))} 字）"
+        if warning:
+            meta += f"\n⚠ {warning}"
+        if note:
+            meta += f"\nℹ {note}"
+        page_blocks.append(f"### {url}\n{meta}\n\n{summary}")
+
+        if _needs_live_supplement(instruction, fetched):
+            if on_status:
+                on_status("⚠ 页面内容不足，正在网页搜索补充…", "info")
+            search_q = _build_search_query(instruction, url)
+            supplement = _fetch_web_supplement(search_q)
+            page_blocks.append(f"### 网页搜索补充（{search_q}）\n{supplement}")
 
     if cancel_check and cancel_check():
         return "", fetch_results

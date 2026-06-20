@@ -1,7 +1,6 @@
 /** 聊天消息 DOM 渲染 */
 window.ChatUI = (() => {
   const scrollEl = () => document.getElementById("chat-scroll");
-  const toolStatusEl = () => document.getElementById("tool-status");
 
   let assistantNode = null;
   let streamText = "";
@@ -320,28 +319,71 @@ window.ChatUI = (() => {
     scrollBottom();
   }
 
+  function ensureBubbleStructure(bubble) {
+    if (!bubble) return;
+    if (bubble.querySelector(".bubble-body") || bubble.querySelector(".bubble-status")) return;
+    const text = bubble.textContent;
+    bubble.textContent = "";
+    const body = document.createElement("div");
+    body.className = "bubble-body";
+    body.textContent = text || "";
+    bubble.appendChild(body);
+  }
+
+  function getBubbleBody(bubble) {
+    ensureBubbleStructure(bubble);
+    let body = bubble.querySelector(".bubble-body");
+    if (!body) {
+      body = document.createElement("div");
+      body.className = "bubble-body";
+      bubble.appendChild(body);
+    }
+    return body;
+  }
+
+  function getOrCreateBubbleStatus(bubble) {
+    ensureBubbleStructure(bubble);
+    let status = bubble.querySelector(".bubble-status");
+    if (!status) {
+      status = document.createElement("div");
+      status.className = "bubble-status";
+      const body = bubble.querySelector(".bubble-body");
+      if (body) {
+        bubble.insertBefore(status, body);
+      } else {
+        bubble.appendChild(status);
+      }
+    }
+    return status;
+  }
+
+  function setBubbleStreamText(bubble, text) {
+    getBubbleBody(bubble).textContent = text || "";
+  }
+
+  function ensureAssistantBubble() {
+    if (!assistantNode) {
+      assistantNode = createRow("assistant");
+      assistantNode.classList.add("streaming");
+      ensureBubbleStructure(assistantNode);
+    }
+    return assistantNode;
+  }
+
   function setToolStatus(text, accent) {
-    const el = toolStatusEl();
-    if (!el) return;
     if (!text) {
       clearToolStatus();
       return;
     }
-    el.classList.remove("hidden", "accent-info", "accent-success", "accent-error");
-    if (accent) el.classList.add(`accent-${accent}`);
-    el.textContent = text;
-    el.style.color = "";
+    const bubble = ensureAssistantBubble();
+    const status = getOrCreateBubbleStatus(bubble);
+    status.className = "bubble-status" + (accent ? ` accent-${accent}` : "");
+    status.textContent = text;
     scrollBottom();
   }
 
   function clearToolStatus() {
-    const el = toolStatusEl();
-    if (el) {
-      el.classList.add("hidden");
-      el.classList.remove("accent-info", "accent-success", "accent-error");
-      el.textContent = "";
-      el.style.color = "";
-    }
+    assistantNode?.querySelector(".bubble-status")?.remove();
   }
 
   function clear() {
@@ -368,11 +410,8 @@ window.ChatUI = (() => {
         streamText = ev.content || "";
         assistantNode = createRow("assistant");
         assistantNode.classList.add("streaming");
-        if (streamText) {
-          assistantNode.textContent = streamText;
-        } else {
-          assistantNode.textContent = "";
-        }
+        ensureBubbleStructure(assistantNode);
+        setBubbleStreamText(assistantNode, streamText);
         scrollBottom();
         break;
       case "assistant_token":
@@ -380,11 +419,12 @@ window.ChatUI = (() => {
           streamText = ev.content || "";
           assistantNode = createRow("assistant");
           assistantNode.classList.add("streaming");
+          ensureBubbleStructure(assistantNode);
         } else {
           streamText += ev.content || "";
         }
         if (assistantNode) {
-          assistantNode.textContent = streamText;
+          setBubbleStreamText(assistantNode, streamText);
         }
         scrollBottom();
         break;

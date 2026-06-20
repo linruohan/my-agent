@@ -718,10 +718,37 @@ body {
   -webkit-user-select: none;
 }
 
-.bubble.streaming {
+.bubble-status {
+  font-size: var(--font-meta);
+  font-weight: 500;
+  line-height: 1.45;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--assistant-bubble-border, var(--border)) 55%, transparent);
+  color: var(--fg-muted);
+}
+
+.bubble-status.accent-info {
+  color: color-mix(in srgb, var(--info) 88%, var(--fg));
+}
+
+.bubble-status.accent-success {
+  color: color-mix(in srgb, var(--success) 85%, var(--fg));
+}
+
+.bubble-status.accent-error {
+  color: color-mix(in srgb, var(--danger) 88%, var(--fg));
+}
+
+.bubble.streaming .bubble-body {
   white-space: pre-wrap;
   color: var(--fg-muted);
   font-style: italic;
+}
+
+.bubble.streaming {
+  white-space: normal;
+  font-style: normal;
 }
 
 .bubble .md-content p {
@@ -857,42 +884,6 @@ body {
   background: color-mix(in srgb, var(--danger) 12%, var(--bg-chat, var(--bg-app)));
   color: color-mix(in srgb, var(--danger) 85%, var(--fg));
   border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
-}
-
-.tool-status {
-  flex-shrink: 0;
-  text-align: center;
-  padding: 8px 14px;
-  margin: 0 8px 4px;
-  font-size: var(--font-meta);
-  font-weight: 500;
-  line-height: 1.4;
-  color: var(--fg);
-  background: color-mix(in srgb, var(--info, #0ea5e9) 12%, var(--bg-chat));
-  border: 1px solid color-mix(in srgb, var(--info, #0ea5e9) 32%, var(--border));
-  border-radius: var(--radius-chip);
-}
-
-.tool-status.hidden {
-  display: none;
-}
-
-.tool-status.accent-info {
-  background: color-mix(in srgb, var(--info) 14%, var(--bg-chat));
-  border-color: color-mix(in srgb, var(--info) 42%, var(--border));
-  color: color-mix(in srgb, var(--info) 88%, var(--fg));
-}
-
-.tool-status.accent-success {
-  background: color-mix(in srgb, var(--success) 14%, var(--bg-chat));
-  border-color: color-mix(in srgb, var(--success) 42%, var(--border));
-  color: color-mix(in srgb, var(--success) 85%, var(--fg));
-}
-
-.tool-status.accent-error {
-  background: color-mix(in srgb, var(--danger) 12%, var(--bg-chat));
-  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
-  color: color-mix(in srgb, var(--danger) 88%, var(--fg));
 }
 
 .modal {
