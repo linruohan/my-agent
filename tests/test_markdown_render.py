@@ -1,0 +1,36 @@
+from __future__ import annotations
+
+from src.ui.markdown_render import parse_table_block
+
+
+def test_parse_table_with_header():
+    lines = [
+        "| Name | Age |",
+        "| --- | --- |",
+        "| Alice | 30 |",
+        "| Bob | 25 |",
+    ]
+    rows, has_header, nxt = parse_table_block(lines, 0)
+    assert has_header is True
+    assert nxt == 4
+    assert rows == [["Name", "Age"], ["Alice", "30"], ["Bob", "25"]]
+
+
+def test_parse_table_without_separator():
+    lines = [
+        "| A | B |",
+        "| 1 | 2 |",
+        "",
+        "next",
+    ]
+    rows, has_header, nxt = parse_table_block(lines, 0)
+    assert has_header is False
+    assert nxt == 2
+    assert rows == [["A", "B"], ["1", "2"]]
+
+
+def test_parse_table_stops_at_blank():
+    lines = ["| x |", "| y |", "", "text"]
+    rows, _, nxt = parse_table_block(lines, 0)
+    assert nxt == 2
+    assert len(rows) == 2

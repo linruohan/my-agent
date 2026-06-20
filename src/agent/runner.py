@@ -119,8 +119,9 @@ class AgentRunner:
 
     def _handle_message(self, msg: Any, meta: dict) -> None:
         if isinstance(msg, (AIMessage, AIMessageChunk)):
-            if msg.content:
-                self.event_queue.put(StreamEvent("token", str(msg.content)))
+            text = self._extract_text(msg.content)
+            if text:
+                self.event_queue.put(StreamEvent("token", text))
             if getattr(msg, "tool_calls", None):
                 for tc in msg.tool_calls:
                     self.event_queue.put(
@@ -136,6 +137,22 @@ class AgentRunner:
                     {"name": msg.name, "content": str(msg.content)[:500]},
                 )
             )
+
+    @staticmethod
+    def _extract_text(content: Any) -> str:
+        if content is None:
+            return ""
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts: list[str] = []
+            for block in content:
+                if isinstance(block, dict):
+                    parts.append(str(block.get("text") or block.get("content") or ""))
+                else:
+                    parts.append(str(block))
+            return "".join(parts)
+        return str(content)
 
     def poll_events(self, handler: Callable[[StreamEvent], None]) -> bool:
         """处理队列中所有待处理事件。返回是否仍在运行。"""

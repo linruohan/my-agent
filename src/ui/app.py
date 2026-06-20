@@ -206,6 +206,8 @@ class AssistantApp(ctk.CTk):
                     self.chat.append_token(event.payload)
                 elif event.kind == "tool_call":
                     p = event.payload
+                    if p["name"] == "web_search":
+                        self.chat.reset_assistant_for_tool()
                     self.chat.append_tool_call(p["name"], p.get("args", {}))
                 elif event.kind == "tool_result":
                     p = event.payload
