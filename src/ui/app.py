@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import queue
 import uuid
 from pathlib import Path
 
@@ -11,11 +12,13 @@ from src.agent.runner import AgentRunner, StreamEvent
 from src.infra.config import ensure_data_dirs, load_app_config, load_merged_providers
 from src.llm.factory import create_llm
 from src.llm.providers import ProviderConfig
-from src.ui.chat_panel import ChatPanel
+from src.memory.rag import set_rag_provider
+from src.memory.search_cache import SearchCache
+from src.ui.chat_panel import ChatPanel, normalize_user_message
 from src.ui.confirm_dialog import ConfirmDialog
 from src.ui.knowledge_dialog import KnowledgeDialog
 from src.ui.settings_dialog import SettingsDialog
-from src.memory.rag import set_rag_provider
+from src.ui.theme import CORNER_RADIUS
 
 
 class AssistantApp(ctk.CTk):
@@ -37,6 +40,12 @@ class AssistantApp(ctk.CTk):
         self._running = False
         self._graph_bundle: AgentGraphBundle | None = None
         self._awaiting_approval = False
+        self._search_cache = SearchCache()
+        self._turn_user_query = ""
+        self._turn_search_query = ""
+        self._turn_used_web_search = False
+        self._turn_assistant_text = ""
+        self._collecting_assistant = False
 
         self._build_layout()
         self._init_agent()
@@ -82,7 +91,7 @@ class AssistantApp(ctk.CTk):
         input_frame.grid(row=1, column=0, sticky="ew", pady=(8, 0))
         input_frame.grid_columnconfigure(0, weight=1)
 
-        self.input_box = ctk.CTkTextbox(input_frame, height=80)
+        self.input_box = ctk.CTkTextbox(input_frame, height=80, corner_radius=CORNER_RADIUS)
         self.input_box.grid(row=0, column=0, sticky="ew", padx=(8, 4), pady=8)
         self.input_box.bind("<Control-Return>", lambda e: self._send())
 
@@ -156,7 +165,7 @@ class AssistantApp(ctk.CTk):
     def _send(self) -> None:
         if self._running:
             return
-        text = self.input_box.get("1.0", "end").strip()
+        text = normalize_user_message(self.input_box.get("1.0", "end"))
         if not text:
             return
         if not self.runner.graph:
@@ -165,9 +174,41 @@ class AssistantApp(ctk.CTk):
 
         self.input_box.delete("1.0", "end")
         self.chat.append_user(text)
+
+        cached = self._search_cache.lookup(text)
+        if cached:
+            self._deliver_cached_search(text, cached)
+            return
+
+        self._start_agent_turn(text)
+
+    def _start_agent_turn(self, text: str) -> None:
+        self._turn_user_query = text
+        self._turn_search_query = ""
+        self._turn_used_web_search = False
+        self._turn_assistant_text = ""
+        self._collecting_assistant = False
         self._running = True
         self.send_btn.configure(state="disabled")
+        self.status_bar.configure(text=self._status_text() + "  |  思考中…")
         self.runner.run_async(text, self._thread_id)
+
+    def _deliver_cached_search(self, user_query: str, response: str) -> None:
+        """命中搜索缓存，跳过 Agent / 工具 / LLM。"""
+        self.chat.append_assistant_complete(response, from_cache=True)
+        self.status_bar.configure(text=self._status_text() + "  |  搜索缓存命中")
+
+    def _maybe_save_search_cache(self) -> None:
+        if self._turn_used_web_search and self._turn_assistant_text.strip():
+            user_q = self._turn_user_query
+            search_q = self._turn_search_query or self._turn_user_query
+            response = self._turn_assistant_text
+            self._search_cache.save_async(user_q, search_q, response)
+        self._turn_user_query = ""
+        self._turn_search_query = ""
+        self._turn_used_web_search = False
+        self._turn_assistant_text = ""
+        self._collecting_assistant = False
 
     def _stop(self) -> None:
         if self._running:
@@ -200,38 +241,83 @@ class AssistantApp(ctk.CTk):
 
     def _poll_agent_events(self) -> None:
         if self.runner and self.runner.graph:
+            batch: list[StreamEvent] = []
+            while True:
+                try:
+                    batch.append(self.runner.event_queue.get_nowait())
+                except queue.Empty:
+                    break
 
-            def handle(event: StreamEvent) -> None:
-                if event.kind == "token":
-                    self.chat.append_token(event.payload)
-                elif event.kind == "tool_call":
-                    p = event.payload
-                    if p["name"] == "web_search":
-                        self.chat.reset_assistant_for_tool()
-                    self.chat.append_tool_call(p["name"], p.get("args", {}))
-                elif event.kind == "tool_result":
-                    p = event.payload
-                    self.chat.append_tool_result(p["name"], p["content"])
-                elif event.kind == "approval_required":
-                    self._handle_approval(event.payload)
-                elif event.kind == "done":
-                    self.chat.end_assistant()
-                    self._running = False
-                    self.send_btn.configure(state="normal")
-                elif event.kind == "error":
-                    self.chat.append_error(event.payload)
-                    self._running = False
-                    self.send_btn.configure(state="normal")
-                elif event.kind == "stopped":
-                    self._running = False
-                    self.send_btn.configure(state="normal")
+            skip_until: int | None = None
+            for i, event in enumerate(batch):
+                if event.kind == "tool_call" and event.payload.get("name") == "web_search":
+                    skip_until = i
+                    break
 
-            still_running = self.runner.poll_events(handle)
-            if not still_running and self._running:
-                self._running = False
-                self.send_btn.configure(state="normal")
+            waiting_approval = False
+            still_running = True
+            for i, event in enumerate(batch):
+                if skip_until is not None and i < skip_until and event.kind == "token":
+                    continue
+                if event.kind == "approval_required":
+                    waiting_approval = True
+                if not self._handle_agent_event(event):
+                    still_running = False
+                    break
+
+            if still_running:
+                if waiting_approval:
+                    still_running = True
+                else:
+                    t = self.runner._thread
+                    still_running = t is not None and t.is_alive()
+                if not still_running and self._running:
+                    self._running = False
+                    self.send_btn.configure(state="normal")
 
         self.after(50, self._poll_agent_events)
+
+    def _handle_agent_event(self, event: StreamEvent) -> bool:
+        """处理单个 Agent 事件，返回是否仍在运行。"""
+        if event.kind == "token":
+            if self._collecting_assistant:
+                self._turn_assistant_text += event.payload
+            self.chat.append_token(event.payload)
+        elif event.kind == "tool_call":
+            p = event.payload
+            if p["name"] == "web_search":
+                self.chat.reset_assistant_for_tool()
+                self._turn_used_web_search = True
+                self._turn_search_query = str(p.get("args", {}).get("query", ""))
+                self._collecting_assistant = False
+            self.chat.append_tool_call(p["name"], p.get("args", {}))
+        elif event.kind == "tool_result":
+            p = event.payload
+            if p["name"] == "web_search":
+                self._collecting_assistant = True
+                self._turn_assistant_text = ""
+            self.chat.append_tool_result(p["name"], p["content"])
+        elif event.kind == "approval_required":
+            self._handle_approval(event.payload)
+        elif event.kind == "done":
+            self.chat.end_assistant()
+            self._maybe_save_search_cache()
+            self._running = False
+            self.send_btn.configure(state="normal")
+            self.status_bar.configure(text=self._status_text() + "  |  就绪")
+            return False
+        elif event.kind == "error":
+            self.chat.append_error(event.payload)
+            self._maybe_save_search_cache()
+            self._running = False
+            self.send_btn.configure(state="normal")
+            return False
+        elif event.kind == "stopped":
+            self._maybe_save_search_cache()
+            self._running = False
+            self.send_btn.configure(state="normal")
+            return False
+        return True
 
 
 def run_app() -> None:

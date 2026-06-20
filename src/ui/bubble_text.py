@@ -10,17 +10,26 @@ from typing import Any
 import customtkinter as ctk
 
 
-def _resolve_color(color: str | tuple[str, str]) -> str:
+def resolve_theme_color(color: str | tuple[str, str]) -> str:
     if isinstance(color, tuple):
         return color[1] if ctk.get_appearance_mode().lower() == "dark" else color[0]
     return color
 
 
+def normalize_corner_radius(radius: int | tuple[int, int, int, int]) -> int:
+    """CustomTkinter CTkFrame 仅支持单一 corner_radius（int）。"""
+    if isinstance(radius, (tuple, list)):
+        return int(max(radius))
+    return int(radius)
+
+
 class BubbleText(ctk.CTkFrame):
     """带圆角背景的消息正文区域。"""
 
-    _MIN_WIDTH = 80
-    _PAD_X = 24
+    _MIN_WIDTH = 88
+    _TEXT_PAD_X = 24
+    _TEXT_PAD_Y = 16
+    _DEFAULT_RADIUS = 6
 
     def __init__(
         self,
@@ -28,14 +37,29 @@ class BubbleText(ctk.CTkFrame):
         *,
         fg_color: str | tuple[str, str],
         text_color: str | None = None,
+        border_color: str | tuple[str, str] | None = None,
+        corner_radius: int | tuple[int, int, int, int] | None = None,
         max_width: int | None = None,
         **kwargs: Any,
     ) -> None:
-        super().__init__(master, fg_color=fg_color, corner_radius=12, **kwargs)
-        bg = _resolve_color(fg_color)
+        radius = normalize_corner_radius(
+            corner_radius if corner_radius is not None else self._DEFAULT_RADIUS
+        )
+        border = resolve_theme_color(border_color) if border_color else None
+        super().__init__(
+            master,
+            fg_color=fg_color,
+            corner_radius=radius,
+            border_width=1 if border else 0,
+            border_color=border or fg_color,
+            **kwargs,
+        )
+        bg = resolve_theme_color(fg_color)
         if text_color is None:
-            text_color = "#ffffff" if ctk.get_appearance_mode().lower() == "dark" else "#1a1a1a"
+            text_color = "#f1f5f9" if ctk.get_appearance_mode().lower() == "dark" else "#1e293b"
 
+        self._fg_color = fg_color
+        self._text_color = text_color
         self._max_width = max_width or 640
         self._font = tkfont.Font(family="Segoe UI", size=13)
 
@@ -50,9 +74,12 @@ class BubbleText(ctk.CTkFrame):
             bg=bg,
             fg=text_color,
             insertbackground=text_color,
-            padx=10,
+            padx=12,
             pady=8,
+            spacing1=0,
+            spacing3=1,
             cursor="arrow",
+            relief="flat",
         )
         self._text.pack(fill="both", expand=True)
         self._md_images: list[Any] = []
@@ -66,7 +93,7 @@ class BubbleText(ctk.CTkFrame):
         return self._text
 
     def set_max_width(self, pixels: int) -> None:
-        self._max_width = max(self._MIN_WIDTH + self._PAD_X, pixels)
+        self._max_width = max(self._MIN_WIDTH + self._TEXT_PAD_X, pixels)
         self.fit_width()
 
     def fit_width(self) -> None:
@@ -81,7 +108,7 @@ class BubbleText(ctk.CTkFrame):
 
         char_w = max(self._font.measure("0"), 1)
         longest_px = max((self._font.measure(line) for line in content.splitlines()), default=0)
-        natural = longest_px + self._PAD_X
+        natural = longest_px + self._TEXT_PAD_X
         target = min(max(natural, self._MIN_WIDTH), self._max_width)
         tb.configure(width=max(8, target // char_w))
         self.configure(width=target)

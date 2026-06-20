@@ -37,6 +37,27 @@ _MAX_IMAGE_WIDTH = 380
 _IMAGE_LINE_HEIGHT = 20
 
 
+def compact_bubble_content(text: str) -> str:
+    """去掉空行并收紧每行首尾空白；代码块内保留原样。"""
+    if not text:
+        return ""
+    lines = text.splitlines()
+    out: list[str] = []
+    in_code = False
+    for line in lines:
+        if line.strip().startswith("```"):
+            in_code = not in_code
+            out.append(line.rstrip())
+            continue
+        if in_code:
+            out.append(line.rstrip())
+            continue
+        stripped = line.strip()
+        if stripped:
+            out.append(stripped)
+    return "\n".join(out).strip()
+
+
 def _base_font(size: int = 13) -> tuple[str, int]:
     return ("Segoe UI", size)
 
@@ -58,21 +79,21 @@ class MarkdownContext:
     link_id: int = 0
 
 
-def _configure_tags(tb: Text) -> None:
+def _configure_tags(tb: Text, *, on_user_bubble: bool = False) -> None:
     dark = _is_dark()
-    code_bg = "#1a1a2e" if dark else "#eef0f4"
-    table_bg = "#252536" if dark else "#f3f4f6"
-    quote_fg = "#9ca3af" if dark else "#6b7280"
-    link_fg = "#60a5fa" if dark else "#2563eb"
-    hr_fg = "#4b5563" if dark else "#d1d5db"
+    code_bg = "#2d2d38" if dark else "#e8eaef"
+    table_bg = "#34343f" if dark else "#ececf1"
+    quote_fg = "#a1a1aa" if dark else "#6b7280"
+    link_fg = "#bfdbfe" if on_user_bubble else ("#60a5fa" if dark else "#2563eb")
+    hr_fg = "#52525b" if dark else "#d4d4d8"
 
     tags = {
-        "h1": {"font": (*_base_font(16), "bold"), "spacing1": 6, "spacing3": 4},
-        "h2": {"font": (*_base_font(15), "bold"), "spacing1": 5, "spacing3": 3},
-        "h3": {"font": (*_base_font(14), "bold"), "spacing1": 4, "spacing3": 2},
-        "h4": {"font": (*_base_font(13), "bold"), "spacing1": 3, "spacing3": 2},
-        "h5": {"font": (*_base_font(12), "bold"), "spacing1": 2, "spacing3": 1},
-        "h6": {"font": (*_base_font(11), "bold"), "spacing1": 2, "spacing3": 1},
+        "h1": {"font": (*_base_font(16), "bold"), "spacing1": 2, "spacing3": 1},
+        "h2": {"font": (*_base_font(15), "bold"), "spacing1": 2, "spacing3": 1},
+        "h3": {"font": (*_base_font(14), "bold"), "spacing1": 1, "spacing3": 0},
+        "h4": {"font": (*_base_font(13), "bold"), "spacing1": 1, "spacing3": 0},
+        "h5": {"font": (*_base_font(12), "bold"), "spacing1": 1, "spacing3": 0},
+        "h6": {"font": (*_base_font(11), "bold"), "spacing1": 1, "spacing3": 0},
         "bold": {"font": (*_base_font(), "bold")},
         "italic": {"font": (*_base_font(), "italic")},
         "strike": {"overstrike": 1, "foreground": quote_fg},
@@ -186,7 +207,6 @@ def _render_table(ctx: MarkdownContext, rows: list[list[str]], has_header: bool)
 
     for row in rows[start:]:
         tb.insert("end", _format_table_row(row, widths) + "\n", "table")
-    tb.insert("end", "\n")
 
 
 def _load_image(url_or_path: str, *, max_width: int = _MAX_IMAGE_WIDTH) -> tuple[PhotoImage | None, int, int]:
@@ -288,13 +308,15 @@ def set_plain_text_content(target: Any, content: str, *, text_color: str | None 
     else:
         tb.configure(state="normal")
     tb.delete("1.0", "end")
-    _configure_tags(tb)
+    on_user = getattr(target, "_chat_role", None) == "user"
+    _configure_tags(tb, on_user_bubble=on_user)
     if text_color:
         tb.configure(fg=text_color)
     ctx = MarkdownContext(tb=tb, host=target if hasattr(target, "_md_images") else None)
     host = ctx.host
     if host is not None:
         host._md_link_urls = {}
+    content = compact_bubble_content(content)
     _insert_plain_with_urls(ctx, content)
     if hasattr(target, "set_readonly"):
         target.set_readonly()
@@ -313,7 +335,8 @@ def render_markdown(target: Any, content: str, *, text_color: str | None = None)
         tb.configure(state="normal")
 
     tb.delete("1.0", "end")
-    _configure_tags(tb)
+    on_user = getattr(target, "_chat_role", None) == "user"
+    _configure_tags(tb, on_user_bubble=on_user)
     if text_color:
         tb.configure(fg=text_color)
 
@@ -323,6 +346,7 @@ def render_markdown(target: Any, content: str, *, text_color: str | None = None)
         host._md_extra_lines = 0
         host._md_link_urls = {}
 
+    content = compact_bubble_content(content)
     lines = content.splitlines()
     i = 0
     in_code = False
@@ -349,7 +373,6 @@ def render_markdown(target: Any, content: str, *, text_color: str | None = None)
         stripped = line.strip()
 
         if not stripped:
-            tb.insert("end", "\n")
             i += 1
             continue
 
@@ -414,6 +437,11 @@ def render_markdown(target: Any, content: str, *, text_color: str | None = None)
     if in_code and code_buf:
         tb.insert("end", "\n".join(code_buf) + "\n", "codeblock")
 
+    # 去掉末尾多余换行，避免占位空行
+    end_index = tb.index("end-1c")
+    if end_index != "1.0" and tb.get("end-2c", "end-1c") == "\n":
+        tb.delete("end-2c", "end-1c")
+
     if host is not None:
         host._md_extra_lines = ctx.extra_lines
 
@@ -444,7 +472,7 @@ def fit_text_height(
     target: Any,
     *,
     max_lines: int = 200,
-    min_lines: int = 2,
+    min_lines: int = 1,
 ) -> None:
     tb = _get_text_widget(target)
     tb.update_idletasks()
@@ -458,7 +486,7 @@ def fit_text_height(
 
     display_lines = _count_display_lines(tb)
     extra = getattr(target, "_md_extra_lines", 0)
-    height = max(min_lines, min(display_lines + extra + 1, max_lines))
+    height = max(min_lines, min(display_lines + extra, max_lines))
     tb.configure(height=height)
 
 
@@ -477,20 +505,28 @@ def schedule_fit_text_height(
     max_width: int | None = None,
     **kwargs: int,
 ) -> None:
-    """布局稳定后多次重算宽高。"""
-    fit_bubble_size(target, max_width=max_width, **kwargs)
+    """布局稳定后重算宽高（合并多次 refit，避免抖动）。"""
     scheduler = target if hasattr(target, "after") else _get_text_widget(target)
+    pending = getattr(target, "_fit_after_ids", None)
+    if pending is None:
+        pending = []
+        target._fit_after_ids = pending
+    for job in pending:
+        try:
+            scheduler.after_cancel(job)
+        except Exception:
+            pass
+    pending.clear()
 
-    def _refit() -> None:
-        fit_bubble_size(target, max_width=max_width, **kwargs)
+    fit_bubble_size(target, max_width=max_width, **kwargs)
 
     def _final() -> None:
         fit_bubble_size(target, max_width=max_width, **kwargs)
+        pending.clear()
         if on_done:
             on_done()
 
-    scheduler.after(50, _refit)
-    scheduler.after(150, _final)
+    pending.append(scheduler.after_idle(_final))
 
 
 # 兼容旧名

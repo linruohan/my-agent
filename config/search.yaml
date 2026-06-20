@@ -5,6 +5,11 @@ search:
   auto_enrich_query: true       # 自动为查询补充当前年份/「最新」
   user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
+cache:
+  enabled: true
+  text_similarity_threshold: 0.65   # 文本近似匹配阈值（不使用 Embedding）
+  max_entries: 100
+
 rag:
   embedding_mode: local          # local | api | auto（推荐 local，无需 Embedding API）
   embedding_model: text-embedding-3-small

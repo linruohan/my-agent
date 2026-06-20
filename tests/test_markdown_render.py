@@ -1,6 +1,16 @@
 from __future__ import annotations
 
-from src.ui.markdown_render import parse_table_block
+from src.ui.markdown_render import compact_bubble_content, parse_table_block
+
+
+def test_compact_bubble_content_removes_empty_lines():
+    raw = "hello\n\n\nworld\n"
+    assert compact_bubble_content(raw) == "hello\nworld"
+
+
+def test_compact_bubble_content_preserves_code_block_blank_lines():
+    raw = "text\n\n```\nline1\n\nline2\n```\n\nafter"
+    assert compact_bubble_content(raw) == "text\n```\nline1\n\nline2\n```\nafter"
 
 
 def test_parse_table_with_header():
