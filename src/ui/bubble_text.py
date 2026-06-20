@@ -9,27 +9,24 @@ from typing import Any
 
 import customtkinter as ctk
 
+from src.ui.theme import (
+    BUBBLE_INSET,
+    BUBBLE_PAD_X,
+    BUBBLE_RADIUS,
+    FONT_BODY,
+    FONT_FAMILY,
+    resolve,
+)
+
 
 def resolve_theme_color(color: str | tuple[str, str]) -> str:
-    if isinstance(color, tuple):
-        return color[1] if ctk.get_appearance_mode().lower() == "dark" else color[0]
-    return color
-
-
-def normalize_corner_radius(radius: int | tuple[int, int, int, int]) -> int:
-    """CustomTkinter CTkFrame 仅支持单一 corner_radius（int）。"""
-    if isinstance(radius, (tuple, list)):
-        return int(max(radius))
-    return int(radius)
+    return resolve(color)
 
 
 class BubbleText(ctk.CTkFrame):
     """带圆角背景的消息正文区域。"""
 
     _MIN_WIDTH = 88
-    _TEXT_PAD_X = 24
-    _TEXT_PAD_Y = 16
-    _DEFAULT_RADIUS = 6
 
     def __init__(
         self,
@@ -38,30 +35,29 @@ class BubbleText(ctk.CTkFrame):
         fg_color: str | tuple[str, str],
         text_color: str | None = None,
         border_color: str | tuple[str, str] | None = None,
-        corner_radius: int | tuple[int, int, int, int] | None = None,
+        corner_radius: int | None = None,
         max_width: int | None = None,
         **kwargs: Any,
     ) -> None:
-        radius = normalize_corner_radius(
-            corner_radius if corner_radius is not None else self._DEFAULT_RADIUS
-        )
-        border = resolve_theme_color(border_color) if border_color else None
+        radius = corner_radius if corner_radius is not None else BUBBLE_RADIUS
+        border = resolve(border_color) if border_color else None
         super().__init__(
             master,
             fg_color=fg_color,
             corner_radius=radius,
             border_width=1 if border else 0,
-            border_color=border or fg_color,
+            border_color=border or resolve(fg_color),
             **kwargs,
         )
-        bg = resolve_theme_color(fg_color)
+        bg = resolve(fg_color)
         if text_color is None:
             text_color = "#f1f5f9" if ctk.get_appearance_mode().lower() == "dark" else "#1e293b"
 
         self._fg_color = fg_color
         self._text_color = text_color
         self._max_width = max_width or 640
-        self._font = tkfont.Font(family="Segoe UI", size=13)
+        self._font = tkfont.Font(family=FONT_FAMILY, size=FONT_BODY)
+        inset = BUBBLE_INSET
 
         self._text = tk.Text(
             self,
@@ -75,13 +71,13 @@ class BubbleText(ctk.CTkFrame):
             fg=text_color,
             insertbackground=text_color,
             padx=12,
-            pady=8,
-            spacing1=0,
-            spacing3=1,
+            pady=9,
+            spacing1=1,
+            spacing3=2,
             cursor="arrow",
             relief="flat",
         )
-        self._text.pack(fill="both", expand=True)
+        self._text.pack(fill="both", expand=True, padx=inset, pady=inset)
         self._md_images: list[Any] = []
         self._md_extra_lines = 0
         self._md_link_urls: dict[str, str] = {}
@@ -93,11 +89,10 @@ class BubbleText(ctk.CTkFrame):
         return self._text
 
     def set_max_width(self, pixels: int) -> None:
-        self._max_width = max(self._MIN_WIDTH + self._TEXT_PAD_X, pixels)
+        self._max_width = max(self._MIN_WIDTH + BUBBLE_PAD_X, pixels)
         self.fit_width()
 
     def fit_width(self) -> None:
-        """内容未超宽时收缩；超过 max_width 时按 max_width 换行。"""
         tb = self._text
         tb.update_idletasks()
         content = tb.get("1.0", "end-1c")
@@ -108,13 +103,12 @@ class BubbleText(ctk.CTkFrame):
 
         char_w = max(self._font.measure("0"), 1)
         longest_px = max((self._font.measure(line) for line in content.splitlines()), default=0)
-        natural = longest_px + self._TEXT_PAD_X
+        natural = longest_px + BUBBLE_PAD_X + BUBBLE_INSET * 2
         target = min(max(natural, self._MIN_WIDTH), self._max_width)
-        tb.configure(width=max(8, target // char_w))
+        tb.configure(width=max(8, (target - BUBBLE_INSET * 2) // char_w))
         self.configure(width=target)
 
     def set_readonly(self) -> None:
-        """保持 normal 状态以便链接可点击，通过按键拦截实现只读。"""
         tb = self._text
         tb.configure(state="normal", cursor="arrow")
         if not self._readonly_guard:

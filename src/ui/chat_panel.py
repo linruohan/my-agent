@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime
 
 import customtkinter as ctk
 
@@ -11,11 +12,37 @@ from src.ui.markdown_render import (
     schedule_fit_text_height,
     set_plain_text_content,
 )
-from src.ui.theme import CORNER_RADIUS
+from src.ui.theme import (
+    ASSISTANT_BG,
+    ASSISTANT_BORDER,
+    ASSISTANT_FG,
+    ASSISTANT_MAX_WIDTH_RATIO,
+    AVATAR_ASSISTANT_BG,
+    AVATAR_RADIUS,
+    AVATAR_SIZE,
+    AVATAR_USER_BG,
+    BUBBLE_RADIUS,
+    CAPTION_FG,
+    CHAT_BG,
+    CHIP_RADIUS,
+    FONT_CAPTION,
+    FONT_META,
+    MESSAGE_GAP,
+    META_BG,
+    META_ERROR,
+    META_FG,
+    META_INFO,
+    META_SUCCESS,
+    SIDE_INSET,
+    USER_BUBBLE,
+    USER_BUBBLE_BORDER,
+    USER_FG,
+    USER_MAX_WIDTH_RATIO,
+    resolve,
+)
 
 
 def normalize_user_message(text: str) -> str:
-    """去掉首尾空白与空行，并去除每行首尾空格。"""
     from src.ui.markdown_render import compact_bubble_content
 
     return compact_bubble_content(text)
@@ -24,29 +51,26 @@ def normalize_user_message(text: str) -> str:
 class ChatPanel(ctk.CTkFrame):
     """聊天消息展示区：Markdown 渲染，用户右对齐，助理左对齐。"""
 
-    # 用户气泡：饱和蓝 + 浅蓝描边
-    _USER_BG = "#2563eb"
-    _USER_BORDER = "#3b82f6"
-    _USER_FG = "#f8fafc"
-    # 助理气泡：与窗口背景拉开层次
-    _ASSISTANT_BG = ("#f4f4f5", "#3f3f46")
-    _ASSISTANT_BORDER = ("#e4e4e7", "#52525b")
-    _ASSISTANT_FG = ("#18181b", "#e4e4e7")
-    _ROLE_LABEL_FG = ("gray40", "gray60")
-    _TOOL_FG = ("#6b7280", "#71717a")
     _H_PAD = 24
-    _USER_MAX_WIDTH_RATIO = 0.76
-    _ASSISTANT_MAX_WIDTH_RATIO = 0.94
     _STREAM_DEBOUNCE_MS = 80
     _SCROLL_DEBOUNCE_MS = 60
 
     def __init__(self, master, **kwargs):
-        super().__init__(master, **kwargs)
+        super().__init__(master, fg_color="transparent", **kwargs)
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
-        self._scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        self._scroll.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
+        self._chat_surface = ctk.CTkFrame(
+            self,
+            fg_color=resolve(CHAT_BG),
+            corner_radius=10,
+        )
+        self._chat_surface.grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
+        self._chat_surface.grid_rowconfigure(0, weight=1)
+        self._chat_surface.grid_columnconfigure(0, weight=1)
+
+        self._scroll = ctk.CTkScrollableFrame(self._chat_surface, fg_color="transparent")
+        self._scroll.grid(row=0, column=0, sticky="nsew", padx=6, pady=6)
         self._scroll.bind("<Configure>", self._on_scroll_configure)
 
         self._streaming = False
@@ -57,6 +81,7 @@ class ChatPanel(ctk.CTkFrame):
         self._stream_update_job: str | None = None
         self._scroll_job: str | None = None
         self._tool_status_row: ctk.CTkFrame | None = None
+        self._tool_status_capsule: ctk.CTkFrame | None = None
         self._tool_status_label: ctk.CTkLabel | None = None
 
     def append_user(self, content: str) -> None:
@@ -64,18 +89,13 @@ class ChatPanel(ctk.CTkFrame):
         if not content:
             return
         self._clear_tool_status()
-        self._add_bubble(
-            role="user",
-            title="我",
-            content=content,
-            use_markdown=True,
-        )
+        self._add_bubble(role="user", content=content, use_markdown=True)
 
     def begin_assistant(self) -> None:
         self._streaming = True
         self._stream_buffer = ""
         self._clear_tool_status()
-        self._assistant_bubble = self._add_bubble_row(role="assistant", title="助理")
+        self._assistant_bubble = self._add_bubble_row(role="assistant")
 
     def append_token(self, token: str) -> None:
         self._stream_buffer += token
@@ -107,7 +127,6 @@ class ChatPanel(ctk.CTkFrame):
         return self._stream_buffer
 
     def reset_assistant_for_tool(self) -> None:
-        """工具调用前移除规划语气泡，后续 token 将开启新的汇总回复。"""
         if self._stream_update_job is not None:
             self.after_cancel(self._stream_update_job)
             self._stream_update_job = None
@@ -140,32 +159,30 @@ class ChatPanel(ctk.CTkFrame):
     def append_tool_call(self, name: str, args: dict) -> None:
         if name == "web_search":
             query = args.get("query", "")
-            self._set_tool_status(f"🔍 正在搜索：{query}")
+            self._set_tool_status(f"🔍 正在搜索：{query}", accent=META_INFO)
             return
-        self._add_meta_line(f"🔧 调用工具: {name}({args})")
+        self._add_meta_capsule(f"🔧 调用工具: {name}({args})")
 
     def append_tool_result(self, name: str, content: str) -> None:
         if name == "web_search":
             self.append_search_done(content)
             return
         preview = content[:200] + ("..." if len(content) > 200 else "")
-        self._add_meta_line(f"📋 {name} 返回: {preview}")
+        self._add_meta_capsule(f"📋 {name} 返回: {preview}")
 
     def append_search_done(self, raw_result: str) -> None:
-        """搜索完成提示（不展示原始摘要）。"""
         count = len(re.findall(r"^\d+\.\s", raw_result, re.MULTILINE))
         if count:
-            self._set_tool_status(f"✓ 搜索完成，获取 {count} 条结果，正在汇总…")
+            self._set_tool_status(f"✓ 搜索完成，获取 {count} 条结果，正在汇总…", accent=META_SUCCESS)
         elif "未找到" in raw_result or "搜索失败" in raw_result:
-            self._set_tool_status("⚠ 搜索未返回有效结果，正在分析…")
+            self._set_tool_status("⚠ 搜索未返回有效结果，正在分析…", accent=META_ERROR)
         else:
-            self._set_tool_status("✓ 搜索完成，正在汇总…")
+            self._set_tool_status("✓ 搜索完成，正在汇总…", accent=META_SUCCESS)
 
     def append_assistant_complete(self, content: str, *, from_cache: bool = False) -> None:
-        """直接展示完整助理回复（缓存命中，无流式）。"""
         if from_cache:
-            self._add_meta_line("📦 命中搜索缓存，直接返回历史回复")
-        bubble = self._add_bubble_row(role="assistant", title="助理")
+            self._add_meta_capsule("📦 命中搜索缓存，直接返回历史回复", accent=META_INFO)
+        bubble = self._add_bubble_row(role="assistant")
         render_markdown(bubble, content, text_color=self._role_text_color("assistant"))
         schedule_fit_text_height(
             bubble,
@@ -174,10 +191,10 @@ class ChatPanel(ctk.CTkFrame):
         )
 
     def append_system(self, content: str) -> None:
-        self._add_meta_line(f"⚙️ {content}")
+        self._add_meta_capsule(f"⚙️ {content}")
 
     def append_error(self, content: str) -> None:
-        self._add_meta_line(f"❌ 错误: {content}", color="#ef4444")
+        self._add_meta_capsule(f"❌ 错误: {content}", accent=META_ERROR)
 
     def clear(self) -> None:
         if self._stream_update_job is not None:
@@ -209,29 +226,50 @@ class ChatPanel(ctk.CTkFrame):
         for row in self._scroll.winfo_children():
             if row is self._tool_status_row:
                 continue
-            for outer in row.winfo_children():
-                for widget in outer.winfo_children():
-                    if isinstance(widget, BubbleText):
-                        yield widget
+            for widget in row.winfo_children():
+                yield from self._walk_bubbles(widget)
+
+    def _walk_bubbles(self, widget):
+        if isinstance(widget, BubbleText):
+            yield widget
+            return
+        for child in widget.winfo_children():
+            yield from self._walk_bubbles(child)
 
     def _bubble_max_width(self, role: str) -> int:
-        ratio = self._USER_MAX_WIDTH_RATIO if role == "user" else self._ASSISTANT_MAX_WIDTH_RATIO
+        ratio = USER_MAX_WIDTH_RATIO if role == "user" else ASSISTANT_MAX_WIDTH_RATIO
         return max(160, int(self._max_width * ratio))
 
     def _role_text_color(self, role: str) -> str:
         if role == "user":
-            return self._USER_FG
-        return resolve_theme_color(self._ASSISTANT_FG)
+            return USER_FG
+        return resolve_theme_color(ASSISTANT_FG)
 
-    def _add_bubble(
-        self,
-        *,
-        role: str,
-        title: str,
-        content: str,
-        use_markdown: bool,
-    ) -> None:
-        bubble = self._add_bubble_row(role=role, title=title)
+    @staticmethod
+    def _now_label() -> str:
+        return datetime.now().strftime("%H:%M")
+
+    def _make_avatar(self, master: ctk.CTkFrame, *, role: str) -> ctk.CTkFrame:
+        bg = resolve(AVATAR_USER_BG if role == "user" else AVATAR_ASSISTANT_BG)
+        frame = ctk.CTkFrame(
+            master,
+            width=AVATAR_SIZE,
+            height=AVATAR_SIZE,
+            corner_radius=AVATAR_RADIUS,
+            fg_color=bg,
+        )
+        frame.pack_propagate(False)
+        emoji = "👤" if role == "user" else "🤖"
+        ctk.CTkLabel(
+            frame,
+            text=emoji,
+            font=ctk.CTkFont(size=15),
+            text_color=resolve(CAPTION_FG),
+        ).place(relx=0.5, rely=0.5, anchor="center")
+        return frame
+
+    def _add_bubble(self, *, role: str, content: str, use_markdown: bool) -> None:
+        bubble = self._add_bubble_row(role=role)
         text_color = self._role_text_color(role)
         if use_markdown:
             render_markdown(bubble, content, text_color=text_color)
@@ -248,83 +286,132 @@ class ChatPanel(ctk.CTkFrame):
         if role == "user":
             return BubbleText(
                 master,
-                fg_color=self._USER_BG,
-                text_color=self._USER_FG,
-                border_color=self._USER_BORDER,
-                corner_radius=CORNER_RADIUS,
+                fg_color=USER_BUBBLE,
+                text_color=USER_FG,
+                border_color=USER_BUBBLE_BORDER,
+                corner_radius=BUBBLE_RADIUS,
                 max_width=max_w,
             )
         return BubbleText(
             master,
-            fg_color=self._ASSISTANT_BG,
+            fg_color=ASSISTANT_BG,
             text_color=self._role_text_color("assistant"),
-            border_color=self._ASSISTANT_BORDER,
-            corner_radius=CORNER_RADIUS,
+            border_color=ASSISTANT_BORDER,
+            corner_radius=BUBBLE_RADIUS,
             max_width=max_w,
         )
 
-    def _add_bubble_row(self, *, role: str, title: str) -> BubbleText:
+    def _add_bubble_row(self, *, role: str) -> BubbleText:
         row = ctk.CTkFrame(self._scroll, fg_color="transparent")
-        row.pack(fill="x", pady=(10, 2))
+        row.pack(fill="x", pady=(MESSAGE_GAP, 2))
 
         is_user = role == "user"
-        anchor = "e" if is_user else "w"
         side = "right" if is_user else "left"
+        anchor = "e" if is_user else "w"
+        padx = (SIDE_INSET, 10) if is_user else (10, SIDE_INSET)
 
         outer = ctk.CTkFrame(row, fg_color="transparent")
-        outer.pack(side=side, anchor=anchor, padx=(16, 12) if is_user else (12, 16))
+        outer.pack(side=side, anchor=anchor, padx=padx)
 
-        ctk.CTkLabel(
-            outer,
-            text=f"{'👤' if is_user else '🤖'} {title}",
-            font=ctk.CTkFont(size=11),
-            text_color=self._ROLE_LABEL_FG,
-            anchor=anchor,
-        ).pack(anchor=anchor, padx=4, pady=(0, 4))
+        body = ctk.CTkFrame(outer, fg_color="transparent")
+        body.pack(anchor=anchor)
 
-        bubble = self._create_bubble(outer, role=role)
+        if is_user:
+            content_col = ctk.CTkFrame(body, fg_color="transparent")
+            content_col.pack(side="right")
+            ctk.CTkLabel(
+                content_col,
+                text=f"我 · {self._now_label()}",
+                font=ctk.CTkFont(size=FONT_CAPTION),
+                text_color=resolve(CAPTION_FG),
+                anchor="e",
+            ).pack(anchor="e", pady=(0, 4))
+            bubble = self._create_bubble(content_col, role=role)
+            bubble.pack(anchor="e")
+            avatar = self._make_avatar(body, role=role)
+            avatar.pack(side="right", padx=(10, 0), anchor="n", pady=(18, 0))
+        else:
+            avatar = self._make_avatar(body, role=role)
+            avatar.pack(side="left", padx=(0, 10), anchor="n", pady=(18, 0))
+            content_col = ctk.CTkFrame(body, fg_color="transparent")
+            content_col.pack(side="left")
+            ctk.CTkLabel(
+                content_col,
+                text=f"助理 · {self._now_label()}",
+                font=ctk.CTkFont(size=FONT_CAPTION),
+                text_color=resolve(CAPTION_FG),
+                anchor="w",
+            ).pack(anchor="w", pady=(0, 4))
+            bubble = self._create_bubble(content_col, role=role)
+            bubble.pack(anchor="w")
+
         bubble._chat_role = role
-        bubble.pack(anchor=anchor)
         return bubble
 
-    def _set_tool_status(self, text: str) -> None:
-        """复用同一行展示工具进度，避免多次插入引发布局跳动。"""
+    def _add_meta_capsule(
+        self,
+        text: str,
+        *,
+        accent: str | tuple[str, str] | None = None,
+    ) -> None:
+        row = ctk.CTkFrame(self._scroll, fg_color="transparent")
+        row.pack(fill="x", pady=(8, 0))
+        holder = ctk.CTkFrame(row, fg_color="transparent")
+        holder.pack(fill="x")
+        capsule = ctk.CTkFrame(
+            holder,
+            fg_color=resolve(META_BG),
+            corner_radius=CHIP_RADIUS,
+        )
+        capsule.pack(anchor="center", pady=2)
+        fg = resolve(accent) if accent else resolve(META_FG)
+        ctk.CTkLabel(
+            capsule,
+            text=text,
+            font=ctk.CTkFont(size=FONT_META),
+            text_color=fg,
+            wraplength=max(240, self._max_width - 80),
+            justify="center",
+        ).pack(padx=14, pady=5)
+        self._schedule_scroll()
+
+    def _set_tool_status(
+        self,
+        text: str,
+        *,
+        accent: str | tuple[str, str] | None = None,
+    ) -> None:
+        fg = resolve(accent) if accent else resolve(META_FG)
         if self._tool_status_label is None:
             self._tool_status_row = ctk.CTkFrame(self._scroll, fg_color="transparent")
-            self._tool_status_row.pack(fill="x", pady=(6, 0))
-            self._tool_status_label = ctk.CTkLabel(
-                self._tool_status_row,
-                text=text,
-                font=ctk.CTkFont(size=12),
-                text_color=self._TOOL_FG,
-                anchor="w",
-                justify="left",
-                wraplength=max(200, self._max_width),
+            self._tool_status_row.pack(fill="x", pady=(8, 0))
+            holder = ctk.CTkFrame(self._tool_status_row, fg_color="transparent")
+            holder.pack(fill="x")
+            self._tool_status_capsule = ctk.CTkFrame(
+                holder,
+                fg_color=resolve(META_BG),
+                corner_radius=CHIP_RADIUS,
             )
-            self._tool_status_label.pack(anchor="w", padx=12, fill="x")
+            self._tool_status_capsule.pack(anchor="center", pady=2)
+            self._tool_status_label = ctk.CTkLabel(
+                self._tool_status_capsule,
+                text=text,
+                font=ctk.CTkFont(size=FONT_META),
+                text_color=fg,
+                wraplength=max(240, self._max_width - 80),
+                justify="center",
+            )
+            self._tool_status_label.pack(padx=14, pady=5)
         else:
-            self._tool_status_label.configure(text=text)
+            self._tool_status_label.configure(text=text, text_color=fg)
         self._schedule_scroll()
 
     def _clear_tool_status(self) -> None:
         if self._tool_status_row is not None:
             self._tool_status_row.destroy()
         self._tool_status_row = None
+        self._tool_status_capsule = None
         self._tool_status_label = None
-
-    def _add_meta_line(self, text: str, *, color: str | tuple[str, str] | None = None) -> None:
-        row = ctk.CTkFrame(self._scroll, fg_color="transparent")
-        row.pack(fill="x", pady=(6, 0))
-        ctk.CTkLabel(
-            row,
-            text=text,
-            font=ctk.CTkFont(size=12),
-            text_color=color or self._TOOL_FG,
-            anchor="w",
-            justify="left",
-            wraplength=max(200, self._max_width),
-        ).pack(anchor="w", padx=12, fill="x")
-        self._schedule_scroll()
 
     def _set_plain_text(
         self,

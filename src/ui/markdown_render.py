@@ -14,6 +14,19 @@ import httpx
 from loguru import logger
 from PIL import Image, ImageTk
 
+from src.ui.theme import (
+    CODE_BG,
+    FONT_BODY,
+    FONT_FAMILY,
+    FONT_MONO,
+    HR_FG,
+    LINK_FG,
+    LINK_FG_ON_USER,
+    QUOTE_FG,
+    TABLE_BG,
+    resolve,
+)
+
 if TYPE_CHECKING:
     from tkinter import PhotoImage, Text
 
@@ -58,16 +71,60 @@ def compact_bubble_content(text: str) -> str:
     return "\n".join(out).strip()
 
 
-def _base_font(size: int = 13) -> tuple[str, int]:
-    return ("Segoe UI", size)
+def _base_font(size: int | None = None) -> tuple[str, int]:
+    return (FONT_FAMILY, size or FONT_BODY)
 
 
-def _mono_font(size: int = 12) -> tuple[str, int]:
-    return ("Consolas", size)
+def _mono_font(size: int | None = None) -> tuple[str, int]:
+    return (FONT_MONO, size or FONT_BODY - 2)
 
 
 def _is_dark() -> bool:
     return ctk.get_appearance_mode().lower() == "dark"
+
+
+def _configure_tags(tb: Text, *, on_user_bubble: bool = False) -> None:
+    code_bg = resolve(CODE_BG)
+    table_bg = resolve(TABLE_BG)
+    quote_fg = resolve(QUOTE_FG)
+    link_fg = LINK_FG_ON_USER if on_user_bubble else resolve(LINK_FG)
+    hr_fg = resolve(HR_FG)
+
+    tags = {
+        "h1": {"font": (*_base_font(16), "bold"), "spacing1": 4, "spacing3": 2},
+        "h2": {"font": (*_base_font(15), "bold"), "spacing1": 3, "spacing3": 1},
+        "h3": {"font": (*_base_font(14), "bold"), "spacing1": 2, "spacing3": 1},
+        "h4": {"font": (*_base_font(13), "bold"), "spacing1": 2, "spacing3": 0},
+        "h5": {"font": (*_base_font(12), "bold"), "spacing1": 1, "spacing3": 0},
+        "h6": {"font": (*_base_font(11), "bold"), "spacing1": 1, "spacing3": 0},
+        "bold": {"font": (*_base_font(), "bold")},
+        "italic": {"font": (*_base_font(), "italic")},
+        "strike": {"overstrike": 1, "foreground": quote_fg},
+        "code": {"font": _mono_font(), "background": code_bg},
+        "codeblock": {
+            "font": _mono_font(12),
+            "background": code_bg,
+            "lmargin1": 6,
+            "lmargin2": 6,
+            "spacing1": 1,
+            "spacing3": 1,
+        },
+        "link": {"foreground": link_fg, "underline": True},
+        "quote": {"foreground": quote_fg, "lmargin1": 10, "lmargin2": 10},
+        "bullet": {"lmargin1": 10, "lmargin2": 22, "spacing1": 0, "spacing3": 1},
+        "table": {"font": _mono_font(11), "background": table_bg, "lmargin1": 2, "lmargin2": 2},
+        "table_header": {
+            "font": (*_mono_font(11), "bold"),
+            "background": table_bg,
+            "lmargin1": 2,
+            "lmargin2": 2,
+        },
+        "table_sep": {"font": _mono_font(11), "foreground": hr_fg, "lmargin1": 2, "lmargin2": 2},
+        "hr": {"foreground": hr_fg},
+        "image_alt": {"foreground": quote_fg, "font": (*_base_font(11), "italic")},
+    }
+    for name, opts in tags.items():
+        tb.tag_configure(name, **opts)
 
 
 @dataclass
@@ -77,39 +134,6 @@ class MarkdownContext:
     extra_lines: int = 0
     host: Any | None = None
     link_id: int = 0
-
-
-def _configure_tags(tb: Text, *, on_user_bubble: bool = False) -> None:
-    dark = _is_dark()
-    code_bg = "#2d2d38" if dark else "#e8eaef"
-    table_bg = "#34343f" if dark else "#ececf1"
-    quote_fg = "#a1a1aa" if dark else "#6b7280"
-    link_fg = "#bfdbfe" if on_user_bubble else ("#60a5fa" if dark else "#2563eb")
-    hr_fg = "#52525b" if dark else "#d4d4d8"
-
-    tags = {
-        "h1": {"font": (*_base_font(16), "bold"), "spacing1": 2, "spacing3": 1},
-        "h2": {"font": (*_base_font(15), "bold"), "spacing1": 2, "spacing3": 1},
-        "h3": {"font": (*_base_font(14), "bold"), "spacing1": 1, "spacing3": 0},
-        "h4": {"font": (*_base_font(13), "bold"), "spacing1": 1, "spacing3": 0},
-        "h5": {"font": (*_base_font(12), "bold"), "spacing1": 1, "spacing3": 0},
-        "h6": {"font": (*_base_font(11), "bold"), "spacing1": 1, "spacing3": 0},
-        "bold": {"font": (*_base_font(), "bold")},
-        "italic": {"font": (*_base_font(), "italic")},
-        "strike": {"overstrike": 1, "foreground": quote_fg},
-        "code": {"font": _mono_font(), "background": code_bg},
-        "codeblock": {"font": _mono_font(11), "background": code_bg, "lmargin1": 8, "lmargin2": 8},
-        "link": {"foreground": link_fg, "underline": True},
-        "quote": {"foreground": quote_fg, "lmargin1": 16, "lmargin2": 16},
-        "bullet": {"lmargin1": 20, "lmargin2": 32},
-        "table": {"font": _mono_font(11), "background": table_bg, "lmargin1": 4, "lmargin2": 4},
-        "table_header": {"font": (*_mono_font(11), "bold"), "background": table_bg, "lmargin1": 4, "lmargin2": 4},
-        "table_sep": {"font": _mono_font(11), "foreground": hr_fg, "lmargin1": 4, "lmargin2": 4},
-        "hr": {"foreground": hr_fg},
-        "image_alt": {"foreground": quote_fg, "font": (*_base_font(11), "italic")},
-    }
-    for name, opts in tags.items():
-        tb.tag_configure(name, **opts)
 
 
 def _open_url(url: str) -> None:
