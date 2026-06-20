@@ -186,6 +186,11 @@ class SearchCacheStore:
                 (cache_key,),
             )
 
+    def delete_by_key(self, cache_key: str) -> bool:
+        with self._connect() as conn:
+            cur = conn.execute("DELETE FROM search_cache WHERE cache_key = ?", (cache_key,))
+            return cur.rowcount > 0
+
     def prune_expired(self) -> int:
         with self._connect() as conn:
             cur = conn.execute(

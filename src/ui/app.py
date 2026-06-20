@@ -15,11 +15,12 @@ from src.agent.graph import AgentGraphBundle, build_agent_graph
 from src.agent.runner import AgentRunner, StreamEvent
 from src.infra.config import ensure_data_dirs, load_app_config, load_merged_providers, save_api_key
 from src.infra.paths import PROJECT_ROOT
-from src.infra.user_settings import has_stored_api_key, persist_provider_choice
+from src.infra.user_settings import has_stored_api_key, load_user_settings, persist_provider_choice, save_user_settings
 from src.llm.factory import create_llm
 from src.llm.providers import ProviderConfig
 from src.memory.rag import get_knowledge_stats, set_rag_provider
 from src.memory.rag_worker import ingest_files_in_process
+from src.memory.cache_admin import handle_cache_command
 from src.memory.search_cache import SearchCache
 from src.ui.clipboard import copy_to_clipboard as sys_copy_to_clipboard
 from src.ui.font_prefs import (
@@ -40,13 +41,20 @@ from src.ui.input_intent import (
     INTENT_LINK,
     INTENT_OCR,
     INTENT_SEARCH,
+    INTENT_SLASH_CACHE,
     INTENT_SLASH_NOTE,
     INTENT_SLASH_OCR,
+    INTENT_SLASH_SKILL,
+    INTENT_SLASH_TASK,
     INTENT_SLASH_WEATHER,
     INTENT_WEATHER,
     InputIntent,
     resolve_input_intent,
 )
+from src.ui.input_history import append_history, list_history
+from src.ui.session_store import SessionStore
+from src.ui.skill_catalog import build_slash_catalog, get_skill_dirs, load_skill_prompt
+from src.ui.skill_runner import run_skill
 from src.ui.link_summarize import run_link_summarize_turn
 from src.ui.message_utils import normalize_user_message
 from src.ui.ocr_worker import ocr_progress_text
@@ -62,6 +70,8 @@ from src.ui.theme_loader import (
     list_theme_catalog,
     persist_theme_prefs,
 )
+from src.tools.note_store import NoteStore, handle_note_command
+from src.tools.task_store import TaskReminderService, TaskStore, handle_task_command
 from src.tools.tool_worker import invoke_tool_in_process
 from src.ui.search_turn import run_web_search_turn
 from src.ui.web_bridge import WebChatBridge
@@ -116,8 +126,29 @@ class AppApi:
     def stop_agent(self) -> None:
         self._ctrl.stop_agent()
 
-    def new_session(self) -> None:
-        self._ctrl.new_session()
+    def new_session(self) -> dict[str, Any]:
+        return self._ctrl.new_session()
+
+    def list_sessions(self) -> dict[str, Any]:
+        return self._ctrl.list_sessions_api()
+
+    def switch_session(self, session_id: str) -> dict[str, Any]:
+        return self._ctrl.switch_session(session_id)
+
+    def delete_session(self, session_id: str) -> dict[str, Any]:
+        return self._ctrl.delete_session(session_id)
+
+    def rename_session(self, session_id: str, title: str) -> dict[str, Any]:
+        return self._ctrl.rename_session(session_id, title)
+
+    def get_slash_catalog(self) -> list[dict[str, Any]]:
+        return self._ctrl.get_slash_catalog()
+
+    def get_input_history(self) -> list[str]:
+        return self._ctrl.get_input_history()
+
+    def save_input_history(self, text: str) -> None:
+        self._ctrl.save_input_history(text)
 
     def approval_response(self, approved: bool) -> None:
         self._ctrl.approval_response(approved)
@@ -144,8 +175,16 @@ class AssistantController:
         self._font_id = get_font_prefs()
 
         self._window: webview.Window | None = None
-        self.chat = WebChatBridge(self._get_window)
-        self._thread_id = str(uuid.uuid4())
+        self._session_store = SessionStore()
+        sessions = self._session_store.list_sessions()
+        active = sessions[0] if sessions else self._session_store.create_session("当前会话")
+        self._session_id = active.id
+        self._thread_id = active.thread_id
+        self.chat = WebChatBridge(self._get_window, on_event=self._on_chat_event)
+        self._note_store = NoteStore()
+        self._task_store = TaskStore()
+        self._task_reminder = TaskReminderService(self._task_store)
+        self._task_reminder.start()
         self._running = False
         self._graph_bundle: AgentGraphBundle | None = None
         self._llm: Any = None
@@ -160,14 +199,30 @@ class AssistantController:
         self._voice_running = False
         self._compose_busy = False
         self._compose_cancel = threading.Event()
+        self._skip_persist_events = False
 
         self._init_agent()
+
+    def _on_chat_event(self, event: dict[str, Any]) -> None:
+        if self._skip_persist_events:
+            return
+        if event.get("type") in ("user", "assistant_end", "meta"):
+            self._session_store.append_event(self._session_id, event)
 
     def attach_window(self, window: webview.Window) -> None:
         self._window = window
 
     def _get_window(self) -> webview.Window | None:
         return self._window
+
+    def get_slash_catalog(self) -> list[dict[str, Any]]:
+        return build_slash_catalog()
+
+    def get_input_history(self) -> list[str]:
+        return list_history()
+
+    def save_input_history(self, text: str) -> None:
+        append_history(text)
 
     def _status_text(self, suffix: str = "") -> str:
         p = self._current_provider
@@ -181,6 +236,8 @@ class AssistantController:
 
     def build_initial_state(self) -> dict[str, Any]:
         app = self.app_cfg.get("app", {})
+        settings = load_user_settings()
+        ui = settings.get("ui", {}) or {}
         return {
             "title": app.get("title", "个人助理 Agent"),
             "theme_variables": self._ui_variables(),
@@ -188,11 +245,19 @@ class AssistantController:
             "appearance": self._appearance,
             "font_id": self._font_id,
             "status_text": self._status_text("就绪"),
-            "welcome": "欢迎使用个人助理 Agent。Enter 发送，Shift+Enter 换行。",
+            "welcome": "欢迎使用个人助理 Agent。Enter 发送，Shift+Enter 换行。输入 / 查看命令。",
             "composer_meta": {
                 "session_short": self._thread_id[:8],
                 "voice_supported": voice_is_supported(),
             },
+            "sessions": [
+                {"id": s.id, "title": s.title, "active": s.id == self._session_id}
+                for s in self._session_store.list_sessions()
+            ],
+            "slash_catalog": build_slash_catalog(),
+            "input_history": list_history(),
+            "skill_dirs": [str(p) for p in get_skill_dirs()],
+            "session_events": self._session_store.load_events(self._session_id),
         }
 
     def _provider_payload(self) -> dict[str, dict[str, Any]]:
@@ -207,6 +272,11 @@ class AssistantController:
         return out
 
     def build_settings_data(self) -> dict[str, Any]:
+        settings = load_user_settings()
+        ui = settings.get("ui", {}) or {}
+        skill_dirs = ui.get("skill_dirs") or settings.get("skill_dirs") or []
+        if isinstance(skill_dirs, str):
+            skill_dirs = [skill_dirs]
         return {
             "theme_catalog": list_theme_catalog(),
             "theme_id": self._theme_id,
@@ -216,6 +286,7 @@ class AssistantController:
             "current_provider": self._current_provider_name,
             "provider_names": list(self._providers.keys()),
             "providers": self._provider_payload(),
+            "skill_dirs": "\n".join(str(x) for x in skill_dirs),
         }
 
     def save_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -247,6 +318,13 @@ class AssistantController:
         persist_provider_choice(name, p)
         self._current_provider_name = name
         self._current_provider = p
+
+        skill_dirs_raw = (payload.get("skill_dirs") or "").strip()
+        skill_dirs = [line.strip() for line in skill_dirs_raw.splitlines() if line.strip()]
+        settings = load_user_settings()
+        ui = settings.setdefault("ui", {})
+        ui["skill_dirs"] = skill_dirs
+        save_user_settings(settings)
         self._providers[name] = p
         self._init_agent()
         self.chat.set_status(self._status_text("设置已更新"))
@@ -289,6 +367,7 @@ class AssistantController:
         display_text = normalize_user_message(text)
         images = build_image_previews(attachments)
         self.chat.append_user(display_text, images=images)
+        append_history(display_text)
 
         self._compose_cancel.clear()
         self._compose_busy = True
@@ -340,6 +419,18 @@ class AssistantController:
 
             if intent.kind == INTENT_SLASH_NOTE:
                 self._handle_slash_note(intent)
+                return
+
+            if intent.kind == INTENT_SLASH_CACHE:
+                self._handle_slash_cache(intent)
+                return
+
+            if intent.kind == INTENT_SLASH_TASK:
+                self._handle_slash_task(intent)
+                return
+
+            if intent.kind == INTENT_SLASH_SKILL:
+                self._handle_slash_skill(intent, text)
                 return
 
             if intent.kind in (INTENT_OCR, INTENT_SLASH_OCR):
@@ -414,18 +505,86 @@ class AssistantController:
                     self.chat.set_running(False)
 
     def _handle_slash_note(self, intent: InputIntent) -> None:
-        content = (intent.note_content or "").strip()
-        if not content:
-            self.chat.append_error("笔记内容不能为空，例如：/note 添加笔记：内容")
+        args = (intent.slash_args or intent.note_content or "").strip()
+        if not args:
+            self.chat.append_error("用法：/note add <标题> <内容> | list | <关键字> | rm <id>")
             self.chat.set_status(self._status_text("就绪"))
             return
         try:
-            result = invoke_tool_in_process("add_note", {"content": content})
+            result = handle_note_command(args, self._note_store)
+            self.chat.append_assistant_complete(result)
+            self.chat.set_status(self._status_text("就绪"))
+        except ValueError as exc:
+            self.chat.append_error(str(exc))
+            self.chat.set_status(self._status_text("就绪"))
+        except Exception as exc:
+            logger.exception("笔记命令失败")
+            self.chat.append_error(f"笔记命令失败: {exc}")
+
+    def _handle_slash_cache(self, intent: InputIntent) -> None:
+        try:
+            result = handle_cache_command(intent.slash_args, self._search_cache)
             self.chat.append_assistant_complete(result)
             self.chat.set_status(self._status_text("就绪"))
         except Exception as exc:
-            logger.exception("添加笔记失败")
-            self.chat.append_error(f"添加笔记失败: {exc}")
+            logger.exception("缓存命令失败")
+            self.chat.append_error(f"缓存命令失败: {exc}")
+
+    def _handle_slash_task(self, intent: InputIntent) -> None:
+        try:
+            result = handle_task_command(intent.slash_args, self._task_store)
+            fmt = "markdown"
+            self.chat.append_assistant_complete(result, content_format=fmt)
+            self.chat.set_status(self._status_text("就绪"))
+        except Exception as exc:
+            logger.exception("任务命令失败")
+            self.chat.append_error(f"任务命令失败: {exc}")
+
+    def _handle_slash_skill(self, intent: InputIntent, text: str) -> None:
+        skill_name = intent.skill_name or intent.slash_cmd
+        user_part = (intent.slash_args or "").strip()
+
+        self.chat.begin_assistant_progress(f"正在执行 Skill: {skill_name}…")
+        self.chat.set_tool_status(f"⚙ 正在按 SKILL.md 执行 {skill_name}…", accent="info")
+
+        def worker() -> None:
+            try:
+                result = run_skill(skill_name, user_part)
+                if result.command:
+                    self.chat.append_tool_call(
+                        "run_skill",
+                        {"skill": skill_name, "cmd": result.command},
+                    )
+                if result.ok:
+                    self.chat.append_assistant_complete(result.output)
+                    self.chat.set_status(self._status_text("就绪"))
+                    return
+
+                if result.fallback_agent:
+                    prompt = load_skill_prompt(skill_name)
+                    if not prompt:
+                        self.chat.append_error(result.error or f"未找到 Skill：{skill_name}")
+                        self.chat.set_status(self._status_text("就绪"))
+                        return
+                    self.chat.reset_assistant_for_tool()
+                    message = (
+                        f"【Skill: {skill_name}】\n\n{prompt}\n\n---\n\n"
+                        f"用户请求：{user_part or '请按 Skill 说明执行'}"
+                    )
+                    self._start_agent_turn(message)
+                    return
+
+                detail = result.output or result.error or "Skill 执行失败"
+                self.chat.append_assistant_complete(f"Skill 执行失败：{result.error}\n\n{detail}")
+                self.chat.set_status(self._status_text("就绪"))
+            except Exception as exc:
+                logger.exception("Skill 执行异常")
+                self.chat.append_error(f"Skill 执行失败: {exc}")
+                self.chat.set_status(self._status_text("就绪"))
+            finally:
+                self.chat.clear_tool_status()
+
+        threading.Thread(target=worker, daemon=True, name="skill-run").start()
 
     def _handle_weather_intent(self, intent: InputIntent, text: str = "") -> None:
         range_label = "当天" if intent.weather_range == "1d" else "7天"
@@ -711,11 +870,73 @@ class AssistantController:
         self.chat.set_status(self._status_text("就绪"))
         self._reset_turn_state()
 
-    def new_session(self) -> None:
-        self._thread_id = str(uuid.uuid4())
+    def new_session(self) -> dict[str, Any]:
+        info = self._session_store.create_session("新会话")
+        return self._activate_session(info.id, announce=True)
+
+    def list_sessions_api(self) -> dict[str, Any]:
+        return {
+            "sessions": [
+                {"id": s.id, "title": s.title, "active": s.id == self._session_id}
+                for s in self._session_store.list_sessions()
+            ]
+        }
+
+    def switch_session(self, session_id: str) -> dict[str, Any]:
+        if session_id == self._session_id:
+            return {"ok": True, **self.list_sessions_api()}
+        if not self._session_store.get(session_id):
+            return {"ok": False, "error": "会话不存在"}
+        if self._is_busy():
+            return {"ok": False, "error": "请等待当前任务完成"}
+        return self._activate_session(session_id, announce=False)
+
+    def delete_session(self, session_id: str) -> dict[str, Any]:
+        sessions = self._session_store.list_sessions()
+        if len(sessions) <= 1:
+            return {"ok": False, "error": "至少保留一个会话"}
+        if not self._session_store.delete(session_id):
+            return {"ok": False, "error": "会话不存在"}
+        if session_id == self._session_id:
+            remaining = self._session_store.list_sessions()
+            if remaining:
+                return self._activate_session(remaining[0].id, announce=True)
+        return {"ok": True, **self.list_sessions_api()}
+
+    def rename_session(self, session_id: str, title: str) -> dict[str, Any]:
+        if not self._session_store.rename(session_id, title):
+            return {"ok": False, "error": "重命名失败"}
+        return {"ok": True, **self.list_sessions_api()}
+
+    def _activate_session(self, session_id: str, *, announce: bool) -> dict[str, Any]:
+        info = self._session_store.get(session_id)
+        if not info:
+            return {"ok": False, "error": "会话不存在"}
+        self._session_id = info.id
+        self._thread_id = info.thread_id
         self.chat.clear()
-        self.chat.append_system(f"新会话已创建: {self._thread_id[:8]}...")
-        self.chat.set_status(self._status_text())
+        events = self._session_store.load_events(session_id)
+        self._skip_persist_events = True
+        try:
+            for ev in events:
+                window = self._get_window()
+                if window:
+                    payload = json.dumps(ev, ensure_ascii=False)
+                    try:
+                        window.evaluate_js(f"window.ChatApp.handleEvent({payload})")
+                    except Exception:
+                        pass
+        finally:
+            self._skip_persist_events = False
+        if announce and not events:
+            self.chat.append_system(f"新会话：{info.title}")
+        self.chat.set_status(self._status_text("就绪"))
+        return {
+            "ok": True,
+            "active_id": session_id,
+            "events": events,
+            **self.list_sessions_api(),
+        }
 
     def approval_response(self, approved: bool) -> None:
         if not self._awaiting_approval:

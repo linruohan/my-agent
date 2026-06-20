@@ -222,13 +222,30 @@ window.ChatUI = (() => {
     return bubble;
   }
 
+  function wrapMarkdownTables(bubble) {
+    bubble.querySelectorAll(".md-content table").forEach((table) => {
+      if (table.parentElement?.classList.contains("md-table-wrap")) return;
+      const wrap = document.createElement("div");
+      wrap.className = "md-table-wrap";
+      table.parentNode.insertBefore(wrap, table);
+      wrap.appendChild(table);
+    });
+    if (bubble.querySelector(".md-table-wrap")) {
+      bubble.classList.add("bubble-has-table");
+      bubble.closest(".msg-row")?.classList.add("has-table");
+    }
+  }
+
   function renderMarkdown(bubble, text, role) {
     bubble.classList.remove("streaming");
-    bubble.innerHTML = `<div class="md-content">${marked.parse(text || "")}</div>`;
-    bubble.querySelectorAll("a").forEach((a) => {
+    ensureBubbleLayout(bubble);
+    const body = getBubbleBody(bubble);
+    body.innerHTML = `<div class="md-content">${marked.parse(text || "")}</div>`;
+    bubble.querySelectorAll(".md-content a").forEach((a) => {
       a.target = "_blank";
       a.rel = "noopener noreferrer";
     });
+    wrapMarkdownTables(bubble);
     enhanceBubble(bubble, text || "");
   }
 
@@ -369,8 +386,38 @@ window.ChatUI = (() => {
     enhanceBubble(bubble, ev.content || "");
   }
 
-  function addMeta(text, accent) {
-    clearToolStatus();
+  function ensureBubbleLayout(bubble) {
+    if (!bubble) return;
+    if (!bubble.querySelector(".bubble-hints")) {
+      const hints = document.createElement("div");
+      hints.className = "bubble-hints";
+      bubble.insertBefore(hints, bubble.firstChild);
+    }
+    if (!bubble.querySelector(".bubble-body")) {
+      const body = document.createElement("div");
+      body.className = "bubble-body";
+      bubble.appendChild(body);
+    }
+  }
+
+  function appendBubbleHint(bubble, text, accent) {
+    if (!text) return;
+    ensureBubbleLayout(bubble);
+    const hints = bubble.querySelector(".bubble-hints");
+    const item = document.createElement("div");
+    item.className = "bubble-hint-item" + (accent ? ` accent-${accent}` : "");
+    item.textContent = text;
+    const live = hints.querySelector(".bubble-hint-live");
+    if (live) hints.insertBefore(item, live);
+    else hints.appendChild(item);
+    scrollBottom();
+  }
+
+  function clearLiveHint() {
+    assistantNode?.querySelector(".bubble-hint-live")?.remove();
+  }
+
+  function addMetaCapsule(text, accent) {
     const wrap = document.createElement("div");
     wrap.className = "meta-capsule selectable" + (accent ? ` accent-${accent}` : "");
     const span = document.createElement("span");
@@ -380,42 +427,33 @@ window.ChatUI = (() => {
     scrollBottom();
   }
 
-  function ensureBubbleStructure(bubble) {
-    if (!bubble) return;
-    if (bubble.querySelector(".bubble-body") || bubble.querySelector(".bubble-status")) return;
-    const text = bubble.textContent;
-    bubble.textContent = "";
-    const body = document.createElement("div");
-    body.className = "bubble-body";
-    body.textContent = text || "";
-    bubble.appendChild(body);
+  function isAgentHint(text) {
+    const t = text || "";
+    return (
+      t.startsWith("🔧") ||
+      t.startsWith("📋") ||
+      t.startsWith("🔍") ||
+      t.includes("调用工具") ||
+      t.includes(" 返回:")
+    );
   }
 
   function getBubbleBody(bubble) {
-    ensureBubbleStructure(bubble);
-    let body = bubble.querySelector(".bubble-body");
-    if (!body) {
-      body = document.createElement("div");
-      body.className = "bubble-body";
-      bubble.appendChild(body);
-    }
-    return body;
+    ensureBubbleLayout(bubble);
+    return bubble.querySelector(".bubble-body");
   }
 
-  function getOrCreateBubbleStatus(bubble) {
-    ensureBubbleStructure(bubble);
-    let status = bubble.querySelector(".bubble-status");
-    if (!status) {
-      status = document.createElement("div");
-      status.className = "bubble-status";
-      const body = bubble.querySelector(".bubble-body");
-      if (body) {
-        bubble.insertBefore(status, body);
-      } else {
-        bubble.appendChild(status);
-      }
+  function addMeta(text, accent) {
+    clearLiveHint();
+    if (isAgentHint(text)) {
+      appendBubbleHint(ensureAssistantBubble(), text, accent);
+      return;
     }
-    return status;
+    if (assistantNode) {
+      appendBubbleHint(assistantNode, text, accent);
+      return;
+    }
+    addMetaCapsule(text, accent);
   }
 
   function setBubbleStreamText(bubble, text) {
@@ -426,25 +464,32 @@ window.ChatUI = (() => {
     if (!assistantNode) {
       assistantNode = createRow("assistant");
       assistantNode.classList.add("streaming");
-      ensureBubbleStructure(assistantNode);
+      ensureBubbleLayout(assistantNode);
     }
     return assistantNode;
   }
 
   function setToolStatus(text, accent) {
     if (!text) {
-      clearToolStatus();
+      clearLiveHint();
       return;
     }
     const bubble = ensureAssistantBubble();
-    const status = getOrCreateBubbleStatus(bubble);
-    status.className = "bubble-status" + (accent ? ` accent-${accent}` : "");
-    status.textContent = text;
+    ensureBubbleLayout(bubble);
+    const hints = bubble.querySelector(".bubble-hints");
+    let live = hints.querySelector(".bubble-hint-live");
+    if (!live) {
+      live = document.createElement("div");
+      live.className = "bubble-hint-live bubble-hint-item";
+      hints.appendChild(live);
+    }
+    live.className = "bubble-hint-live bubble-hint-item" + (accent ? ` accent-${accent}` : "");
+    live.textContent = text;
     scrollBottom();
   }
 
   function clearToolStatus() {
-    assistantNode?.querySelector(".bubble-status")?.remove();
+    clearLiveHint();
   }
 
   function clear() {
@@ -471,7 +516,7 @@ window.ChatUI = (() => {
         streamText = ev.content || "";
         assistantNode = createRow("assistant");
         assistantNode.classList.add("streaming");
-        ensureBubbleStructure(assistantNode);
+        ensureBubbleLayout(assistantNode);
         setBubbleStreamText(assistantNode, streamText);
         scrollBottom();
         break;
@@ -480,7 +525,7 @@ window.ChatUI = (() => {
           streamText = ev.content || "";
           assistantNode = createRow("assistant");
           assistantNode.classList.add("streaming");
-          ensureBubbleStructure(assistantNode);
+          ensureBubbleLayout(assistantNode);
         } else {
           streamText += ev.content || "";
         }
@@ -501,7 +546,7 @@ window.ChatUI = (() => {
         appendBubbleElapsed(replyBubble, ev.elapsed_ms);
         assistantNode = null;
         streamText = "";
-        clearToolStatus();
+        clearLiveHint();
         scrollBottom();
         break;
       }

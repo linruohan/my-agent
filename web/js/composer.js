@@ -1,10 +1,16 @@
-/** 底部 Pill 输入区：附件、语音、拖拽、粘贴 */
+/** 底部 Pill 输入区：附件、语音、斜杠补全、历史 */
 window.Composer = (() => {
   let attachments = [];
   let voiceListening = false;
   let lastVoiceResultKey = "";
   let attachMenuOpen = false;
   let actionRunning = false;
+  let slashCatalog = [];
+  let inputHistory = [];
+  let historyIndex = -1;
+  let slashItems = [];
+  let slashIndex = -1;
+  let slashOpen = false;
 
   function api() {
     return window.pywebview && window.pywebview.api;
@@ -71,6 +77,8 @@ window.Composer = (() => {
     }
     attachments = [];
     renderAttachments();
+    historyIndex = -1;
+    closeSlashMenu();
   }
 
   function getPayload() {
@@ -78,6 +86,113 @@ window.Composer = (() => {
       text: (el("input-box")?.value || "").trim(),
       attachments: attachments.map(({ type, path, url, name }) => ({ type, path, url, name })),
     };
+  }
+
+  function slashFilter(text) {
+    const body = text || "";
+    if (!body.startsWith("/")) return [];
+    const rest = body.slice(1).toLowerCase();
+    return slashCatalog.filter((item) => {
+      const name = (item.name || "").toLowerCase();
+      const desc = (item.desc || "").toLowerCase();
+      if (!rest) return true;
+      return name.includes(rest) || desc.includes(rest) || `/${name}`.includes("/" + rest);
+    });
+  }
+
+  function renderSlashMenu(items) {
+    const menu = el("slash-menu");
+    if (!menu) return;
+    slashItems = items;
+    slashIndex = items.length ? 0 : -1;
+    if (!items.length) {
+      menu.classList.add("hidden");
+      slashOpen = false;
+      menu.innerHTML = "";
+      return;
+    }
+    menu.innerHTML = "";
+    items.forEach((item, idx) => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "slash-item" + (idx === slashIndex ? " active" : "");
+      const cmd = document.createElement("span");
+      cmd.className = "slash-cmd " + (item.kind === "skill" ? "slash-skill" : "slash-tool");
+      cmd.textContent = item.slash || `/${item.name}`;
+      const desc = document.createElement("span");
+      desc.className = "slash-desc";
+      desc.textContent = item.desc || "";
+      row.appendChild(cmd);
+      row.appendChild(desc);
+      row.addEventListener("click", () => applySlashItem(item));
+      menu.appendChild(row);
+    });
+    menu.classList.remove("hidden");
+    slashOpen = true;
+  }
+
+  function highlightSlashMenu() {
+    const menu = el("slash-menu");
+    if (!menu) return;
+    menu.querySelectorAll(".slash-item").forEach((node, idx) => {
+      node.classList.toggle("active", idx === slashIndex);
+    });
+  }
+
+  function applySlashItem(item) {
+    const box = el("input-box");
+    if (!box || !item) return;
+    box.value = item.slash || `/${item.name}`;
+    closeSlashMenu();
+    box.focus();
+    autoResizeInput();
+  }
+
+  function closeSlashMenu() {
+    slashOpen = false;
+    slashItems = [];
+    slashIndex = -1;
+    el("slash-menu")?.classList.add("hidden");
+  }
+
+  function onInputChange() {
+    autoResizeInput();
+    const box = el("input-box");
+    if (!box) return;
+    const val = box.value;
+    if (val.startsWith("/")) {
+      renderSlashMenu(slashFilter(val));
+    } else {
+      closeSlashMenu();
+    }
+    historyIndex = -1;
+  }
+
+  function historyUp() {
+    if (!inputHistory.length) return;
+    const box = el("input-box");
+    if (!box) return;
+    if (historyIndex < inputHistory.length - 1) {
+      historyIndex += 1;
+      box.value = inputHistory[historyIndex];
+      onInputChange();
+    }
+  }
+
+  function historyDown() {
+    if (historyIndex <= 0) {
+      historyIndex = -1;
+      const box = el("input-box");
+      if (box) box.value = "";
+      onInputChange();
+      return;
+    }
+    historyIndex -= 1;
+    const box = el("input-box");
+    if (box) {
+      box.value = inputHistory[historyIndex];
+      onInputChange();
+    }
   }
 
   async function send() {
@@ -93,6 +208,9 @@ window.Composer = (() => {
         window.ChatApp.setComposerHint("请等待当前任务完成");
         return false;
       }
+      if (payload.text) {
+        inputHistory = [payload.text, ...inputHistory.filter((x) => x !== payload.text)].slice(0, 200);
+      }
       clearInput();
       return true;
     } catch (e) {
@@ -105,6 +223,11 @@ window.Composer = (() => {
     if (!api() || !window.ChatApp) return;
     if (actionRunning || window.ChatApp.isRunning()) {
       await api().stop_agent();
+      return;
+    }
+    if (slashOpen && slashItems.length && slashIndex >= 0) {
+      applySlashItem(slashItems[slashIndex]);
+      await send();
       return;
     }
     await send();
@@ -232,7 +355,7 @@ window.Composer = (() => {
       const box = el("input-box");
       if (box) {
         box.value = box.value ? `${box.value}\n${text}` : text;
-        autoResizeInput();
+        onInputChange();
       }
     }
   }
@@ -243,12 +366,8 @@ window.Composer = (() => {
 
   async function startVoice() {
     voiceLog("click", { voiceListening, hasApi: !!api() });
-    if (voiceListening) {
-      voiceLog("ignored: already listening");
-      return;
-    }
+    if (voiceListening) return;
     if (!api()) {
-      voiceLog("ignored: pywebview api not ready");
       window.ChatApp?.setComposerHint("语音 API 未就绪，请稍候重试");
       return;
     }
@@ -256,32 +375,22 @@ window.Composer = (() => {
     el("btn-voice")?.classList.add("listening");
     window.ChatApp?.setComposerHint("正在启动语音…");
     try {
-      voiceLog("get_voice_info …");
       const info = await api().get_voice_info();
-      voiceLog("get_voice_info", info);
       if (!info.supported) {
         voiceListening = false;
         el("btn-voice")?.classList.remove("listening");
         window.ChatApp?.setComposerHint(info.error || "当前平台不支持语音输入");
         return;
       }
-      window.ChatApp?.setComposerHint("正在检查本地语音…");
-      voiceLog("start_voice_input …");
       const started = await api().start_voice_input();
-      voiceLog("start_voice_input", started);
       if (!started || started.ok === false) {
         voiceListening = false;
         el("btn-voice")?.classList.remove("listening");
-        if (started?.needs_speech_settings) {
-          window.ChatApp?.setComposerHint(started.error || "请先开启系统在线语音识别");
-        } else if (started?.error) {
-          window.ChatApp?.setComposerHint(started.error);
-        }
+        window.ChatApp?.setComposerHint(started?.error || "语音启动失败");
         return;
       }
-      window.ChatApp?.setComposerHint("正在聆听… 本地语音识别（无需在线语音）");
+      window.ChatApp?.setComposerHint("正在聆听…");
     } catch (err) {
-      voiceLog("startVoice error", err);
       voiceListening = false;
       el("btn-voice")?.classList.remove("listening");
       window.ChatApp?.setComposerHint(`语音启动失败: ${err?.message || err}`);
@@ -289,39 +398,14 @@ window.Composer = (() => {
   }
 
   function onVoiceResult(result) {
-    voiceLog("onVoiceResult", result);
     voiceListening = false;
     el("btn-voice")?.classList.remove("listening");
-    if (!result) return;
-    if (result.ok && result.text) {
-      const key = `${result.text}|${result.language || ""}`;
-      if (key === lastVoiceResultKey) {
-        voiceLog("skip duplicate onVoiceResult");
-        return;
-      }
-      lastVoiceResultKey = key;
-      const box = el("input-box");
-      if (box) {
-        const text = result.text.trim();
-        const cur = box.value.trimEnd();
-        if (cur.endsWith(text)) {
-          voiceLog("skip append: already ends with text");
-        } else {
-          box.value = cur ? `${cur} ${text}` : text;
-        }
-        autoResizeInput();
-        box.focus();
-      }
-      const lang = result.language ? ` (${result.language})` : "";
-      window.ChatApp?.setComposerHint(`语音识别完成${lang}`);
-    } else if (result.ok && result.canceled) {
-      window.ChatApp?.setComposerHint("已取消语音输入");
-    } else if (result.error) {
-      window.ChatApp?.setComposerHint(result.error);
-    } else if (result.needs_speech_settings) {
-      window.ChatApp?.setComposerHint(result.error || "请先开启系统在线语音识别");
-    } else {
-      window.ChatApp?.setComposerHint("未识别到语音，请重试");
+    if (!result?.ok || !result.text) return;
+    const box = el("input-box");
+    if (box) {
+      box.value = box.value.trimEnd() ? `${box.value.trimEnd()} ${result.text.trim()}` : result.text.trim();
+      onInputChange();
+      box.focus();
     }
   }
 
@@ -329,8 +413,40 @@ window.Composer = (() => {
     const box = el("input-box");
     const pill = el("composer-pill");
 
-    box?.addEventListener("input", autoResizeInput);
+    box?.addEventListener("input", onInputChange);
     box?.addEventListener("keydown", (e) => {
+      if (slashOpen && slashItems.length) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          slashIndex = Math.min(slashIndex + 1, slashItems.length - 1);
+          highlightSlashMenu();
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          slashIndex = Math.max(slashIndex - 1, 0);
+          highlightSlashMenu();
+          return;
+        }
+        if (e.key === "Tab" && slashIndex >= 0) {
+          e.preventDefault();
+          applySlashItem(slashItems[slashIndex]);
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          closeSlashMenu();
+          return;
+        }
+      } else if (e.key === "ArrowUp" && !e.shiftKey) {
+        e.preventDefault();
+        historyUp();
+        return;
+      } else if (e.key === "ArrowDown" && !e.shiftKey) {
+        e.preventDefault();
+        historyDown();
+        return;
+      }
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         toggleAction();
@@ -358,8 +474,20 @@ window.Composer = (() => {
     pill?.addEventListener("drop", handleDrop);
   }
 
+  async function refreshSlashCatalog() {
+    if (!api()) return;
+    try {
+      slashCatalog = (await api().get_slash_catalog()) || [];
+    } catch {
+      slashCatalog = [];
+    }
+  }
+
   function init(meta) {
     bind();
+    if (meta?.slash_catalog) slashCatalog = meta.slash_catalog;
+    else refreshSlashCatalog();
+    if (meta?.input_history) inputHistory = meta.input_history;
     if (meta) {
       const voiceBtn = el("btn-voice");
       if (voiceBtn && meta.voice_supported === false) {
@@ -378,5 +506,6 @@ window.Composer = (() => {
     clearInput,
     onVoiceResult,
     getPayload,
+    refreshSlashCatalog,
   };
 })();

@@ -13,8 +13,9 @@ WindowGetter = Callable[[], Any]
 class WebChatBridge:
     """替代 ChatPanel，通过 evaluate_js 驱动前端 ChatUI。"""
 
-    def __init__(self, get_window: WindowGetter) -> None:
+    def __init__(self, get_window: WindowGetter, *, on_event: Callable[[dict[str, Any]], None] | None = None) -> None:
         self._get_window = get_window
+        self._on_event = on_event
         self._stream_buffer = ""
         self._streaming = False
         self._turn_started_at: float | None = None
@@ -24,6 +25,11 @@ class WebChatBridge:
         return self._stream_buffer
 
     def _emit(self, event: dict[str, Any]) -> None:
+        if self._on_event:
+            try:
+                self._on_event(event)
+            except Exception:
+                pass
         window = self._get_window()
         if window is None:
             return

@@ -48,9 +48,7 @@ window.ChatApp = (() => {
   }
 
   function bindComposer() {
-    document.getElementById("btn-new-session")?.addEventListener("click", async () => {
-      if (api()) await api().new_session();
-    });
+    /* 会话按钮由 SessionUI 绑定 */
   }
 
   function fillThemeSelect(catalog, currentId) {
@@ -115,7 +113,9 @@ window.ChatApp = (() => {
     providerNames = data.provider_names || [];
     fillThemeSelect(data.theme_catalog, data.theme_id);
     fillFontSelect(data.font_catalog, data.font_id);
+    document.getElementById("font-select").value = data.font_id;
     document.getElementById("appearance-select").value = data.appearance || "dark";
+    document.getElementById("skill-dirs-input").value = data.skill_dirs || "";
     fillProviderSelect(data.current_provider);
     loadProviderFields(data.current_provider);
     document.getElementById("settings-modal").showModal();
@@ -147,11 +147,13 @@ window.ChatApp = (() => {
         base_url: document.getElementById("base-url-input").value,
         api_key: document.getElementById("api-key-input").value,
         temperature: parseFloat(document.getElementById("temp-slider").value),
+        skill_dirs: document.getElementById("skill-dirs-input").value,
       };
       const result = await api().save_settings(payload);
       if (result && result.ok) {
         applyTheme(result.theme_variables);
         setStatus(result.status_text);
+        await window.Composer?.refreshSlashCatalog?.();
         modal.close();
       } else if (result && result.error) {
         const status = document.getElementById("api-key-status");
@@ -251,8 +253,15 @@ window.ChatApp = (() => {
     applyTheme(state.theme_variables);
     setStatus(state.status_text);
     setRunning(false);
-    window.Composer?.init(state.composer_meta);
-    if (state.welcome) {
+    window.SessionUI?.init(state);
+    window.Composer?.init({
+      ...state.composer_meta,
+      slash_catalog: state.slash_catalog,
+      input_history: state.input_history,
+    });
+    if (state.session_events && state.session_events.length) {
+      state.session_events.forEach((ev) => window.ChatUI.handleEvent(ev));
+    } else if (state.welcome) {
       window.ChatUI.handleEvent({ type: "meta", content: "⚙️ " + state.welcome });
     }
   }

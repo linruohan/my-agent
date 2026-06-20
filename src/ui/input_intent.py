@@ -14,6 +14,7 @@ from loguru import logger
 from src.tools.weather import WeatherRange, detect_weather_range, parse_weather_slash_args
 from src.ui.input_compose import extract_inline_urls
 from src.ui.message_utils import normalize_user_message
+from src.ui.skill_catalog import build_slash_catalog
 
 INTENT_OCR = "ocr"
 INTENT_LINK = "link_summarize"
@@ -23,8 +24,12 @@ INTENT_SLASH_NOTE = "slash_note"
 INTENT_SLASH_OCR = "slash_ocr"
 INTENT_WEATHER = "weather"
 INTENT_SLASH_WEATHER = "slash_weather"
+INTENT_SLASH_CACHE = "slash_cache"
+INTENT_SLASH_TASK = "slash_task"
+INTENT_SLASH_SKILL = "slash_skill"
 
-_SLASH_RE = re.compile(r"^/(note|ocr|search|weather)\b\s*(.*)$", re.IGNORECASE | re.DOTALL)
+_SYSTEM_SLASH = {"note", "ocr", "search", "weather", "cache", "tsk"}
+_SLASH_GENERIC_RE = re.compile(r"^/([\w-]+)\b\s*(.*)$", re.IGNORECASE | re.DOTALL)
 _OCR_HINT_RE = re.compile(
     r"识别|提取文字|查看文本|识图|文字识别|图片识别|ocr",
     re.IGNORECASE,
@@ -43,9 +48,16 @@ class InputIntent:
     urls: list[str] = field(default_factory=list)
     link_instruction: str = ""
     note_content: str = ""
+    slash_cmd: str = ""
+    slash_args: str = ""
+    skill_name: str = ""
     weather_city_code: str = ""
     weather_range: WeatherRange = "7d"
     reason: str = ""
+
+
+def _skill_names() -> set[str]:
+    return {s["name"].lower() for s in build_slash_catalog() if s.get("kind") == "skill"}
 
 
 def extract_link_instruction(text: str, urls: list[str]) -> str:
@@ -60,7 +72,7 @@ def parse_slash_command(text: str) -> InputIntent | None:
     body = normalize_user_message(text or "").strip()
     if not body.startswith("/"):
         return None
-    match = _SLASH_RE.match(body)
+    match = _SLASH_GENERIC_RE.match(body)
     if not match:
         return None
 
@@ -68,16 +80,30 @@ def parse_slash_command(text: str) -> InputIntent | None:
     args = match.group(2).strip()
 
     if cmd == "note":
+        if args.lower().startswith(("add ", "list", "rm ")) or args.isdigit():
+            return InputIntent(
+                kind=INTENT_SLASH_NOTE,
+                slash_cmd="note",
+                slash_args=args,
+                reason="slash:/note",
+            )
         content = _NOTE_PREFIX_RE.sub("", args).strip() or args.strip()
-        return InputIntent(kind=INTENT_SLASH_NOTE, note_content=content, reason="slash:/note")
+        return InputIntent(
+            kind=INTENT_SLASH_NOTE,
+            slash_cmd="note",
+            slash_args=args,
+            note_content=content,
+            reason="slash:/note",
+        )
 
     if cmd == "ocr":
-        return InputIntent(kind=INTENT_SLASH_OCR, reason="slash:/ocr")
+        return InputIntent(kind=INTENT_SLASH_OCR, slash_cmd="ocr", reason="slash:/ocr")
 
     if cmd == "search":
         return InputIntent(
             kind=INTENT_SEARCH,
             search_query=args or body,
+            slash_cmd="search",
             reason="slash:/search",
         )
 
@@ -87,29 +113,36 @@ def parse_slash_command(text: str) -> InputIntent | None:
             kind=INTENT_SLASH_WEATHER,
             weather_city_code=code,
             weather_range=range_type,
+            slash_cmd="weather",
             reason="slash:/weather",
         )
+
+    if cmd == "cache":
+        return InputIntent(
+            kind=INTENT_SLASH_CACHE,
+            slash_cmd="cache",
+            slash_args=args,
+            reason="slash:/cache",
+        )
+
+    if cmd == "tsk":
+        return InputIntent(
+            kind=INTENT_SLASH_TASK,
+            slash_cmd="tsk",
+            slash_args=args,
+            reason="slash:/tsk",
+        )
+
+    if cmd in _skill_names():
+        return InputIntent(
+            kind=INTENT_SLASH_SKILL,
+            slash_cmd=cmd,
+            slash_args=args,
+            skill_name=cmd,
+            reason=f"slash:/{cmd}",
+        )
+
     return None
-
-
-def _is_weather_request(text: str) -> bool:
-    body = normalize_user_message(text or "").strip()
-    if not body:
-        return False
-    if _WEATHER_HINT_RE.search(body):
-        return True
-    if re.search(r"天气(?:预报)?", body, re.IGNORECASE) and len(body) <= 24:
-        return True
-    return False
-
-
-def _attachment_flags(attachments: list[dict[str, Any]] | None) -> dict[str, bool]:
-    attachments = attachments or []
-    return {
-        "has_images": any(att.get("type") == "image" for att in attachments),
-        "has_files": any(att.get("type") == "file" for att in attachments),
-        "has_link_att": any(att.get("type") == "link" for att in attachments),
-    }
 
 
 def classify_intent_rules(text: str, attachments: list[dict[str, Any]] | None) -> InputIntent | None:
@@ -149,6 +182,26 @@ def classify_intent_rules(text: str, attachments: list[dict[str, Any]] | None) -
         return InputIntent(kind=INTENT_AGENT, reason="rule:file_attachment")
 
     return None
+
+
+def _is_weather_request(text: str) -> bool:
+    body = normalize_user_message(text or "").strip()
+    if not body:
+        return False
+    if _WEATHER_HINT_RE.search(body):
+        return True
+    if re.search(r"天气(?:预报)?", body, re.IGNORECASE) and len(body) <= 24:
+        return True
+    return False
+
+
+def _attachment_flags(attachments: list[dict[str, Any]] | None) -> dict[str, bool]:
+    attachments = attachments or []
+    return {
+        "has_images": any(att.get("type") == "image" for att in attachments),
+        "has_files": any(att.get("type") == "file" for att in attachments),
+        "has_link_att": any(att.get("type") == "link" for att in attachments),
+    }
 
 
 def _parse_llm_json(raw: str) -> dict[str, Any]:

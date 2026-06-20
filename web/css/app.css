@@ -110,10 +110,46 @@ body {
 }
 
 .session-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
   padding: 8px 10px;
   border-radius: var(--radius-input);
   font-size: var(--font-meta);
   color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.session-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-actions {
+  display: none;
+  gap: 2px;
+}
+
+.session-item:hover .session-actions,
+.session-item.active .session-actions {
+  display: inline-flex;
+}
+
+.session-act {
+  border: none;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  padding: 0 4px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.session-act:hover {
+  color: var(--fg);
 }
 
 .session-item.active {
@@ -170,6 +206,7 @@ body {
 }
 
 .composer-pill {
+  position: relative;
   display: flex;
   align-items: flex-end;
   gap: 8px;
@@ -189,6 +226,69 @@ body {
 .composer-pill.drag-over {
   border-color: var(--info);
   background: color-mix(in srgb, var(--info) 8%, var(--bg-input));
+}
+
+.slash-menu {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: calc(100% + 6px);
+  max-height: 220px;
+  overflow: auto;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--border) 50%, transparent);
+  z-index: 30;
+  padding: 4px;
+}
+
+.slash-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: var(--font-meta);
+  color: var(--fg);
+}
+
+.slash-item:hover,
+.slash-item.active {
+  background: color-mix(in srgb, var(--primary-bg) 12%, transparent);
+}
+
+.slash-cmd {
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.slash-tool {
+  color: #ea580c;
+}
+
+.slash-skill {
+  color: #38bdf8;
+}
+
+.slash-desc {
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.md-content mark.kw-hl,
+.bubble mark.kw-hl {
+  background: #fef08a;
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 2px;
 }
 
 .pill-left {
@@ -752,6 +852,55 @@ body {
   -webkit-user-select: none;
 }
 
+.bubble-hints {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: -2px 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--assistant-bubble-border, var(--border)) 55%, transparent);
+}
+
+.bubble-hints:empty {
+  display: none;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.bubble-hint-item {
+  font-size: var(--font-meta);
+  font-weight: 500;
+  line-height: 1.45;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--info, #0ea5e9) 10%, var(--assistant-bubble-bg, var(--bg-chat)));
+  border: 1px solid color-mix(in srgb, var(--info, #0ea5e9) 28%, var(--border));
+  color: var(--fg-muted);
+  word-break: break-word;
+}
+
+.bubble-hint-item.accent-info {
+  color: color-mix(in srgb, var(--info) 88%, var(--fg));
+  background: color-mix(in srgb, var(--info) 12%, var(--assistant-bubble-bg, var(--bg-chat)));
+}
+
+.bubble-hint-item.accent-success {
+  color: color-mix(in srgb, var(--success) 85%, var(--fg));
+  background: color-mix(in srgb, var(--success) 10%, var(--assistant-bubble-bg, var(--bg-chat)));
+  border-color: color-mix(in srgb, var(--success) 35%, var(--border));
+}
+
+.bubble-hint-item.accent-error {
+  color: color-mix(in srgb, var(--danger) 88%, var(--fg));
+  background: color-mix(in srgb, var(--danger) 10%, var(--assistant-bubble-bg, var(--bg-chat)));
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+}
+
+.bubble-hint-live {
+  font-style: italic;
+}
+
 .bubble-status {
   font-size: var(--font-meta);
   font-weight: 500;
@@ -866,16 +1015,46 @@ body {
   margin: 0.5em 0;
 }
 
+.msg-row.assistant.has-table .msg-col {
+  max-width: min(96%, calc(100vw - 120px));
+}
+
+.bubble.bubble-has-table {
+  word-break: normal;
+  max-width: 100%;
+}
+
+.bubble .md-content:has(table) {
+  overflow-x: visible;
+}
+
+.bubble .md-table-wrap {
+  overflow-x: auto;
+  max-width: 100%;
+  margin: 0.35em 0;
+  -webkit-overflow-scrolling: touch;
+}
+
 .bubble .md-content table {
   border-collapse: collapse;
   font-size: 0.92em;
-  margin: 0.35em 0;
+  width: max-content;
+  max-width: none;
+  table-layout: auto;
 }
 
 .bubble .md-content th,
 .bubble .md-content td {
   border: 1px solid var(--border);
-  padding: 4px 8px;
+  padding: 4px 10px;
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
+  vertical-align: top;
+}
+
+.bubble .md-content table a {
+  white-space: nowrap;
 }
 
 .meta-capsule {

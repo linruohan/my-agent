@@ -62,25 +62,19 @@ def get_weather_forecast(
 
 @tool
 def add_note(content: str, title: str = "") -> str:
-    """添加一条个人笔记。
+    """添加一条个人笔记（note.db）。
 
     Args:
         content: 笔记正文
         title: 可选标题，留空则取正文前 30 字
     """
+    from src.tools.note_store import NoteStore
+
     body = (content or "").strip()
     if not body:
         return "笔记内容不能为空。"
-    notes = _load_json(_NOTES_FILE, [])
-    note = {
-        "id": len(notes) + 1,
-        "title": (title or body[:30]).strip() or body[:30],
-        "content": body,
-        "created_at": datetime.now().isoformat(timespec="seconds"),
-    }
-    notes.append(note)
-    _save_json(_NOTES_FILE, notes)
-    return f"已添加笔记 #{note['id']}：{note['title']}"
+    row = NoteStore().add(title, body)
+    return f"已添加笔记 #{row.id}：{row.title}"
 
 
 @tool
