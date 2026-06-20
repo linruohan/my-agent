@@ -11,6 +11,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from loguru import logger
 
+from src.tools.weather import WeatherRange, detect_weather_range, parse_weather_slash_args
 from src.ui.input_compose import extract_inline_urls
 from src.ui.message_utils import normalize_user_message
 
@@ -20,10 +21,16 @@ INTENT_SEARCH = "search"
 INTENT_AGENT = "agent"
 INTENT_SLASH_NOTE = "slash_note"
 INTENT_SLASH_OCR = "slash_ocr"
+INTENT_WEATHER = "weather"
+INTENT_SLASH_WEATHER = "slash_weather"
 
-_SLASH_RE = re.compile(r"^/(note|ocr|search)\b\s*(.*)$", re.IGNORECASE | re.DOTALL)
+_SLASH_RE = re.compile(r"^/(note|ocr|search|weather)\b\s*(.*)$", re.IGNORECASE | re.DOTALL)
 _OCR_HINT_RE = re.compile(
     r"识别|提取文字|查看文本|识图|文字识别|图片识别|ocr",
+    re.IGNORECASE,
+)
+_WEATHER_HINT_RE = re.compile(
+    r"^(?:/)?weather\b|(?:查(?:询|看)?|获取|看看)?(?:一下)?天气(?:预报)?(?:怎么样|如何)?[？?]?$",
     re.IGNORECASE,
 )
 _NOTE_PREFIX_RE = re.compile(r"^(?:添加笔记|新建笔记|笔记)[：:\s]*", re.IGNORECASE)
@@ -36,6 +43,8 @@ class InputIntent:
     urls: list[str] = field(default_factory=list)
     link_instruction: str = ""
     note_content: str = ""
+    weather_city_code: str = ""
+    weather_range: WeatherRange = "7d"
     reason: str = ""
 
 
@@ -71,7 +80,27 @@ def parse_slash_command(text: str) -> InputIntent | None:
             search_query=args or body,
             reason="slash:/search",
         )
+
+    if cmd == "weather":
+        code, range_type = parse_weather_slash_args(args)
+        return InputIntent(
+            kind=INTENT_SLASH_WEATHER,
+            weather_city_code=code,
+            weather_range=range_type,
+            reason="slash:/weather",
+        )
     return None
+
+
+def _is_weather_request(text: str) -> bool:
+    body = normalize_user_message(text or "").strip()
+    if not body:
+        return False
+    if _WEATHER_HINT_RE.search(body):
+        return True
+    if re.search(r"天气(?:预报)?", body, re.IGNORECASE) and len(body) <= 24:
+        return True
+    return False
 
 
 def _attachment_flags(attachments: list[dict[str, Any]] | None) -> dict[str, bool]:
@@ -100,6 +129,13 @@ def classify_intent_rules(text: str, attachments: list[dict[str, Any]] | None) -
 
     if flags["has_images"] and (not body.strip() or _OCR_HINT_RE.search(body)):
         return InputIntent(kind=INTENT_OCR, reason="rule:ocr_keywords_or_empty")
+
+    if not attachments and _is_weather_request(body):
+        return InputIntent(
+            kind=INTENT_WEATHER,
+            weather_range=detect_weather_range(body),
+            reason="rule:weather_keyword",
+        )
 
     if urls and not flags["has_files"]:
         return InputIntent(
@@ -136,12 +172,13 @@ def _llm_intent_prompt(text: str, attachments: list[dict[str, Any]] | None) -> s
     flags = _attachment_flags(attachments)
     urls = extract_inline_urls(text)
     return f"""分析用户输入，只返回 JSON（不要 markdown）：
-{{"intent":"ocr|link_summarize|search|agent","reason":"简短原因"}}
+{{"intent":"ocr|link_summarize|search|weather|agent","reason":"简短原因"}}
 
 意图说明：
 - ocr：用户要识别/提取图片中的文字（含「识别」「提取文字」「查看文本」等）
 - link_summarize：用户提供了链接 URL，希望抓取页面并按指令提取/总结信息
 - search：用户要搜索网络实时信息（新闻、热榜、版本等），且不是针对某个给定链接
+- weather：用户要查询天气预报（如「天气」「天气预报」「/weather」）
 - agent：一般对话、代码、文件、待办、知识库问答等
 
 输入上下文：
@@ -190,6 +227,8 @@ def classify_intent_llm(
             )
         if kind == INTENT_SEARCH:
             return InputIntent(kind=INTENT_SEARCH, search_query=body, reason=reason)
+        if kind == INTENT_WEATHER:
+            return InputIntent(kind=INTENT_WEATHER, reason=reason)
         if kind == INTENT_AGENT:
             return InputIntent(kind=INTENT_AGENT, reason=reason)
     except Exception:

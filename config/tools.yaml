@@ -133,3 +133,8 @@ tools:
     enabled: true
     risk: low
     requires_confirmation: false
+
+  get_weather_forecast:
+    enabled: true
+    risk: low
+    requires_confirmation: false

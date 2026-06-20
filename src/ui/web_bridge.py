@@ -134,11 +134,21 @@ class WebChatBridge:
                 }
             )
 
-    def append_assistant_complete(self, content: str, *, from_cache: bool = False) -> None:
+    def append_assistant_complete(
+        self,
+        content: str,
+        *,
+        from_cache: bool = False,
+        content_format: str = "markdown",
+    ) -> None:
         if from_cache:
             pass
         self._stream_buffer = content
-        event: dict[str, Any] = {"type": "assistant_end", "content": content}
+        event: dict[str, Any] = {
+            "type": "assistant_end",
+            "content": content,
+            "content_format": content_format,
+        }
         elapsed = self._elapsed_ms()
         if elapsed is not None:
             event["elapsed_ms"] = elapsed

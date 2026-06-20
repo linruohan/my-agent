@@ -1,0 +1,10 @@
+weather:
+  # 省 / 市 / 区（用于展示；城市代码见中国天气网）
+  province: 陕西
+  city: 西安
+  district: 莲湖区
+  # 城市代码，见 https://www.weather.com.cn/weather/{city_code}.shtml https://j.i8tq.com/weather2020/search/city.js
+  city_code: "101110101"
+  # 预报天数（页面通常提供 7 天）
+  days: 7
+  request_timeout: 20

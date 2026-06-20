@@ -12,6 +12,7 @@ from src.infra.paths import DATA_DIR
 from src.memory.rag import search_knowledge_base
 from src.tools.file.tools import FILE_TOOLS
 from src.tools.search import SearchEngine, web_search_impl
+from src.tools.weather import get_weather_forecast_impl
 
 # 工具注册约定：按类别分包（如 file/、web/），各包导出 *_TOOLS 列表，在此汇总。
 _TODOS_FILE = DATA_DIR / "workspace" / "todos.json"
@@ -41,6 +42,22 @@ def web_search(query: str, engine: SearchEngine = "auto") -> str:
         engine: 搜索引擎 bing / baidu / auto（默认 auto，先 Bing 后百度）
     """
     return web_search_impl(query, engine)
+
+
+@tool
+def get_weather_forecast(
+    city_code: str = "",
+    range_type: str = "7d",
+    query_text: str = "",
+) -> str:
+    """查询中国天气网天气预报（当天或 7 天），返回页面 HTML。默认 7 天、使用 config/weather.yaml 地区。
+
+    Args:
+        city_code: 可选，中国天气网 9 位城市代码（如 101110101）；留空则用配置
+        range_type: 1d（当天）或 7d（7 天），默认 7d
+        query_text: 用户原文，用于识别「今天」「7天」等关键词
+    """
+    return get_weather_forecast_impl(city_code or None, range_type=range_type, query_text=query_text)
 
 
 @tool
@@ -163,6 +180,7 @@ def list_todos(include_done: bool = False) -> str:
 
 OTHER_TOOLS = [
     web_search,
+    get_weather_forecast,
     add_note,
     search_notes,
     read_calendar,

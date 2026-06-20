@@ -232,6 +232,38 @@ window.ChatUI = (() => {
     enhanceBubble(bubble, text || "");
   }
 
+  function renderHtml(bubble, html) {
+    bubble.classList.remove("streaming");
+    bubble.innerHTML = "";
+    const wrap = document.createElement("div");
+    wrap.className = "html-content weather-html";
+    const iframe = document.createElement("iframe");
+    iframe.className = "weather-iframe";
+    iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-popups");
+    iframe.srcdoc = html || "";
+    iframe.addEventListener("load", () => {
+      try {
+        const doc = iframe.contentDocument;
+        const height = doc?.documentElement?.scrollHeight || doc?.body?.scrollHeight || 520;
+        iframe.style.height = `${Math.min(Math.max(height + 16, 320), 900)}px`;
+      } catch {
+        iframe.style.height = "520px";
+      }
+      scrollBottom();
+    });
+    wrap.appendChild(iframe);
+    bubble.appendChild(wrap);
+    scrollBottom();
+  }
+
+  function renderAssistantContent(bubble, content, format) {
+    if (format === "html") {
+      renderHtml(bubble, content || "");
+      return;
+    }
+    renderMarkdown(bubble, content || "", "assistant");
+  }
+
   function ensureLightbox() {
     if (document.getElementById("image-lightbox")) return;
     const dlg = document.createElement("dialog");
@@ -430,11 +462,12 @@ window.ChatUI = (() => {
         break;
       case "assistant_end": {
         let replyBubble = assistantNode;
+        const format = ev.content_format || "markdown";
         if (replyBubble) {
-          renderMarkdown(replyBubble, ev.content || streamText, "assistant");
+          renderAssistantContent(replyBubble, ev.content || streamText, format);
         } else if (ev.content) {
           replyBubble = createRow("assistant");
-          renderMarkdown(replyBubble, ev.content, "assistant");
+          renderAssistantContent(replyBubble, ev.content, format);
         }
         appendBubbleElapsed(replyBubble, ev.elapsed_ms);
         assistantNode = null;

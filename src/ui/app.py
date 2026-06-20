@@ -42,6 +42,8 @@ from src.ui.input_intent import (
     INTENT_SEARCH,
     INTENT_SLASH_NOTE,
     INTENT_SLASH_OCR,
+    INTENT_SLASH_WEATHER,
+    INTENT_WEATHER,
     InputIntent,
     resolve_input_intent,
 )
@@ -344,6 +346,10 @@ class AssistantController:
                 self._handle_ocr_intent(text, attachments, intent)
                 return
 
+            if intent.kind in (INTENT_WEATHER, INTENT_SLASH_WEATHER):
+                self._handle_weather_intent(intent, text)
+                return
+
             if intent.kind == INTENT_LINK:
                 self._start_link_summarize_turn(intent)
                 return
@@ -420,6 +426,27 @@ class AssistantController:
         except Exception as exc:
             logger.exception("添加笔记失败")
             self.chat.append_error(f"添加笔记失败: {exc}")
+
+    def _handle_weather_intent(self, intent: InputIntent, text: str = "") -> None:
+        range_label = "当天" if intent.weather_range == "1d" else "7天"
+        self.chat.begin_assistant_progress("正在获取天气预报…")
+        self.chat.set_tool_status(f"🌤 正在从中国天气网获取{range_label}预报…", accent="info")
+        try:
+            args: dict[str, str] = {
+                "range_type": intent.weather_range,
+                "query_text": text or "",
+            }
+            if intent.weather_city_code:
+                args["city_code"] = intent.weather_city_code
+            result = invoke_tool_in_process("get_weather_forecast", args)
+            content_format = "html" if result.lstrip().startswith("<") else "markdown"
+            self.chat.append_assistant_complete(result, content_format=content_format)
+            self.chat.set_status(self._status_text("就绪"))
+        except Exception as exc:
+            logger.exception("获取天气预报失败")
+            self.chat.append_error(f"获取天气预报失败: {exc}")
+        finally:
+            self.chat.clear_tool_status()
 
     def _handle_ocr_intent(
         self,

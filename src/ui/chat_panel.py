@@ -176,11 +176,24 @@ class ChatPanel(ctk.CTkFrame):
         else:
             self._set_tool_status("✓ 搜索完成，正在汇总…", accent=META_SUCCESS)
 
-    def append_assistant_complete(self, content: str, *, from_cache: bool = False) -> None:
+    def append_assistant_complete(
+        self,
+        content: str,
+        *,
+        from_cache: bool = False,
+        content_format: str = "markdown",
+    ) -> None:
         if from_cache:
             self._add_meta_capsule("📦 命中搜索缓存，直接返回历史回复", accent=META_INFO)
         bubble = self._add_bubble_row(role="assistant")
-        render_markdown(bubble, content, text_color=self._role_text_color("assistant"))
+        if content_format == "html":
+            render_markdown(
+                bubble,
+                "天气预报页面 HTML 已获取（请使用 Web UI 查看完整渲染）。",
+                text_color=self._role_text_color("assistant"),
+            )
+        else:
+            render_markdown(bubble, content, text_color=self._role_text_color("assistant"))
         schedule_fit_text_height(
             bubble,
             max_width=self._bubble_max_width("assistant"),

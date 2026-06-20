@@ -35,6 +35,29 @@ def load_search_config() -> dict[str, Any]:
     return _load_yaml(CONFIG_DIR / "search.yaml")
 
 
+def load_weather_config() -> dict[str, Any]:
+    path = CONFIG_DIR / "weather.yaml"
+    if not path.is_file():
+        return {
+            "province": "",
+            "city": "",
+            "district": "",
+            "city_code": "101110101",
+            "days": 7,
+            "request_timeout": 20,
+        }
+    data = _load_yaml(path)
+    cfg = data.get("weather", data)
+    return {
+        "province": cfg.get("province", ""),
+        "city": cfg.get("city", ""),
+        "district": cfg.get("district", ""),
+        "city_code": str(cfg.get("city_code", "101110101")),
+        "days": int(cfg.get("days", 7) or 7),
+        "request_timeout": float(cfg.get("request_timeout", 20) or 20),
+    }
+
+
 def ensure_data_dirs() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     for sub in ("checkpoints", "workspace", "vectorstore"):

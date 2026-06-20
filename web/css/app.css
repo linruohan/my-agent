@@ -707,6 +707,23 @@ body {
   border: 1px solid var(--assistant-bubble-border);
 }
 
+.weather-html {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: calc(var(--bubble-radius) - 4px);
+}
+
+.weather-iframe {
+  display: block;
+  width: 100%;
+  min-height: 320px;
+  max-height: 900px;
+  border: none;
+  border-radius: calc(var(--bubble-radius) - 4px);
+  background: #fff;
+}
+
 .bubble-elapsed {
   margin-top: 8px;
   padding-top: 6px;
