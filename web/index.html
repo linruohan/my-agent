@@ -6,11 +6,21 @@
   <title>个人助理 Agent</title>
   <link rel="stylesheet" href="css/fonts-lxgw.css" />
   <link rel="stylesheet" href="css/app.css" />
+  <link rel="stylesheet" href="css/calendar.css" />
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
   <div id="app" class="app">
     <aside class="sidebar">
+      <button type="button" class="sidebar-calendar" id="sidebar-calendar" title="打开万年历">
+        <span class="sidebar-cal-icon" aria-hidden="true">📅</span>
+        <div class="sidebar-cal-body">
+          <div class="sidebar-cal-date">—</div>
+          <div class="sidebar-cal-lunar">—</div>
+          <div class="sidebar-cal-sub"></div>
+        </div>
+        <span class="sidebar-cal-day-num">—</span>
+      </button>
       <div class="sidebar-header">
         <h1 class="sidebar-title">会话</h1>
       </div>
@@ -183,6 +193,54 @@
     </form>
   </dialog>
 
+  <!-- 万年历 -->
+  <dialog class="modal calendar-modal" id="calendar-modal">
+    <div class="modal-panel calendar-panel">
+      <header class="modal-header">
+        <h2>万年历</h2>
+        <button type="button" class="btn-icon" id="cal-close" aria-label="关闭">✕</button>
+      </header>
+      <div class="calendar-layout">
+        <section class="calendar-grid-section">
+          <div class="cal-toolbar">
+            <button type="button" class="cal-nav-btn" id="cal-prev-month" aria-label="上个月">◀</button>
+            <span class="cal-month-label" id="cal-month-label">—</span>
+            <button type="button" class="cal-nav-btn" id="cal-next-month" aria-label="下个月">▶</button>
+            <button type="button" class="cal-today-btn" id="cal-today-btn">今天</button>
+          </div>
+          <div class="cal-week-head" id="cal-week-head"></div>
+          <div class="cal-grid" id="cal-grid"></div>
+        </section>
+        <section class="calendar-detail-section">
+          <div class="cal-detail-header" id="cal-detail-header">—</div>
+          <div class="cal-today-tag hidden" id="cal-today-tag">今天</div>
+          <span class="cal-holiday-tag hidden" id="cal-holiday-tag"></span>
+          <div class="cal-day-nav">
+            <button type="button" class="cal-day-arrow" id="cal-prev-day" aria-label="前一天">◀</button>
+            <span class="cal-big-day" id="cal-big-day">—</span>
+            <button type="button" class="cal-day-arrow" id="cal-next-day" aria-label="后一天">▶</button>
+          </div>
+          <div class="cal-lunar-info" id="cal-lunar-info">—</div>
+          <div class="cal-ganzhi" id="cal-ganzhi">—</div>
+          <div class="cal-yiji">
+            <div class="cal-yiji-row">
+              <span class="cal-yiji-label yi">宜</span>
+              <span class="cal-yiji-text" id="cal-yi">—</span>
+            </div>
+            <div class="cal-yiji-row">
+              <span class="cal-yiji-label ji">忌</span>
+              <span class="cal-yiji-text" id="cal-ji">—</span>
+            </div>
+          </div>
+          <div class="cal-jieqi">
+            <div id="cal-prev-jieqi"></div>
+            <div id="cal-next-jieqi"></div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </dialog>
+
   <!-- 知识库 -->
   <dialog class="modal" id="knowledge-modal">
     <div class="modal-panel">
@@ -205,6 +263,9 @@
     </div>
   </dialog>
 
+  <script src="js/vendor/lunar.js"></script>
+  <script src="js/holidays.js"></script>
+  <script src="js/calendar.js"></script>
   <script src="js/chat.js"></script>
   <script src="js/composer.js"></script>
   <script src="js/sessions.js"></script>

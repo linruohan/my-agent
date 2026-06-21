@@ -888,7 +888,7 @@ body {
   max-height: 900px;
   border: none;
   border-radius: calc(var(--radius-bubble) - 4px);
-  background: #fff;
+  background: var(--assistant-bubble-bg, var(--bg-chat, transparent));
 }
 
 .bubble-elapsed {

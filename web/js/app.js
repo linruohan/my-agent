@@ -17,6 +17,7 @@ window.ChatApp = (() => {
     Object.entries(variables).forEach(([key, val]) => {
       root.style.setProperty(key, val);
     });
+    window.ChatUI?.refreshWeatherIframes?.();
   }
 
   function setStatus(text) {
@@ -248,6 +249,7 @@ window.ChatApp = (() => {
     bindSettings();
     bindKnowledge();
     bindConfirm();
+    window.CalendarUI?.init();
 
     if (!api()) return;
     const state = await api().get_initial_state();

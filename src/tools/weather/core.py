@@ -9,6 +9,7 @@ import httpx
 from loguru import logger
 
 from src.infra.config import load_search_config, load_weather_config
+from src.tools.weather.live import fetch_sk_live
 from src.tools.weather.render import build_weather_page_html
 
 WeatherRange = Literal["1d", "7d"]
@@ -152,7 +153,13 @@ def get_weather_forecast_impl(
     if not raw_html.strip():
         return "页面内容为空，请稍后重试。"
 
-    rendered = build_weather_page_html(raw_html, resolved_range, page_url=page_url)
+    sk_live = fetch_sk_live(code, timeout=timeout, headers=_default_headers()) if resolved_range == "1d" else None
+    rendered = build_weather_page_html(
+        raw_html,
+        resolved_range,
+        page_url=page_url,
+        sk_live=sk_live,
+    )
     if not rendered.get("ok"):
         return str(rendered.get("error", "解析天气预报失败"))
 

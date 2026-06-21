@@ -428,8 +428,46 @@ window.ChatUI = (() => {
     }
   }
 
+  function readThemeVariables() {
+    const root = document.documentElement;
+    const vars = {};
+    for (let i = 0; i < root.style.length; i += 1) {
+      const key = root.style[i];
+      if (key.startsWith("--")) {
+        vars[key] = root.style.getPropertyValue(key).trim();
+      }
+    }
+    return vars;
+  }
+
+  function applyThemeToWeatherIframe(iframe) {
+    try {
+      const doc = iframe.contentDocument;
+      if (!doc) return;
+      const vars = readThemeVariables();
+      const root = doc.documentElement;
+      Object.entries(vars).forEach(([key, val]) => {
+        root.style.setProperty(key, val);
+      });
+      const mode = vars["--theme-mode"] || "dark";
+      root.style.colorScheme = mode === "light" ? "light" : "dark";
+      root.dataset.themeMode = mode;
+    } catch {
+      /* iframe 未就绪 */
+    }
+  }
+
+  function refreshWeatherIframes() {
+    document.querySelectorAll(".weather-iframe").forEach((iframe) => {
+      applyThemeToWeatherIframe(iframe);
+      const bubble = iframe.closest(".bubble");
+      if (bubble) resizeWeatherIframe(iframe, bubble);
+    });
+  }
+
   function resizeWeatherIframe(iframe, bubble) {
     layoutWeatherBubble(bubble, iframe);
+    applyThemeToWeatherIframe(iframe);
     try {
       const doc = iframe.contentDocument;
       const height = doc?.documentElement?.scrollHeight || doc?.body?.scrollHeight || 520;
@@ -451,7 +489,10 @@ window.ChatUI = (() => {
     iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-popups");
     iframe.srcdoc = html || "";
     layoutWeatherBubble(bubble, iframe);
-    iframe.addEventListener("load", () => resizeWeatherIframe(iframe, bubble));
+    iframe.addEventListener("load", () => {
+      applyThemeToWeatherIframe(iframe);
+      resizeWeatherIframe(iframe, bubble);
+    });
     wrap.appendChild(iframe);
     bubble.appendChild(wrap);
     scrollBottom();
@@ -729,5 +770,6 @@ window.ChatUI = (() => {
     clear,
     scrollBottom,
     copyText,
+    refreshWeatherIframes,
   };
 })();
