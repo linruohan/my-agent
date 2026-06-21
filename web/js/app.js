@@ -9,8 +9,25 @@ window.ChatApp = (() => {
     return window.pywebview && window.pywebview.api;
   }
 
+  function ensureWebFontLoaded(fontId) {
+    const linkId = "webfont-lxgw-css";
+    const need = fontId === "lxgw-wenkai-gb";
+    const existing = document.getElementById(linkId);
+    if (!need) {
+      existing?.remove();
+      return;
+    }
+    if (existing) return;
+    const link = document.createElement("link");
+    link.id = linkId;
+    link.rel = "stylesheet";
+    link.href = "css/fonts-lxgw.css";
+    document.head.appendChild(link);
+  }
+
   function applyTheme(variables) {
     if (!variables) return;
+    ensureWebFontLoaded(variables["--ui-font-id"]);
     const root = document.documentElement;
     appliedThemeKeys.forEach((key) => root.style.removeProperty(key));
     appliedThemeKeys = Object.keys(variables);

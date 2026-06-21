@@ -4,14 +4,12 @@ from __future__ import annotations
 
 import html
 import re
-import sqlite3
-from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterator
 
 from src.infra.paths import DATA_DIR
+from src.infra.sqlite_store import ReusableSqliteStore
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS notes (
@@ -34,24 +32,10 @@ class NoteRow:
     updated_at: str
 
 
-class NoteStore:
+class NoteStore(ReusableSqliteStore):
     def __init__(self, db_path: Path | None = None) -> None:
-        self.db_path = db_path or (DATA_DIR / "note.db")
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        super().__init__(db_path or (DATA_DIR / "note.db"))
         self._init_schema()
-
-    @contextmanager
-    def _connect(self) -> Iterator[sqlite3.Connection]:
-        conn = sqlite3.connect(self.db_path, timeout=10)
-        conn.row_factory = sqlite3.Row
-        try:
-            yield conn
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
 
     def _init_schema(self) -> None:
         with self._connect() as conn:

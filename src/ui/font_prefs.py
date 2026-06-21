@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from src.infra.user_settings import load_user_settings, save_user_settings
 
-DEFAULT_FONT_ID = "lxgw-wenkai-gb"
+DEFAULT_FONT_ID = "system"
 
 FONT_CATALOG: dict[str, dict[str, str]] = {
     "system": {

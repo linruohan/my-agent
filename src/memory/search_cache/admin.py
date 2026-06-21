@@ -93,6 +93,36 @@ def delete_cache_entry(cache: SearchCache, cache_id: str) -> str:
     return f"已删除缓存 `{cache_display_id(row.cache_key)}`：{_title_of(row)}"
 
 
+def format_cache_stats(cache: SearchCache) -> str:
+    stats = cache.session_stats.as_dict()
+    total_hits = sum(r.hit_count for r in cache._store.list_active())
+    lines = [
+        "搜索缓存统计：",
+        "",
+        f"- 活跃条目：{cache.entry_count}",
+        f"- 本次会话：查找 {stats['lookups']} 次，命中 {stats['hits']} 次（{stats['hit_rate']}%）",
+        f"- 本次写入：{stats['saves']} 次",
+        f"- 历史累计命中（DB）：{total_hits} 次",
+    ]
+    try:
+        from src.infra.metrics import get_metrics_store, metrics_enabled
+
+        if metrics_enabled():
+            store = get_metrics_store()
+            parts: list[str] = []
+            for label in ("agent_turn", "search_turn", "tool"):
+                summary = store.summarize(label)
+                if summary["count"]:
+                    parts.append(
+                        f"{label} n={summary['count']} avg={summary['avg_ms']}ms p95={summary['p95_ms']}ms"
+                    )
+            if parts:
+                lines.extend(["", "耗时指标（最近记录）：", *[f"- {p}" for p in parts]])
+    except Exception:
+        pass
+    return "\n".join(lines)
+
+
 def handle_cache_command(args: str, cache: SearchCache) -> str:
     body = (args or "").strip()
     if not body or body.lower() == "list":
@@ -100,6 +130,8 @@ def handle_cache_command(args: str, cache: SearchCache) -> str:
     parts = body.split(None, 1)
     sub = parts[0].lower()
     rest = parts[1].strip() if len(parts) > 1 else ""
+    if sub == "stats":
+        return format_cache_stats(cache)
     if sub == "list":
         return format_cache_list(cache)
     if sub == "rm" and rest:

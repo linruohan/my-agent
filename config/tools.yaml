@@ -1,3 +1,6 @@
+# 工具元数据：enabled / risk / requires_confirmation
+# run_in_process（可选）：true 强制子进程；false 强制同进程；省略则按内置默认
+# 默认子进程：web_search, search_notes, find_files, grep_files, get_weather_forecast
 tools:
   search_tools_status:
     enabled: true

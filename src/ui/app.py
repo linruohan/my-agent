@@ -69,6 +69,13 @@ def run_app() -> None:
     finally:
         stop.set()
         controller._task_reminder.stop()
+        controller._session_store.close()
+        controller._task_store.close()
+        controller._note_store.close()
+        controller._search_cache.close()
+        from src.infra.metrics import close_metrics_store
+
+        close_metrics_store()
         shutdown_process_pools(wait=False)
         if controller._graph_bundle:
             controller._graph_bundle.close()

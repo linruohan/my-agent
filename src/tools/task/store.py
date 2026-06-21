@@ -6,15 +6,15 @@ import html
 import json
 import re
 import sqlite3
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from loguru import logger
 
 from src.infra.paths import DATA_DIR
+from src.infra.sqlite_store import ReusableSqliteStore
 from src.tools.task.attachments import apply_content_attachments, merge_attachments
 from src.tools.task.parse import parse_task_add_with_defaults, parse_task_edit
 
@@ -97,24 +97,10 @@ class TaskRow:
     attachments: list[dict[str, str]] = field(default_factory=list)
 
 
-class TaskStore:
+class TaskStore(ReusableSqliteStore):
     def __init__(self, db_path: Path | None = None) -> None:
-        self.db_path = db_path or (DATA_DIR / "task.db")
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        super().__init__(db_path or (DATA_DIR / "task.db"))
         self._init_schema()
-
-    @contextmanager
-    def _connect(self) -> Iterator[sqlite3.Connection]:
-        conn = sqlite3.connect(self.db_path, timeout=10)
-        conn.row_factory = sqlite3.Row
-        try:
-            yield conn
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
 
     def _init_schema(self) -> None:
         with self._connect() as conn:

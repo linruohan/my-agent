@@ -10,6 +10,8 @@ from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from langgraph.types import Command
 from loguru import logger
 
+from src.infra.timing import log_timing
+
 from src.agent.hitl import (
     format_approval_description,
     get_pending_tool_calls,
@@ -51,7 +53,8 @@ class AgentRunner:
         def _worker() -> None:
             try:
                 self._put_event(StreamEvent("start", {"thread_id": self._thread_id}))
-                self._stream_loop({"messages": [{"role": "user", "content": user_input}]})
+                with log_timing("agent_turn", thread_id=self._thread_id[:8]):
+                    self._stream_loop({"messages": [{"role": "user", "content": user_input}]})
                 self._put_event(StreamEvent("done", {"thread_id": self._thread_id}))
             except Exception as exc:
                 logger.exception("Agent 执行失败")

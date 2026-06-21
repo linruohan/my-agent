@@ -34,4 +34,4 @@ def test_get_font_prefs_invalid(monkeypatch):
         "src.ui.font_prefs.load_user_settings",
         lambda: {"ui_font": "unknown"},
     )
-    assert get_font_prefs() == "lxgw-wenkai-gb"
+    assert get_font_prefs() == "system"

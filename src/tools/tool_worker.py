@@ -8,6 +8,7 @@ from typing import Any
 from loguru import logger
 
 from src.infra.process_executor import run_in_process
+from src.infra.timing import log_timing
 
 
 def tool_process_enabled() -> bool:
@@ -51,13 +52,15 @@ def invoke_tool_in_process(
         from src.tools import TOOL_BY_NAME
 
         tool = TOOL_BY_NAME[tool_name]
-        result = tool.invoke(args or {})
+        with log_timing("tool", name=tool_name, process="inline"):
+            result = tool.invoke(args or {})
         return str(result) if result is not None else ""
 
-    return run_in_process(
-        _tool_invoke_worker,
-        tool_name,
-        args or {},
-        pool="tools",
-        timeout=timeout if timeout is not None else _default_tool_timeout(),
-    )
+    with log_timing("tool", name=tool_name, process="subprocess"):
+        return run_in_process(
+            _tool_invoke_worker,
+            tool_name,
+            args or {},
+            pool="tools",
+            timeout=timeout if timeout is not None else _default_tool_timeout(),
+        )

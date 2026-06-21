@@ -14,6 +14,7 @@ from loguru import logger
 from src.infra.config import load_search_config
 from src.infra.paths import DATA_DIR, PROJECT_ROOT
 from src.memory.search_cache.db import CacheRow, SearchCacheStore
+from src.memory.search_cache.stats import CacheSessionStats
 
 _LEGACY_JSON = DATA_DIR / "search_cache.json"
 _STRIP_PREFIX = re.compile(
@@ -76,7 +77,15 @@ class SearchCache:
             self.db_path = (PROJECT_ROOT / rel).resolve()
         self._store = SearchCacheStore(self.db_path)
         self._lock = threading.Lock()
+        self._session_stats = CacheSessionStats()
         self._migrate_legacy()
+
+    @property
+    def session_stats(self) -> CacheSessionStats:
+        return self._session_stats
+
+    def close(self) -> None:
+        self._store.close()
 
     def _migrate_legacy(self) -> None:
         if _LEGACY_JSON.is_file():
@@ -141,6 +150,8 @@ class SearchCache:
             return None
 
         query = user_query.strip()
+        with self._lock:
+            self._session_stats.lookups += 1
         self._store.prune_expired()
 
         best_score = 0.0
@@ -154,14 +165,20 @@ class SearchCache:
                 best_row = row
 
         if best_row and best_score >= self.text_threshold:
+            with self._lock:
+                self._session_stats.hits += 1
             logger.info(
-                "搜索缓存命中 score={:.3f} key={} query={}",
+                "搜索缓存命中 score={:.3f} key={} query={} hit_rate={:.1f}%",
                 best_score,
                 best_row.cache_key[:40],
                 query[:60],
+                self._session_stats.hit_rate * 100,
             )
             self._store.record_hit(best_row.cache_key)
             return best_row.response
+        with self._lock:
+            self._session_stats.misses += 1
+        logger.debug("搜索缓存未命中 query={} best_score={:.3f}", query[:60], best_score)
         return None
 
     def save(
@@ -204,6 +221,7 @@ class SearchCache:
             )
             self._store.prune_expired()
             self._store.prune_overflow(self.max_entries)
+            self._session_stats.saves += 1
         logger.info("已写入搜索缓存 [{}]: {}", cache_key[:40], user_query[:60])
 
     def save_async(

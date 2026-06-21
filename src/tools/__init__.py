@@ -41,3 +41,25 @@ def get_tool_meta(name: str) -> dict[str, Any]:
 
 def requires_confirmation(tool_name: str) -> bool:
     return bool(get_tool_meta(tool_name).get("requires_confirmation"))
+
+
+# 默认走子进程：网络 I/O、大规模文件搜索、向量检索等可能阻塞 GIL 的工具
+_DEFAULT_SUBPROCESS_TOOLS = frozenset({
+    "web_search",
+    "search_notes",
+    "find_files",
+    "grep_files",
+    "get_weather_forecast",
+})
+
+
+def should_run_in_process(tool_name: str) -> bool:
+    """是否将工具包装为子进程执行。tools.yaml 可用 run_in_process 覆盖。"""
+    from src.tools.tool_worker import tool_process_enabled
+
+    if not tool_process_enabled():
+        return False
+    meta = get_tool_meta(tool_name)
+    if "run_in_process" in meta:
+        return bool(meta["run_in_process"])
+    return tool_name in _DEFAULT_SUBPROCESS_TOOLS

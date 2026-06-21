@@ -9,6 +9,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from loguru import logger
 
 from src.infra.time_context import current_date_context, current_year
+from src.infra.timing import log_timing
 from src.tools.tool_worker import invoke_tool_in_process
 
 SummarizeFn = Callable[[str], None]
@@ -66,42 +67,43 @@ def run_web_search_turn(
     if not query:
         return "请输入要搜索的内容。", "", False
 
-    if on_search_status:
-        on_search_status(f"🔍 正在搜索：{query}", "info")
+    with log_timing("search_turn", query=query[:40]):
+        if on_search_status:
+            on_search_status(f"🔍 正在搜索：{query}", "info")
 
-    raw = invoke_tool_in_process("web_search", {"query": query})
-    ok = search_result_ok(raw)
+        raw = invoke_tool_in_process("web_search", {"query": query})
+        ok = search_result_ok(raw)
 
-    if cancel_check and cancel_check():
-        return "", raw, ok
+        if cancel_check and cancel_check():
+            return "", raw, ok
 
-    if on_search_status:
-        if ok:
-            on_search_status("✓ 搜索完成，正在汇总…", "success")
-        else:
-            on_search_status("⚠ 搜索未返回有效结果，正在分析…", "error")
+        if on_search_status:
+            if ok:
+                on_search_status("✓ 搜索完成，正在汇总…", "success")
+            else:
+                on_search_status("⚠ 搜索未返回有效结果，正在分析…", "error")
 
-    prompt = f"用户问题：{query}\n\n【搜索结果】\n{raw}"
-    messages = [SystemMessage(content=_summarize_system_prompt()), HumanMessage(content=prompt)]
+        prompt = f"用户问题：{query}\n\n【搜索结果】\n{raw}"
+        messages = [SystemMessage(content=_summarize_system_prompt()), HumanMessage(content=prompt)]
 
-    parts: list[str] = []
-    try:
-        for chunk in llm.stream(messages):
-            if cancel_check and cancel_check():
-                return "".join(parts).strip(), raw, ok
-            token = _extract_text(getattr(chunk, "content", chunk))
-            if token:
-                parts.append(token)
-                on_token(token)
-    except Exception:
-        logger.exception("LLM 流式汇总失败，回退 invoke")
-        msg = llm.invoke(messages)
-        text = _extract_text(getattr(msg, "content", msg))
-        if text and not parts:
-            on_token(text)
-        parts = [text] if text else parts
+        parts: list[str] = []
+        try:
+            for chunk in llm.stream(messages):
+                if cancel_check and cancel_check():
+                    return "".join(parts).strip(), raw, ok
+                token = _extract_text(getattr(chunk, "content", chunk))
+                if token:
+                    parts.append(token)
+                    on_token(token)
+        except Exception:
+            logger.exception("LLM 流式汇总失败，回退 invoke")
+            msg = llm.invoke(messages)
+            text = _extract_text(getattr(msg, "content", msg))
+            if text and not parts:
+                on_token(text)
+            parts = [text] if text else parts
 
-    response = "".join(parts).strip()
-    if not response:
-        response = "未能根据搜索结果生成有效回复，请换个关键词重试。"
-    return response, raw, ok
+        response = "".join(parts).strip()
+        if not response:
+            response = "未能根据搜索结果生成有效回复，请换个关键词重试。"
+        return response, raw, ok

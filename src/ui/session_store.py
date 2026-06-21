@@ -1,17 +1,16 @@
-"""会话持久化与切换。"""
+"""SessionStore — 基于 ReusableSqliteStore。"""
 
 from __future__ import annotations
 
 import json
-import sqlite3
 import uuid
-from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from src.infra.paths import DATA_DIR
+from src.infra.sqlite_store import ReusableSqliteStore
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -41,27 +40,11 @@ class SessionInfo:
     updated_at: str
 
 
-class SessionStore:
+class SessionStore(ReusableSqliteStore):
     def __init__(self, db_path: Path | None = None) -> None:
-        self.db_path = db_path or (DATA_DIR / "sessions.db")
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        super().__init__(db_path or (DATA_DIR / "sessions.db"), foreign_keys=True)
         self._init_schema()
         self._ensure_default()
-
-    @contextmanager
-    def _connect(self) -> Iterator[sqlite3.Connection]:
-        conn = sqlite3.connect(self.db_path, timeout=10)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
-        conn.execute("PRAGMA journal_mode = WAL")
-        try:
-            yield conn
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
 
     def _init_schema(self) -> None:
         with self._connect() as conn:
@@ -123,17 +106,21 @@ class SessionStore:
             conn.execute("UPDATE sessions SET updated_at = ? WHERE id = ?", (self._now(), session_id))
 
     def append_event(self, session_id: str, event: dict[str, Any]) -> None:
+        now = self._now()
+        payload = json.dumps(event, ensure_ascii=False)
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT COALESCE(MAX(seq), 0) AS m FROM session_messages WHERE session_id = ?",
-                (session_id,),
-            ).fetchone()
-            seq = int(row["m"]) + 1 if row else 1
             conn.execute(
-                "INSERT INTO session_messages (session_id, seq, event_json) VALUES (?, ?, ?)",
-                (session_id, seq, json.dumps(event, ensure_ascii=False)),
+                """
+                INSERT INTO session_messages (session_id, seq, event_json)
+                VALUES (
+                    ?,
+                    (SELECT COALESCE(MAX(seq), 0) + 1 FROM session_messages WHERE session_id = ?),
+                    ?
+                )
+                """,
+                (session_id, session_id, payload),
             )
-            conn.execute("UPDATE sessions SET updated_at = ? WHERE id = ?", (self._now(), session_id))
+            conn.execute("UPDATE sessions SET updated_at = ? WHERE id = ?", (now, session_id))
 
     def load_events(self, session_id: str) -> list[dict[str, Any]]:
         with self._connect() as conn:
