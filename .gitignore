@@ -8,6 +8,13 @@ venv/
 data/temp/
 data/secrets.json
 data/user_settings.yaml
+data/metrics.db
+data/metrics_export.csv
+data/search_cache.db
+data/sessions.db
+data/task.db
+data/note.db
+web/fonts/lxgwwenkaigb-regular/*.woff2
 data/vectorstore/*
 !data/vectorstore/.gitkeep
 data/vectorstore/faiss_index/**

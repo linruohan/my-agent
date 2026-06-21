@@ -12,6 +12,7 @@ from src.ui.input import (
     INTENT_OCR,
     INTENT_SEARCH,
     INTENT_SLASH_CACHE,
+    INTENT_SLASH_METRICS,
     INTENT_SLASH_NOTE,
     INTENT_SLASH_OCR,
     INTENT_SLASH_SKILL,
@@ -101,6 +102,10 @@ class RouterMixin:
 
             if intent.kind == INTENT_SLASH_CACHE:
                 self._handle_slash_cache(intent)
+                return
+
+            if intent.kind == INTENT_SLASH_METRICS:
+                self._handle_slash_metrics(intent)
                 return
 
             if intent.kind == INTENT_SLASH_TASK:

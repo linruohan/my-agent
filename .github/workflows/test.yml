@@ -29,6 +29,6 @@ jobs:
       - name: Run tests
         run: |
           python -m pytest tests/ -q \
-            --ignore=tests/test_speech_win.py \
+            -m "not windows" \
             --ignore=tests/test_ocr.py \
             --ignore=tests/test_ocr_worker.py

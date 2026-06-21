@@ -82,9 +82,11 @@ pywebview 窗口
 
 ## 字体
 
-- 使用 LXGW 文楷（霞鹜文楷）作为聊天字体
-- 字体文件位于 `web/fonts/lxgwwenkaigb-regular/`
-- `web/css/fonts-lxgw.css` 定义 @font-face
+- 默认使用**系统字体**（`Segoe UI` / `system-ui`），首屏不加载 Web 字体
+- 可选 **LXGW 文楷 GB**：设置 → 字体 →「LXGW WenKai GB」
+- 安装字体分片：`scripts/install-web-fonts.ps1`（需 npm）
+- 分片文件位于 `web/fonts/lxgwwenkaigb-regular/`（`.woff2` 已加入 `.gitignore`，不随仓库分发）
+- 选择霞鹜文楷但未安装时，自动回退系统字体并提示安装脚本
 
 ## 设置面板
 

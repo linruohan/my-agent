@@ -27,6 +27,46 @@ def test_record_timing_respects_disable(monkeypatch):
     record_timing("tool", 10, {"name": "x"})
 
 
+def test_metrics_export_csv(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENT_METRICS", "1")
+    store = MetricsStore(tmp_path / "metrics.db")
+    store.record_timing("tool", 42, {"name": "list_tasks"})
+    out = tmp_path / "out.csv"
+    n = store.export_csv(out)
+    assert n == 1
+    text = out.read_text(encoding="utf-8-sig")
+    assert "tool" in text
+    assert "42" in text
+    store.close()
+
+
+def test_export_metrics_csv_helper(tmp_path, monkeypatch):
+    from src.infra.metrics import close_metrics_store, export_metrics_csv, get_metrics_store
+
+    close_metrics_store()
+    monkeypatch.setenv("AGENT_METRICS", "1")
+    monkeypatch.setattr("src.infra.metrics.DATA_DIR", tmp_path)
+    get_metrics_store().record_timing("search_turn", 100)
+    count, path = export_metrics_csv(tmp_path / "export.csv")
+    assert count == 1
+    assert path.exists()
+    close_metrics_store()
+
+
+def test_cache_export_command(tmp_path, monkeypatch):
+    from src.infra.metrics import close_metrics_store, get_metrics_store
+
+    close_metrics_store()
+    monkeypatch.setenv("AGENT_METRICS", "1")
+    monkeypatch.setattr("src.infra.metrics.DATA_DIR", tmp_path)
+    get_metrics_store().record_timing("agent_turn", 200)
+    cache = SearchCache(db_path=tmp_path / "c.db")
+    msg = handle_cache_command("export", cache)
+    assert "已导出" in msg
+    assert (tmp_path / "metrics_export.csv").exists()
+    close_metrics_store()
+
+
 def test_cache_session_stats(tmp_path):
     cache = SearchCache(db_path=tmp_path / "c.db")
     cache.enabled = True
@@ -45,6 +85,35 @@ def test_cache_session_stats(tmp_path):
     text = format_cache_stats(cache)
     assert "活跃条目" in text
     assert "50.0%" in text or "50%" in text
+    assert "/metrics" in text
 
     stats_cmd = handle_cache_command("stats", cache)
     assert "搜索缓存统计" in stats_cmd
+
+
+def test_metrics_command_stats(tmp_path, monkeypatch):
+    from src.infra.metrics import close_metrics_store, get_metrics_store
+    from src.infra.metrics_admin import handle_metrics_command
+
+    close_metrics_store()
+    monkeypatch.setenv("AGENT_METRICS", "1")
+    monkeypatch.setattr("src.infra.metrics.DATA_DIR", tmp_path)
+    get_metrics_store().record_timing("agent_turn", 150)
+    text = handle_metrics_command("stats")
+    assert "agent_turn" in text
+    assert "150" in text
+    close_metrics_store()
+
+
+def test_metrics_command_export(tmp_path, monkeypatch):
+    from src.infra.metrics import close_metrics_store, get_metrics_store
+    from src.infra.metrics_admin import handle_metrics_command
+
+    close_metrics_store()
+    monkeypatch.setenv("AGENT_METRICS", "1")
+    monkeypatch.setattr("src.infra.metrics.DATA_DIR", tmp_path)
+    get_metrics_store().record_timing("tool", 42, {"name": "list_tasks"})
+    msg = handle_metrics_command(f"export {tmp_path / 'm.csv'}")
+    assert "已导出" in msg
+    assert (tmp_path / "m.csv").exists()
+    close_metrics_store()

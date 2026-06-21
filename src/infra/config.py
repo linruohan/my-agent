@@ -16,16 +16,21 @@ def _load_yaml(path: Path) -> dict[str, Any]:
         return yaml.safe_load(f) or {}
 
 
+def _yaml_cache_key(path: Path) -> tuple[int, int]:
+    st = path.stat()
+    return st.st_mtime_ns, st.st_size
+
+
 def _load_yaml_cached(path: Path) -> dict[str, Any]:
-    """按文件 mtime 缓存 YAML，避免热路径重复读盘。"""
+    """按文件 mtime+size 缓存 YAML，避免热路径重复读盘。"""
     if not path.is_file():
         return {}
-    mtime = path.stat().st_mtime
+    key = _yaml_cache_key(path)
     cached = _yaml_cache.get(path)
-    if cached and cached[0] == mtime:
+    if cached and cached[0] == key:
         return cached[1]
     data = _load_yaml(path)
-    _yaml_cache[path] = (mtime, data)
+    _yaml_cache[path] = (key, data)
     return data
 
 

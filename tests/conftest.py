@@ -1,6 +1,26 @@
 from __future__ import annotations
 
+import sys
+
 import pytest
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "windows: 仅 Windows 平台运行")
+    config.addinivalue_line("markers", "linux: 仅 Linux 平台运行")
+
+
+def pytest_collection_modifyitems(config, items):
+    if sys.platform == "win32":
+        skip_linux = pytest.mark.skip(reason="仅 Linux 平台")
+        for item in items:
+            if "linux" in item.keywords:
+                item.add_marker(skip_linux)
+        return
+    skip_windows = pytest.mark.skip(reason="仅 Windows 平台")
+    for item in items:
+        if "windows" in item.keywords:
+            item.add_marker(skip_windows)
 
 
 @pytest.fixture

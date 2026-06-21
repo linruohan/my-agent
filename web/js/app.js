@@ -4,6 +4,8 @@ window.ChatApp = (() => {
   let providers = {};
   let providerNames = [];
   let appliedThemeKeys = [];
+  let lxgwFontInstalled = true;
+  let lxgwFontWarned = false;
 
   function api() {
     return window.pywebview && window.pywebview.api;
@@ -15,6 +17,17 @@ window.ChatApp = (() => {
     const existing = document.getElementById(linkId);
     if (!need) {
       existing?.remove();
+      return;
+    }
+    if (!lxgwFontInstalled) {
+      if (!lxgwFontWarned) {
+        lxgwFontWarned = true;
+        window.ChatUI?.handleEvent?.({
+          type: "meta",
+          content:
+            "⚙️ 霞鹜文楷未安装，当前使用系统字体。请在项目根目录运行 scripts/install-web-fonts.ps1",
+        });
+      }
       return;
     }
     if (existing) return;
@@ -270,6 +283,7 @@ window.ChatApp = (() => {
 
     if (!api()) return;
     const state = await api().get_initial_state();
+    lxgwFontInstalled = state.lxgw_font_installed !== false;
     document.title = state.title || document.title;
     applyTheme(state.theme_variables);
     setStatus(state.status_text);

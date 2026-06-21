@@ -10,7 +10,7 @@ from src.memory.search_cache import SearchCache
 from src.memory.search_cache_db import SearchCacheStore
 from src.tools.note_store import NoteStore, handle_note_command
 from src.tools.task_store import TaskStore, handle_task_command
-from src.ui.input_intent import INTENT_SLASH_CACHE, INTENT_SLASH_TASK, parse_slash_command
+from src.ui.input_intent import INTENT_SLASH_CACHE, INTENT_SLASH_METRICS, INTENT_SLASH_TASK, parse_slash_command
 
 
 def test_parse_slash_cache():
@@ -18,6 +18,13 @@ def test_parse_slash_cache():
     assert intent is not None
     assert intent.kind == INTENT_SLASH_CACHE
     assert intent.slash_args == "list"
+
+
+def test_parse_slash_metrics():
+    intent = parse_slash_command("/metrics stats")
+    assert intent is not None
+    assert intent.kind == INTENT_SLASH_METRICS
+    assert intent.slash_args == "stats"
 
 
 def test_parse_slash_tsk():

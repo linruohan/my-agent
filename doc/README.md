@@ -79,6 +79,7 @@ Agent 可调用的工具在 `config/tools.yaml` 中配置启用状态与风险�
 | `/search <query>` | 直接触发网页搜索 |
 | `/weather [城市]` | 天气预报 |
 | `/cache` | 搜索缓存管理 |
+| `/metrics` | 耗时指标查看与导出 |
 | `/ocr` | 图片文字识别 |
 | `/<skill-name>` | 执行 Skill 目录中的脚本 |
 

@@ -20,6 +20,13 @@ FONT_CATALOG: dict[str, dict[str, str]] = {
 }
 
 
+def lxgw_font_installed() -> bool:
+    from src.infra.paths import PROJECT_ROOT
+
+    font_dir = PROJECT_ROOT / "web" / "fonts" / "lxgwwenkaigb-regular"
+    return any(font_dir.glob("*.woff2"))
+
+
 def list_font_catalog() -> list[dict[str, str]]:
     return [{"id": fid, "name": meta["name"]} for fid, meta in FONT_CATALOG.items()]
 
@@ -44,6 +51,8 @@ def build_font_variables(font_id: str | None = None) -> dict[str, str]:
     fid = font_id or get_font_prefs()
     if fid not in FONT_CATALOG:
         fid = DEFAULT_FONT_ID
+    if fid == "lxgw-wenkai-gb" and not lxgw_font_installed():
+        fid = "system"
     meta = FONT_CATALOG[fid]
     return {
         "--font-family": meta["family"],

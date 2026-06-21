@@ -13,7 +13,7 @@ from src.infra.config import save_api_key
 from src.infra.user_settings import has_stored_api_key, load_user_settings, persist_provider_choice, save_user_settings
 from src.memory.rag import get_knowledge_stats
 from src.memory.rag_worker import ingest_files_in_process
-from src.ui.font_prefs import get_font_prefs, list_font_catalog, persist_font_prefs
+from src.ui.font_prefs import get_font_prefs, list_font_catalog, lxgw_font_installed, persist_font_prefs
 from src.ui.input import append_history, list_history
 from src.ui.skill import build_slash_catalog, get_skill_dirs
 from src.ui.speech import is_supported as voice_is_supported
@@ -40,6 +40,7 @@ class SettingsMixin:
             "theme_id": self._theme_id,
             "appearance": self._appearance,
             "font_id": self._font_id,
+            "lxgw_font_installed": lxgw_font_installed(),
             "status_text": self._status_text("就绪"),
             "welcome": "欢迎使用个人助理 Agent。Enter 发送，Shift+Enter 换行。输入 / 查看命令。",
             "composer_meta": {
@@ -95,6 +96,10 @@ class SettingsMixin:
         self._theme_id = theme_id
         self._appearance = appearance
         self._font_id = get_font_prefs()
+        if font_id == "lxgw-wenkai-gb" and not lxgw_font_installed():
+            self.chat.append_system(
+                "霞鹜文楷字体未安装，已使用系统字体。请运行 scripts/install-web-fonts.ps1 后重选字体。"
+            )
         vars_ = self._ui_variables()
 
         name = payload.get("provider") or self._current_provider_name

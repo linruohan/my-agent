@@ -7,6 +7,8 @@ from typing import Any
 
 from loguru import logger
 
+from src.infra.metrics_admin import handle_metrics_command
+from src.infra.timing import log_timing
 from src.memory.search_cache import handle_cache_command
 from src.tools.note import handle_note_command
 from src.tools.task import handle_task_command
@@ -32,7 +34,8 @@ class TurnsMixin:
             self.chat.set_status(self._status_text("就绪"))
             return
         try:
-            result = handle_note_command(args, self._note_store)
+            with log_timing("note_command", args=args[:40]):
+                result = handle_note_command(args, self._note_store)
             self.chat.append_assistant_complete(result)
             self.chat.set_status(self._status_text("就绪"))
         except ValueError as exc:
@@ -44,16 +47,28 @@ class TurnsMixin:
 
     def _handle_slash_cache(self, intent: InputIntent) -> None:
         try:
-            result = handle_cache_command(intent.slash_args, self._search_cache)
+            with log_timing("cache_command", args=(intent.slash_args or "")[:40]):
+                result = handle_cache_command(intent.slash_args, self._search_cache)
             self.chat.append_assistant_complete(result)
             self.chat.set_status(self._status_text("就绪"))
         except Exception as exc:
             logger.exception("缓存命令失败")
             self.chat.append_error(f"缓存命令失败: {exc}")
 
+    def _handle_slash_metrics(self, intent: InputIntent) -> None:
+        try:
+            with log_timing("metrics_command", args=(intent.slash_args or "")[:40]):
+                result = handle_metrics_command(intent.slash_args)
+            self.chat.append_assistant_complete(result)
+            self.chat.set_status(self._status_text("就绪"))
+        except Exception as exc:
+            logger.exception("metrics 命令失败")
+            self.chat.append_error(f"metrics 命令失败: {exc}")
+
     def _handle_slash_task(self, intent: InputIntent) -> None:
         try:
-            result = handle_task_command(intent.slash_args, self._task_store)
+            with log_timing("task_command", args=(intent.slash_args or "")[:40]):
+                result = handle_task_command(intent.slash_args, self._task_store)
             self.chat.append_assistant_complete(result, content_format="markdown")
             self.chat.set_status(self._status_text("就绪"))
         except Exception as exc:

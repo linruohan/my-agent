@@ -97,6 +97,29 @@ class MetricsStore(ReusableSqliteStore):
             ).fetchall()
         return [str(r["label"]) for r in rows]
 
+    def export_csv(self, path: Path, *, limit: int = 5000) -> int:
+        """导出最近 timing 记录为 CSV，返回行数。"""
+        import csv
+
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT label, elapsed_ms, fields_json, created_at
+                FROM timing_events
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        with path.open("w", encoding="utf-8-sig", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["label", "elapsed_ms", "fields_json", "created_at"])
+            for row in rows:
+                writer.writerow([row["label"], row["elapsed_ms"], row["fields_json"], row["created_at"]])
+        return len(rows)
+
 
 _store: MetricsStore | None = None
 _store_lock = threading.Lock()
@@ -126,3 +149,12 @@ def close_metrics_store() -> None:
         if _store is not None:
             _store.close()
             _store = None
+
+
+def export_metrics_csv(path: Path | None = None, *, limit: int = 5000) -> tuple[int, Path]:
+    """导出 metrics 为 CSV。返回 (行数, 路径)。"""
+    if not metrics_enabled():
+        raise RuntimeError("metrics 已关闭（AGENT_METRICS=0）")
+    out = path or (DATA_DIR / "metrics_export.csv")
+    count = get_metrics_store().export_csv(out, limit=limit)
+    return count, out

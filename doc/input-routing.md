@@ -48,7 +48,8 @@ src/ui/input/
 | `/tsk` | add / list / done / rm | 任务管理 |
 | `/search` | `<query>` | 直接网页搜索 |
 | `/weather` | `[city] [range]` | 天气预报 |
-| `/cache` | list / clear | 搜索缓存管理 |
+| `/cache` | list / clear / stats / export [路径] | 搜索缓存管理；`export` 导出 metrics CSV（同 `/metrics export`） |
+| `/metrics` | stats / export [路径] | 耗时指标查看与 CSV 导出 |
 | `/ocr` | — | 触发图片 OCR |
 
 ### Skill 命令

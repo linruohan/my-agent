@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import sys
 
+import pytest
+
 from src.ui import speech_win
 
 
+@pytest.mark.windows
 def test_is_supported_on_win32():
     if sys.platform == "win32":
         # 依赖已安装时应为 True
