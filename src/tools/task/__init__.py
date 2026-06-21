@@ -1,7 +1,8 @@
 """任务存储、提醒与 /tsk 命令。"""
 
+from src.tools.task.notify import notify_task, send_task_toast
+from src.tools.task.scheduler import TaskReminderService
 from src.tools.task.store import (
-    TaskReminderService,
     TaskRow,
     TaskStore,
     format_task_list,
@@ -33,5 +34,7 @@ __all__ = [
     "list_tasks",
     "migrate_legacy_todos_json",
     "search_tasks",
+    "notify_task",
+    "send_task_toast",
     "send_windows_toast",
 ]

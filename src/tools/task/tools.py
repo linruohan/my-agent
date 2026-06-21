@@ -52,11 +52,7 @@ def list_tasks(include_done: bool = False) -> str:
     if not rows:
         return "当前没有任务。" if include_done else "暂无未完成任务。"
     if include_done:
-        lines = ["| ID | 标题 | 状态 |", "| --- | --- | --- |"]
-        for r in rows:
-            title = r.title.replace("|", "\\|")
-            lines.append(f"| {r.id} | {title} | {r.status} |")
-        return "全部任务：\n\n" + "\n".join(lines)
+        return format_task_list(rows, heading="全部任务：")
     return format_task_list(rows)
 
 

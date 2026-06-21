@@ -5,25 +5,31 @@ description = "个人助理 Agent — LangChain + LangGraph + pywebview"
 readme = "个人助理Agent设计文档.md"
 requires-python = ">=3.11,<3.14"
 dependencies = [
+    # Agent / LLM
     "langchain-core>=1.4.7,<2",
     "langchain>=1.0,<2",
     "langgraph>=1.2,<2",
-    "langgraph-checkpoint-sqlite>=3.0",
-    "langchain-openai>=1.0",
-    "langchain-community>=0.4",
-    "langchain-text-splitters>=1.0",
+    "langgraph-checkpoint-sqlite>=3.0,<4",
+    "langchain-openai>=1.0,<2",
+    "langchain-community>=0.4,<0.5",
+    "langchain-text-splitters>=1.0,<2",
+    # UI
     "customtkinter>=5.2",
     "pywebview>=5.0",
+    "pillow>=10.0",
+    # 配置与基础设施
     "pyyaml>=6.0",
     "keyring>=25.0",
     "loguru>=0.7",
     "httpx>=0.27",
+    # 搜索 / 网页 / 知识库
     "beautifulsoup4>=4.12",
+    "playwright>=1.40",
     "faiss-cpu>=1.8",
     "fastembed>=0.4",
     "pypdf>=4.0",
     "python-docx>=1.1",
-    "pillow>=10.0",
+    # Windows 平台能力（语音 / OCR / 通知 / COM）
     "winrt-runtime>=3.2.1; sys_platform == 'win32'",
     "winrt-Windows.Media.SpeechRecognition>=3.2.1; sys_platform == 'win32'",
     "winrt-Windows.Globalization>=3.2.1; sys_platform == 'win32'",
@@ -33,15 +39,17 @@ dependencies = [
     "winrt-Windows.Storage>=3.2.1; sys_platform == 'win32'",
     "winrt-Windows.Storage.Streams>=3.2.1; sys_platform == 'win32'",
     "pywin32>=306; sys_platform == 'win32'",
+    "win11toast>=0.36; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
 input = [
     "paddleocr>=2.7",
     "paddlepaddle>=2.6",
-    "playwright>=1.40",
 ]
-dev = ["pytest>=8.0"]
+dev = [
+    "pytest>=8.0",
+]
 
 [project.scripts]
 my-agent = "main:main"

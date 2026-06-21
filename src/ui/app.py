@@ -295,6 +295,7 @@ class AssistantController:
             "provider_names": list(self._providers.keys()),
             "providers": self._provider_payload(),
             "skill_dirs": "\n".join(str(x) for x in skill_dirs),
+            "task_owner_name": (settings.get("tasks") or {}).get("owner_name") or "林若寒",
         }
 
     def save_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -329,9 +330,12 @@ class AssistantController:
 
         skill_dirs_raw = (payload.get("skill_dirs") or "").strip()
         skill_dirs = [line.strip() for line in skill_dirs_raw.splitlines() if line.strip()]
+        task_owner = (payload.get("task_owner_name") or "").strip() or "林若寒"
         settings = load_user_settings()
         ui = settings.setdefault("ui", {})
         ui["skill_dirs"] = skill_dirs
+        tasks = settings.setdefault("tasks", {})
+        tasks["owner_name"] = task_owner
         save_user_settings(settings)
         self._providers[name] = p
         self._init_agent()

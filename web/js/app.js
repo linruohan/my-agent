@@ -116,6 +116,7 @@ window.ChatApp = (() => {
     document.getElementById("font-select").value = data.font_id;
     document.getElementById("appearance-select").value = data.appearance || "dark";
     document.getElementById("skill-dirs-input").value = data.skill_dirs || "";
+    document.getElementById("task-owner-input").value = data.task_owner_name || "林若寒";
     fillProviderSelect(data.current_provider);
     loadProviderFields(data.current_provider);
     document.getElementById("settings-modal").showModal();
@@ -148,6 +149,7 @@ window.ChatApp = (() => {
         api_key: document.getElementById("api-key-input").value,
         temperature: parseFloat(document.getElementById("temp-slider").value),
         skill_dirs: document.getElementById("skill-dirs-input").value,
+        task_owner_name: document.getElementById("task-owner-input").value,
       };
       const result = await api().save_settings(payload);
       if (result && result.ok) {
