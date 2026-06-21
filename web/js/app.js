@@ -264,7 +264,7 @@ window.ChatApp = (() => {
       input_history: state.input_history,
     });
     if (state.session_events && state.session_events.length) {
-      state.session_events.forEach((ev) => window.ChatUI.handleEvent(ev));
+      window.ChatUI.loadHistory(state.session_events);
     } else if (state.welcome) {
       window.ChatUI.handleEvent({ type: "meta", content: "⚙️ " + state.welcome });
     }

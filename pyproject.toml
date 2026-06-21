@@ -14,7 +14,6 @@ dependencies = [
     "langchain-community>=0.4,<0.5",
     "langchain-text-splitters>=1.0,<2",
     # UI
-    "customtkinter>=5.2",
     "pywebview>=5.0",
     "pillow>=10.0",
     # 配置与基础设施

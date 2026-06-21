@@ -29,12 +29,17 @@ class StreamEvent:
 class AgentRunner:
     graph: Any
     event_queue: queue.Queue = field(default_factory=queue.Queue)
+    event_notify: threading.Event = field(default_factory=threading.Event, init=False)
     _thread: threading.Thread | None = field(default=None, init=False)
     _stop_flag: threading.Event = field(default_factory=threading.Event, init=False)
     _approval_event: threading.Event = field(default_factory=threading.Event, init=False)
     _approval_result: bool = field(default=False, init=False)
     _thread_id: str | None = field(default=None, init=False)
     _config: dict | None = field(default=None, init=False)
+
+    def _put_event(self, event: StreamEvent) -> None:
+        self.event_queue.put(event)
+        self.event_notify.set()
 
     def run_async(self, user_input: str, thread_id: str | None = None) -> str:
         """在后台线程执行 Agent，事件写入 event_queue。"""
@@ -45,12 +50,12 @@ class AgentRunner:
 
         def _worker() -> None:
             try:
-                self.event_queue.put(StreamEvent("start", {"thread_id": self._thread_id}))
+                self._put_event(StreamEvent("start", {"thread_id": self._thread_id}))
                 self._stream_loop({"messages": [{"role": "user", "content": user_input}]})
-                self.event_queue.put(StreamEvent("done", {"thread_id": self._thread_id}))
+                self._put_event(StreamEvent("done", {"thread_id": self._thread_id}))
             except Exception as exc:
                 logger.exception("Agent 执行失败")
-                self.event_queue.put(StreamEvent("error", str(exc)))
+                self._put_event(StreamEvent("error", str(exc)))
 
         self._thread = threading.Thread(target=_worker, daemon=True)
         self._thread.start()
@@ -69,7 +74,7 @@ class AgentRunner:
     def _stream_loop(self, input_data: Any) -> None:
         while True:
             if self._stop_flag.is_set():
-                self.event_queue.put(StreamEvent("stopped"))
+                self._put_event(StreamEvent("stopped"))
                 return
 
             for chunk in self.graph.stream(
@@ -78,7 +83,7 @@ class AgentRunner:
                 stream_mode="messages",
             ):
                 if self._stop_flag.is_set():
-                    self.event_queue.put(StreamEvent("stopped"))
+                    self._put_event(StreamEvent("stopped"))
                     return
                 msg, meta = chunk if isinstance(chunk, tuple) else (chunk, {})
                 self._handle_message(msg, meta)
@@ -93,7 +98,7 @@ class AgentRunner:
 
             approved = True
             if needs_user_approval(tool_calls):
-                self.event_queue.put(
+                self._put_event(
                     StreamEvent(
                         "approval_required",
                         {
@@ -105,7 +110,7 @@ class AgentRunner:
                 self._approval_event.clear()
                 self._approval_event.wait()
                 if self._stop_flag.is_set():
-                    self.event_queue.put(StreamEvent("stopped"))
+                    self._put_event(StreamEvent("stopped"))
                     return
                 approved = self._approval_result
 
@@ -121,17 +126,17 @@ class AgentRunner:
         if isinstance(msg, (AIMessage, AIMessageChunk)):
             text = self._extract_text(msg.content)
             if text:
-                self.event_queue.put(StreamEvent("token", text))
+                self._put_event(StreamEvent("token", text))
             if getattr(msg, "tool_calls", None):
                 for tc in msg.tool_calls:
-                    self.event_queue.put(
+                    self._put_event(
                         StreamEvent(
                             "tool_call",
                             {"name": tc.get("name"), "args": tc.get("args", {})},
                         )
                     )
         elif isinstance(msg, ToolMessage):
-            self.event_queue.put(
+            self._put_event(
                 StreamEvent(
                     "tool_result",
                     {"name": msg.name, "content": str(msg.content)[:500]},

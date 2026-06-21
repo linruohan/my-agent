@@ -7,6 +7,8 @@ import re
 import time
 from typing import Any, Callable
 
+from loguru import logger
+
 WindowGetter = Callable[[], Any]
 
 
@@ -28,16 +30,27 @@ class WebChatBridge:
         if self._on_event:
             try:
                 self._on_event(event)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("聊天事件持久化回调失败: {}", exc)
         window = self._get_window()
         if window is None:
             return
         payload = json.dumps(event, ensure_ascii=False)
         try:
             window.evaluate_js(f"window.ChatApp.handleEvent({payload})")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("推送聊天事件到 WebView 失败: {}", exc)
+
+    def load_history(self, events: list[dict[str, Any]]) -> None:
+        """批量回放会话历史（单次 JS 调用）。"""
+        window = self._get_window()
+        if window is None:
+            return
+        payload = json.dumps(events, ensure_ascii=False)
+        try:
+            window.evaluate_js(f"window.ChatUI.loadHistory({payload})")
+        except Exception as exc:
+            logger.warning("批量加载会话历史失败: {}", exc)
 
     def _elapsed_ms(self) -> int | None:
         if self._turn_started_at is None:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.ui.markdown_render import compact_bubble_content, parse_table_block
+from src.ui.markdown_utils import compact_bubble_content, parse_table_block
 
 
 def test_compact_bubble_content_removes_empty_lines():

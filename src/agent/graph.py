@@ -7,6 +7,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.prebuilt import create_react_agent
 
+from src.agent.history import make_pre_model_hook
 from src.infra.config import load_app_config
 from src.infra.time_context import current_date_context, current_year
 from src.tools import get_enabled_tools
@@ -50,12 +51,16 @@ def build_agent_graph(llm: BaseChatModel, checkpoint_path: str | Path) -> AgentG
     path.parent.mkdir(parents=True, exist_ok=True)
 
     conn = sqlite3.connect(str(path), check_same_thread=False)
+    conn.execute("PRAGMA journal_mode = WAL")
     checkpointer = SqliteSaver(conn)
 
     app_cfg = load_app_config()
-    base_prompt = app_cfg.get("agent", {}).get("system_prompt", "").strip()
+    agent_cfg = app_cfg.get("agent", {})
+    base_prompt = agent_cfg.get("system_prompt", "").strip()
+    max_history = int(agent_cfg.get("max_history_messages", 0) or 0)
     tools = wrap_tools_for_process(get_enabled_tools())
     prompt = build_system_prompt(base_prompt)
+    pre_model_hook = make_pre_model_hook(max_history)
 
     graph = create_react_agent(
         llm,
@@ -63,5 +68,6 @@ def build_agent_graph(llm: BaseChatModel, checkpoint_path: str | Path) -> AgentG
         prompt=prompt,
         checkpointer=checkpointer,
         interrupt_before=["tools"],
+        pre_model_hook=pre_model_hook,
     )
     return AgentGraphBundle(graph, conn, checkpointer)

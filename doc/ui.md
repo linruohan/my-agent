@@ -20,8 +20,11 @@ pywebview 窗口
 
 | 文件 | 说明 |
 |------|------|
-| `src/ui/app.py` | `AssistantController` + `AppApi` + `run_app()` |
+| `src/ui/app.py` | `run_app()` 应用入口 |
+| `src/ui/app_api.py` | `AppApi` — pywebview js_api |
+| `src/ui/controller/` | `AssistantController`（Mixin 组合） |
 | `src/ui/web_bridge.py` | `WebChatBridge`：Python → JS 事件推送 |
+| `src/ui/markdown_utils.py` | Markdown 文本工具（与 UI 框架无关） |
 
 ### AppApi（js_api）
 
@@ -93,19 +96,19 @@ Web 模态窗口提供：
 - Skill 目录配置
 - 任务 owner 设置
 
-## 遗留 CTk 组件
+## 控制器结构
 
-以下 CustomTkinter 组件仍存在于代码库，但**不是当前主 UI**：
+`AssistantController` 位于 `src/ui/controller/`，由多个 Mixin 组合：
 
-| 文件 | 状态 |
-|------|------|
-| `src/ui/chat_panel.py` | 遗留聊天面板 |
-| `src/ui/settings_dialog.py` | 遗留设置对话框 |
-| `src/ui/knowledge_dialog.py` | 遗留知识库对话框 |
-| `src/ui/confirm_dialog.py` | 遗留确认对话框 |
-| `src/ui/bubble_text.py` | 遗留气泡文本组件 |
-
-设置与知识库管理已迁移到 Web 模态窗口。
+| Mixin | 职责 |
+|-------|------|
+| `core.py` | 初始化、Agent、停止、共享状态 |
+| `settings.py` | 设置面板、知识库导入 |
+| `session.py` | 多会话 CRUD |
+| `router.py` | 消息发送与意图路由 |
+| `turns.py` | 搜索/链接/Agent/斜杠/天气/OCR |
+| `agent.py` | Agent 事件轮询与 HITL |
+| `voice.py` | 语音输入与文件选择 |
 
 ## 会话管理
 

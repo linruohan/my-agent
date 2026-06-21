@@ -8,14 +8,34 @@ import yaml
 from src.infra.paths import CONFIG_DIR, DATA_DIR, PROJECT_ROOT
 from src.infra.user_settings import get_stored_api_key, save_stored_api_key
 
+_yaml_cache: dict[Path, tuple[float, dict[str, Any]]] = {}
+
 
 def _load_yaml(path: Path) -> dict[str, Any]:
     with path.open(encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
 
+def _load_yaml_cached(path: Path) -> dict[str, Any]:
+    """按文件 mtime 缓存 YAML，避免热路径重复读盘。"""
+    if not path.is_file():
+        return {}
+    mtime = path.stat().st_mtime
+    cached = _yaml_cache.get(path)
+    if cached and cached[0] == mtime:
+        return cached[1]
+    data = _load_yaml(path)
+    _yaml_cache[path] = (mtime, data)
+    return data
+
+
+def invalidate_yaml_cache() -> None:
+    """清除 YAML 缓存（测试或热重载配置时使用）。"""
+    _yaml_cache.clear()
+
+
 def load_app_config() -> dict[str, Any]:
-    cfg = _load_yaml(CONFIG_DIR / "app.yaml")
+    cfg = _load_yaml_cached(CONFIG_DIR / "app.yaml")
     paths = cfg.setdefault("paths", {})
     for key in ("checkpoints", "workspace", "vectorstore"):
         rel = paths.get(key, f"data/{key}")
@@ -24,15 +44,15 @@ def load_app_config() -> dict[str, Any]:
 
 
 def load_llm_providers_config() -> dict[str, Any]:
-    return _load_yaml(CONFIG_DIR / "llm_providers.yaml")
+    return _load_yaml_cached(CONFIG_DIR / "llm_providers.yaml")
 
 
 def load_tools_config() -> dict[str, Any]:
-    return _load_yaml(CONFIG_DIR / "tools.yaml")
+    return _load_yaml_cached(CONFIG_DIR / "tools.yaml")
 
 
 def load_search_config() -> dict[str, Any]:
-    return _load_yaml(CONFIG_DIR / "search.yaml")
+    return _load_yaml_cached(CONFIG_DIR / "search.yaml")
 
 
 def load_weather_config() -> dict[str, Any]:
@@ -46,7 +66,7 @@ def load_weather_config() -> dict[str, Any]:
             "days": 7,
             "request_timeout": 20,
         }
-    data = _load_yaml(path)
+    data = _load_yaml_cached(path)
     cfg = data.get("weather", data)
     return {
         "province": cfg.get("province", ""),

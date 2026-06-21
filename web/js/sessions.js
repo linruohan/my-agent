@@ -112,8 +112,7 @@ window.SessionUI = (() => {
         if (res?.ok) {
           renderSessions(res.sessions);
           if (res.events) {
-            window.ChatUI.clear();
-            res.events.forEach((ev) => window.ChatApp.handleEvent(ev));
+            window.ChatUI.loadHistory(res.events);
           }
         } else if (res?.error) {
           window.ChatApp?.setComposerHint(res.error);
@@ -151,7 +150,7 @@ window.SessionUI = (() => {
         renderSessions(res.sessions);
         window.ChatUI.clear();
         if (res.events) {
-          res.events.forEach((ev) => window.ChatApp.handleEvent(ev));
+          window.ChatUI.loadHistory(res.events);
         }
         const newSession = (res.sessions || []).find((s) => s.id === activeId);
         await openRenameDialog(activeId, newSession?.title || "新会话");

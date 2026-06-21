@@ -37,10 +37,15 @@ window.ChatUI = (() => {
     bubble.appendChild(footer);
   }
 
+  let scrollScheduled = false;
+
   function scrollBottom() {
-    const el = scrollEl();
-    if (!el) return;
+    if (scrollScheduled) return;
+    scrollScheduled = true;
     requestAnimationFrame(() => {
+      scrollScheduled = false;
+      const el = scrollEl();
+      if (!el) return;
       el.scrollTop = el.scrollHeight;
       const last = el.lastElementChild;
       if (last && typeof last.scrollIntoView === "function") {
@@ -696,8 +701,9 @@ window.ChatUI = (() => {
     if (el) el.innerHTML = "";
   }
 
-  function handleEvent(ev) {
+  function handleEvent(ev, options = {}) {
     if (!ev || !ev.type) return;
+    const skipScroll = options.skipScroll === true;
 
     switch (ev.type) {
       case "clear":
@@ -714,7 +720,7 @@ window.ChatUI = (() => {
         assistantNode.classList.add("streaming");
         ensureBubbleLayout(assistantNode);
         setBubbleStreamText(assistantNode, streamText);
-        scrollBottom();
+        if (!skipScroll) scrollBottom();
         break;
       case "assistant_token":
         if (!assistantNode) {
@@ -728,7 +734,7 @@ window.ChatUI = (() => {
         if (assistantNode) {
           setBubbleStreamText(assistantNode, streamText);
         }
-        scrollBottom();
+        if (!skipScroll) scrollBottom();
         break;
       case "assistant_end": {
         let replyBubble = assistantNode;
@@ -743,7 +749,7 @@ window.ChatUI = (() => {
         assistantNode = null;
         streamText = "";
         clearLiveHint();
-        scrollBottom();
+        if (!skipScroll) scrollBottom();
         break;
       }
       case "assistant_reset":
@@ -765,8 +771,15 @@ window.ChatUI = (() => {
     }
   }
 
+  function loadHistory(events) {
+    clear();
+    (events || []).forEach((ev) => handleEvent(ev, { skipScroll: true }));
+    scrollBottom();
+  }
+
   return {
     handleEvent,
+    loadHistory,
     clear,
     scrollBottom,
     copyText,
