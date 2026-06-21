@@ -8,6 +8,7 @@ window.Composer = (() => {
   let slashCatalog = [];
   let inputHistory = [];
   let historyIndex = -1;
+  let historyDraft = "";
   let slashItems = [];
   let slashIndex = -1;
   let slashOpen = false;
@@ -78,6 +79,7 @@ window.Composer = (() => {
     attachments = [];
     renderAttachments();
     historyIndex = -1;
+    historyDraft = "";
     closeSlashMenu();
   }
 
@@ -155,6 +157,25 @@ window.Composer = (() => {
     el("slash-menu")?.classList.add("hidden");
   }
 
+  function isOnFirstLine(box) {
+    const pos = box.selectionStart ?? 0;
+    return box.value.slice(0, pos).indexOf("\n") === -1;
+  }
+
+  function isOnLastLine(box) {
+    const pos = box.selectionStart ?? 0;
+    return box.value.slice(pos).indexOf("\n") === -1;
+  }
+
+  function applyHistoryValue(value) {
+    const box = el("input-box");
+    if (!box) return;
+    box.value = value;
+    autoResizeInput();
+    closeSlashMenu();
+    box.setSelectionRange(box.value.length, box.value.length);
+  }
+
   function onInputChange() {
     autoResizeInput();
     const box = el("input-box");
@@ -166,33 +187,32 @@ window.Composer = (() => {
       closeSlashMenu();
     }
     historyIndex = -1;
+    historyDraft = "";
   }
 
   function historyUp() {
     if (!inputHistory.length) return;
     const box = el("input-box");
-    if (!box) return;
+    if (!box || !isOnFirstLine(box)) return;
+    if (historyIndex === -1) {
+      historyDraft = box.value;
+    }
     if (historyIndex < inputHistory.length - 1) {
       historyIndex += 1;
-      box.value = inputHistory[historyIndex];
-      onInputChange();
+      applyHistoryValue(inputHistory[historyIndex]);
     }
   }
 
   function historyDown() {
+    const box = el("input-box");
+    if (!box || !isOnLastLine(box)) return;
     if (historyIndex <= 0) {
       historyIndex = -1;
-      const box = el("input-box");
-      if (box) box.value = "";
-      onInputChange();
+      applyHistoryValue(historyDraft);
       return;
     }
     historyIndex -= 1;
-    const box = el("input-box");
-    if (box) {
-      box.value = inputHistory[historyIndex];
-      onInputChange();
-    }
+    applyHistoryValue(inputHistory[historyIndex]);
   }
 
   async function send() {
