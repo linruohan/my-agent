@@ -9,7 +9,7 @@ def test_lxgw_font_installed_detects_woff2(tmp_path, monkeypatch):
     font_dir = tmp_path / "web" / "fonts" / "lxgwwenkaigb-regular"
     font_dir.mkdir(parents=True)
     (font_dir / "0.woff2").write_bytes(b"x")
-    monkeypatch.setattr("src.infra.paths.PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr("src.infra.paths.WEB_DIR", tmp_path / "web")
     assert fp.lxgw_font_installed() is True
 
 

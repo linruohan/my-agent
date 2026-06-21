@@ -13,6 +13,8 @@ from src.infra.config import save_api_key
 from src.infra.user_settings import has_stored_api_key, load_user_settings, persist_provider_choice, save_user_settings
 from src.memory.rag import get_knowledge_stats
 from src.memory.rag_worker import ingest_files_in_process
+from src.ui.file_dialog import create_file_dialog_safe
+from src.ui.file_dialog import create_file_dialog_safe
 from src.ui.font_prefs import get_font_prefs, list_font_catalog, lxgw_font_installed, persist_font_prefs
 from src.ui.input import append_history, list_history
 from src.ui.skill import build_slash_catalog, get_skill_dirs
@@ -131,7 +133,7 @@ class SettingsMixin:
         tasks["owner_name"] = task_owner
         save_user_settings(settings)
         self._providers[name] = p
-        self._init_agent()
+        self._schedule_agent_reinit()
         self.chat.set_status(self._status_text("设置已更新"))
 
         return {
@@ -162,9 +164,10 @@ class SettingsMixin:
         )
         try:
             if kind == "folder":
-                paths = window.create_file_dialog(webview.FOLDER_DIALOG)
+                paths = create_file_dialog_safe(window, webview.FOLDER_DIALOG)
             else:
-                paths = window.create_file_dialog(
+                paths = create_file_dialog_safe(
+                    window,
                     webview.OPEN_DIALOG,
                     allow_multiple=True,
                     file_types=file_types,

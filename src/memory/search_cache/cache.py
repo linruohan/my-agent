@@ -12,7 +12,7 @@ from typing import Any
 from loguru import logger
 
 from src.infra.config import load_search_config
-from src.infra.paths import DATA_DIR, PROJECT_ROOT
+from src.infra.paths import DATA_DIR, INSTALL_ROOT
 from src.memory.search_cache.db import CacheRow, SearchCacheStore
 from src.memory.search_cache.stats import CacheSessionStats
 
@@ -74,7 +74,7 @@ class SearchCache:
             self.db_path = db_path
         else:
             rel = cfg.get("db_path", "data/search_cache.db")
-            self.db_path = (PROJECT_ROOT / rel).resolve()
+            self.db_path = (INSTALL_ROOT / rel).resolve()
         self._store = SearchCacheStore(self.db_path)
         self._lock = threading.Lock()
         self._session_stats = CacheSessionStats()

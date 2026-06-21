@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -59,6 +60,7 @@ class CoreMixin:
         self._turn_search_ok = False
         self._collecting_assistant = False
         self._poll_stop = threading.Event()
+        self._agent_reinit_lock = threading.Lock()
         self._voice_running = False
         self._compose_busy = False
         self._compose_cancel = threading.Event()
@@ -89,6 +91,10 @@ class CoreMixin:
         return vars_
 
     def _init_agent(self) -> None:
+        with self._agent_reinit_lock:
+            self._init_agent_unlocked()
+
+    def _init_agent_unlocked(self) -> None:
         try:
             if self._graph_bundle:
                 self._graph_bundle.close()
@@ -107,6 +113,22 @@ class CoreMixin:
             logger.exception("Agent 初始化失败")
             self.chat.append_error(f"Agent 初始化失败: {exc}")
             self.runner = AgentRunner(graph=None)
+
+    def _schedule_agent_reinit(self) -> None:
+        """后台重建 Agent，避免保存设置时阻塞 UI 或与运行中任务争用 checkpoint。"""
+
+        def worker() -> None:
+            for _ in range(100):
+                if not self._running:
+                    break
+                time.sleep(0.1)
+            with self._agent_reinit_lock:
+                if self._running:
+                    logger.warning("Agent 仍在运行，跳过设置触发的重建")
+                    return
+                self._init_agent_unlocked()
+
+        threading.Thread(target=worker, daemon=True, name="agent-reinit").start()
 
     @staticmethod
     def _provider_fallback_chain(

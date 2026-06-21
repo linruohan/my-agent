@@ -5,7 +5,7 @@ from typing import Any
 
 import yaml
 
-from src.infra.paths import CONFIG_DIR, DATA_DIR, PROJECT_ROOT
+from src.infra.paths import CONFIG_DIR, DATA_DIR, INSTALL_ROOT
 from src.infra.user_settings import get_stored_api_key, save_stored_api_key
 
 _yaml_cache: dict[Path, tuple[float, dict[str, Any]]] = {}
@@ -44,7 +44,7 @@ def load_app_config() -> dict[str, Any]:
     paths = cfg.setdefault("paths", {})
     for key in ("checkpoints", "workspace", "vectorstore"):
         rel = paths.get(key, f"data/{key}")
-        paths[key] = str((PROJECT_ROOT / rel).resolve())
+        paths[key] = str((INSTALL_ROOT / rel).resolve())
     return cfg
 
 

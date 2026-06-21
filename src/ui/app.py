@@ -7,12 +7,11 @@ import threading
 import webview
 from loguru import logger
 
-from src.infra.paths import PROJECT_ROOT
+from src.infra.paths import WEB_DIR
 from src.infra.process_executor import shutdown_process_pools
 from src.ui.app_api import AppApi
 from src.ui.controller import AssistantController
 
-WEB_DIR = PROJECT_ROOT / "web"
 WEB_INDEX = WEB_DIR / "index.html"
 
 

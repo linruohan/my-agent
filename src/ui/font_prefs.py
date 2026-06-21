@@ -21,9 +21,9 @@ FONT_CATALOG: dict[str, dict[str, str]] = {
 
 
 def lxgw_font_installed() -> bool:
-    from src.infra.paths import PROJECT_ROOT
+    from src.infra.paths import WEB_DIR
 
-    font_dir = PROJECT_ROOT / "web" / "fonts" / "lxgwwenkaigb-regular"
+    font_dir = WEB_DIR / "fonts" / "lxgwwenkaigb-regular"
     return any(font_dir.glob("*.woff2"))
 
 

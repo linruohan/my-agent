@@ -5,7 +5,7 @@ from typing import Any
 
 import yaml
 
-from src.infra.paths import CONFIG_DIR, PROJECT_ROOT
+from src.infra.paths import CONFIG_DIR, INSTALL_ROOT
 
 
 def load_files_config() -> dict[str, Any]:
@@ -22,7 +22,7 @@ def get_search_roots() -> list[Path]:
     for raw in cfg.get("search_roots", ["~", "data/workspace"]):
         p = Path(raw).expanduser()
         if not p.is_absolute():
-            p = (PROJECT_ROOT / p).resolve()
+            p = (INSTALL_ROOT / p).resolve()
         else:
             p = p.resolve()
         if p.exists():

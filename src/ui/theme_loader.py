@@ -7,10 +7,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from src.infra.paths import PROJECT_ROOT
+from src.infra.paths import THEMES_DIR
 from src.infra.user_settings import load_user_settings, save_user_settings
-
-THEMES_DIR = PROJECT_ROOT / "themes"
 
 # 语义变量 -> gpui 键回退链（按优先级）
 _SEMANTIC: dict[str, tuple[str, ...]] = {

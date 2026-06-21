@@ -1,0 +1,24 @@
+my-agent Windows 发布包
+========================
+
+目录说明
+--------
+my-agent.exe   主程序
+config/        配置文件（可直接编辑）
+themes/        UI 主题
+web/           前端静态资源（含可选字体）
+data/          运行时数据（数据库、工作区、向量库等）
+
+使用说明
+--------
+1. 将整个文件夹复制到任意位置后运行 my-agent.exe
+2. 首次运行会使用 data/ 中的数据库；若不存在则自动创建
+3. 修改 config/llm_providers.yaml 或在应用内配置 API Key
+4. 用户偏好保存在 data/user_settings.yaml（首次运行后生成）
+5. API Key 优先存入 Windows 凭据管理器
+
+注意
+----
+- 请勿将 data/secrets.json 分享给他人
+- 动态网页抓取（Playwright）需另行安装 Chromium
+- 需要 Microsoft Edge WebView2 运行时

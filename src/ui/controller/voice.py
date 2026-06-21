@@ -9,6 +9,7 @@ from typing import Any
 import webview
 from loguru import logger
 
+from src.ui.file_dialog import create_file_dialog_safe
 from src.ui.speech import (
     ensure_speech_privacy_ready,
     get_voice_info as speech_voice_info,
@@ -87,7 +88,8 @@ class FilesMixin:
             return {"ok": False, "paths": []}
         file_types = ("图片 (*.png;*.jpg;*.jpeg;*.webp;*.bmp;*.gif)", "All files (*.*)")
         try:
-            paths = window.create_file_dialog(
+            paths = create_file_dialog_safe(
+                window,
                 webview.OPEN_DIALOG,
                 allow_multiple=True,
                 file_types=file_types,
@@ -101,7 +103,7 @@ class FilesMixin:
         if window is None:
             return {"ok": False, "paths": []}
         try:
-            paths = window.create_file_dialog(webview.OPEN_DIALOG, allow_multiple=True)
+            paths = create_file_dialog_safe(window, webview.OPEN_DIALOG, allow_multiple=True)
             return {"ok": True, "paths": list(paths or [])}
         except Exception as exc:
             return {"ok": False, "paths": [], "error": str(exc)}
