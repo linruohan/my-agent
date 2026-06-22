@@ -395,6 +395,10 @@ body {
   cursor: not-allowed;
 }
 
+.pill-voice.hidden {
+  display: none;
+}
+
 .pill-action {
   flex-shrink: 0;
   width: 36px;
@@ -1238,6 +1242,23 @@ body {
   background: var(--bg-input);
   color: var(--fg);
   font: inherit;
+}
+
+.field-checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.field-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.field-checkbox span {
+  color: var(--fg);
 }
 
 .hint {

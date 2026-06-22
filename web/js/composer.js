@@ -2,7 +2,8 @@
 window.Composer = (() => {
   let attachments = [];
   let voiceListening = false;
-  let lastVoiceResultKey = "";
+  let voiceEnabled = false;
+  let voiceSupported = false;
   let attachMenuOpen = false;
   let actionRunning = false;
   let slashCatalog = [];
@@ -384,8 +385,29 @@ window.Composer = (() => {
     console.debug("[voice]", ...args);
   }
 
+  function applyVoiceUi() {
+    const voiceBtn = el("btn-voice");
+    if (!voiceBtn) return;
+    voiceBtn.classList.remove("listening", "disabled", "hidden");
+    if (!voiceEnabled) {
+      voiceBtn.classList.add("hidden");
+      voiceBtn.title = "语音输入未启用，请在设置中开启";
+      return;
+    }
+    if (!voiceSupported) {
+      voiceBtn.title = "语音输入仅 Windows 可用";
+      voiceBtn.classList.add("disabled");
+      return;
+    }
+    voiceBtn.title = "语音输入";
+  }
+
   async function startVoice() {
-    voiceLog("click", { voiceListening, hasApi: !!api() });
+    voiceLog("click", { voiceListening, voiceEnabled, hasApi: !!api() });
+    if (!voiceEnabled) {
+      window.ChatApp?.setComposerHint("语音输入未启用，请在设置中开启");
+      return;
+    }
     if (voiceListening) return;
     if (!api()) {
       window.ChatApp?.setComposerHint("语音 API 未就绪，请稍候重试");
@@ -503,18 +525,19 @@ window.Composer = (() => {
     }
   }
 
+  function updateVoiceMeta(meta) {
+    if (!meta) return;
+    if (typeof meta.voice_enabled === "boolean") voiceEnabled = meta.voice_enabled;
+    if (typeof meta.voice_supported === "boolean") voiceSupported = meta.voice_supported;
+    applyVoiceUi();
+  }
+
   function init(meta) {
     bind();
     if (meta?.slash_catalog) slashCatalog = meta.slash_catalog;
     else refreshSlashCatalog();
     if (meta?.input_history) inputHistory = meta.input_history;
-    if (meta) {
-      const voiceBtn = el("btn-voice");
-      if (voiceBtn && meta.voice_supported === false) {
-        voiceBtn.title = "语音输入仅 Windows 可用";
-        voiceBtn.classList.add("disabled");
-      }
-    }
+    updateVoiceMeta(meta);
     autoResizeInput();
   }
 
@@ -527,5 +550,6 @@ window.Composer = (() => {
     onVoiceResult,
     getPayload,
     refreshSlashCatalog,
+    updateVoiceMeta,
   };
 })();

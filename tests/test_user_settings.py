@@ -5,10 +5,12 @@ import json
 from src.infra.user_settings import (
     get_stored_api_key,
     has_stored_api_key,
+    is_voice_input_enabled,
     load_user_settings,
     merge_provider_configs,
     persist_provider_choice,
     save_stored_api_key,
+    save_user_settings,
 )
 from src.llm.providers import ProviderConfig, parse_providers
 
@@ -67,3 +69,16 @@ def test_api_key_file_fallback(tmp_path, monkeypatch):
 
     data = json.loads(secrets_file.read_text(encoding="utf-8"))
     assert data["TEST_API_KEY"] == "sk-test-12345"
+
+
+def test_voice_input_disabled_by_default(tmp_path, monkeypatch):
+    settings_file = tmp_path / "user_settings.yaml"
+    monkeypatch.setattr("src.infra.user_settings.USER_SETTINGS_PATH", settings_file)
+    assert is_voice_input_enabled() is False
+
+
+def test_voice_input_enabled_from_settings(tmp_path, monkeypatch):
+    settings_file = tmp_path / "user_settings.yaml"
+    monkeypatch.setattr("src.infra.user_settings.USER_SETTINGS_PATH", settings_file)
+    save_user_settings({"ui": {"voice_enabled": True}})
+    assert is_voice_input_enabled() is True

@@ -39,14 +39,14 @@ AppApi.send_message()
 AssistantController._process_send_message()
     │
     ▼
-resolve_input_intent()  ── 意图识别
+resolve_input_intent()  ── 斜杠命令 / 规则意图
     │
-    ├─ INTENT_SLASH_*     → 本地斜杠命令处理
-    ├─ INTENT_SEARCH      → 搜索管道 / 缓存命中
+    ├─ INTENT_SLASH_*     → 本地斜杠命令处理（含 Skill）
     ├─ INTENT_WEATHER     → 天气 HTML 渲染
     ├─ INTENT_LINK        → 链接抓取 + LLM 摘要
     ├─ INTENT_OCR         → 图片 OCR
-    └─ INTENT_AGENT       → AgentRunner.run_async()
+    ├─ INTENT_SEARCH      → 仅 /search 命令 → 搜索管道 / 缓存命中
+    └─ INTENT_AGENT       → 先查搜索缓存 → 未命中则 AgentRunner.run_async()
                                 │
                                 ▼
                           LangGraph ReAct 循环

@@ -148,6 +148,18 @@ window.ChatApp = (() => {
     document.getElementById("appearance-select").value = data.appearance || "dark";
     document.getElementById("skill-dirs-input").value = data.skill_dirs || "";
     document.getElementById("task-owner-input").value = data.task_owner_name || "林若寒";
+    const voiceInput = document.getElementById("voice-enabled-input");
+    if (voiceInput) voiceInput.checked = !!data.voice_enabled;
+    const voiceHint = document.getElementById("voice-settings-hint");
+    if (voiceHint) {
+      if (!data.voice_supported) {
+        voiceHint.textContent = "当前平台不支持语音输入（仅 Windows）";
+        voiceHint.className = "hint err";
+      } else {
+        voiceHint.textContent = "开启后，输入框旁显示话筒按钮，点击开始识别";
+        voiceHint.className = "hint";
+      }
+    }
     fillProviderSelect(data.current_provider);
     loadProviderFields(data.current_provider);
     document.getElementById("settings-modal").showModal();
@@ -181,11 +193,15 @@ window.ChatApp = (() => {
         temperature: parseFloat(document.getElementById("temp-slider").value),
         skill_dirs: document.getElementById("skill-dirs-input").value,
         task_owner_name: document.getElementById("task-owner-input").value,
+        voice_enabled: document.getElementById("voice-enabled-input")?.checked || false,
       };
       const result = await api().save_settings(payload);
       if (result && result.ok) {
         applyTheme(result.theme_variables);
         setStatus(result.status_text);
+        if (result.composer_meta) {
+          window.Composer?.updateVoiceMeta?.(result.composer_meta);
+        }
         await window.Composer?.refreshSlashCatalog?.();
         modal.close();
       } else if (result && result.error) {

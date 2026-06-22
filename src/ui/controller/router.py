@@ -128,16 +128,22 @@ class RouterMixin:
                 self._start_link_summarize_turn(intent)
                 return
 
-            search_query = (intent.search_query or normalize_user_message(text or "")).strip()
-            if intent.kind == INTENT_SEARCH and search_query and not attachments:
-                cached = self._lookup_search_cache(search_query)
-                if cached:
-                    self._deliver_cached_search(search_query, cached)
+            # 显式 /search：跳过缓存，始终调用 web_search
+            if intent.kind == INTENT_SEARCH:
+                search_query = (intent.search_query or "").strip()
+                if not search_query:
+                    self.chat.append_error("请在 /search 后输入搜索关键词，例如：/search 今日头条")
                     return
-
-            if intent.kind == INTENT_SEARCH and search_query:
                 self._start_search_turn(search_query)
                 return
+
+            # 通用输入：先查缓存，未命中则交给 Agent（LLM）
+            query = normalize_user_message(text or "").strip()
+            if query and not attachments:
+                cached = self._lookup_search_cache(query)
+                if cached:
+                    self._deliver_cached_search(query, cached)
+                    return
 
             has_images = any(att.get("type") == "image" for att in attachments)
             ocr_progress = False

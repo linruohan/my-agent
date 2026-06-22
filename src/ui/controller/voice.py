@@ -10,6 +10,7 @@ import webview
 from loguru import logger
 
 from src.ui.file_dialog import create_file_dialog_safe
+from src.infra.user_settings import is_voice_input_enabled
 from src.ui.speech import (
     ensure_speech_privacy_ready,
     get_voice_info as speech_voice_info,
@@ -24,12 +25,20 @@ class VoiceMixin:
 
     def get_voice_info(self) -> dict[str, Any]:
         logger.debug("[voice] AppApi.get_voice_info")
+        if not is_voice_input_enabled():
+            info = {"supported": False, "enabled": False, "error": "语音输入未启用，请在设置中开启"}
+            logger.debug("[voice] AppApi.get_voice_info -> disabled")
+            return info
         info = speech_voice_info()
+        info["enabled"] = True
         logger.debug("[voice] AppApi.get_voice_info -> {}", info)
         return info
 
     def start_voice_input(self) -> dict[str, Any]:
         logger.info("[voice] AppApi.start_voice_input voice_running={}", self._voice_running)
+        if not is_voice_input_enabled():
+            logger.warning("[voice] 拒绝：设置中未启用语音输入")
+            return {"ok": False, "error": "语音输入未启用，请在设置中开启"}
         if self._voice_running:
             logger.warning("[voice] 拒绝：已有识别任务进行中")
             return {"ok": False, "error": "语音识别进行中"}

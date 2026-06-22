@@ -21,7 +21,6 @@ from src.tools.note import NoteStore
 from src.tools.task import TaskReminderService, TaskStore, migrate_legacy_todos_json
 from src.ui.font_prefs import build_font_variables, get_font_prefs
 from src.ui.session_store import SessionStore
-from src.ui.speech import is_supported as voice_is_supported
 from src.ui.theme_loader import build_css_variables, get_theme_prefs
 from src.ui.web_bridge import WebChatBridge
 

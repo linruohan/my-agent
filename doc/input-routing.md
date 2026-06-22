@@ -35,8 +35,14 @@ src/ui/input/
 2. **附件 OCR** — 消息含图片且无其他明确意图
 3. **URL 检测** — 消息含 http(s) 链接 → 链接摘要
 4. **规则匹配** — 天气关键词、笔记前缀等正则
-5. **LLM 分类** — 调用 LLM 判断 search vs agent（可选）
-6. **默认** — `INTENT_AGENT`
+5. **默认** — `INTENT_AGENT`（交给路由层继续处理）
+
+`AssistantController._process_send_message()` 对通用输入的处理顺序：
+
+1. **斜杠 / 规则意图** — 笔记、任务、Skill、OCR、天气、链接等专用管道
+2. **显式 `/search`** — 搜索管道（先查缓存，未命中再搜索）
+3. **搜索缓存** — 纯文本输入先查缓存，命中则直接返回
+4. **Agent（LLM）** — 未命中缓存且无 Skill 命中时，交给 LangGraph ReAct Agent
 
 ## 斜杠命令详解
 

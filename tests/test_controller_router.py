@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.ui.input import INTENT_SEARCH, INTENT_SLASH_NOTE, InputIntent
+from src.ui.input import INTENT_AGENT, INTENT_SEARCH, INTENT_SLASH_NOTE, InputIntent
 
 
 @pytest.fixture
@@ -75,15 +75,66 @@ def test_lookup_search_cache_dedupes(controller):
 
 
 def test_process_send_message_routes_search(controller, monkeypatch):
-    intent = InputIntent(kind=INTENT_SEARCH, reason="rule", search_query="天气")
+    intent = InputIntent(kind=INTENT_SEARCH, reason="slash:/search", search_query="天气")
     monkeypatch.setattr(
         "src.ui.controller.router.resolve_input_intent",
         lambda text, attachments, llm=None: intent,
     )
-    controller._lookup_search_cache = MagicMock(return_value=None)
+    controller._lookup_search_cache = MagicMock(return_value="cached answer")
     controller._start_search_turn = MagicMock()
 
-    controller._process_send_message("天气", [])
+    controller._process_send_message("/search 天气", [])
 
     controller._start_search_turn.assert_called_once_with("天气")
+    controller._lookup_search_cache.assert_not_called()
     assert controller._compose_busy is False or controller._running is True
+
+
+def test_process_send_message_search_requires_query(controller, monkeypatch):
+    intent = InputIntent(kind=INTENT_SEARCH, reason="slash:/search", search_query="")
+    monkeypatch.setattr(
+        "src.ui.controller.router.resolve_input_intent",
+        lambda text, attachments, llm=None: intent,
+    )
+    controller._start_search_turn = MagicMock()
+
+    controller._process_send_message("/search", [])
+
+    controller._start_search_turn.assert_not_called()
+    controller.chat.append_error.assert_called_once()
+
+
+def test_process_send_message_cache_before_agent(controller, monkeypatch):
+    intent = InputIntent(kind=INTENT_AGENT, reason="fallback:agent")
+    monkeypatch.setattr(
+        "src.ui.controller.router.resolve_input_intent",
+        lambda text, attachments, llm=None: intent,
+    )
+    controller._lookup_search_cache = MagicMock(return_value="cached answer")
+    controller._deliver_cached_search = MagicMock()
+    controller._start_agent_turn = MagicMock()
+
+    controller._process_send_message("今日头条", [])
+
+    controller._lookup_search_cache.assert_called()
+    controller._deliver_cached_search.assert_called_once_with("今日头条", "cached answer")
+    controller._start_agent_turn.assert_not_called()
+
+
+def test_process_send_message_agent_when_cache_miss(controller, monkeypatch):
+    intent = InputIntent(kind=INTENT_AGENT, reason="fallback:agent")
+    monkeypatch.setattr(
+        "src.ui.controller.router.resolve_input_intent",
+        lambda text, attachments, llm=None: intent,
+    )
+    monkeypatch.setattr(
+        "src.ui.controller.router.compose_user_message",
+        lambda text, attachments: {"ok": True, "message": text, "errors": []},
+    )
+    controller._lookup_search_cache = MagicMock(return_value=None)
+    controller._start_agent_turn = MagicMock()
+    controller.runner.graph = MagicMock()
+
+    controller._process_send_message("写一段 Python", [])
+
+    controller._start_agent_turn.assert_called_once()

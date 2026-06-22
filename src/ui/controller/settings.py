@@ -10,7 +10,7 @@ import webview
 from loguru import logger
 
 from src.infra.config import save_api_key
-from src.infra.user_settings import has_stored_api_key, load_user_settings, persist_provider_choice, save_user_settings
+from src.infra.user_settings import has_stored_api_key, is_voice_input_enabled, load_user_settings, persist_provider_choice, save_user_settings
 from src.memory.rag import get_knowledge_stats
 from src.memory.rag_worker import ingest_files_in_process
 from src.ui.file_dialog import create_file_dialog_safe
@@ -36,6 +36,7 @@ class SettingsMixin:
 
     def build_initial_state(self) -> dict[str, Any]:
         app = self.app_cfg.get("app", {})
+        voice_enabled = is_voice_input_enabled()
         return {
             "title": app.get("title", "个人助理 Agent"),
             "theme_variables": self._ui_variables(),
@@ -47,7 +48,8 @@ class SettingsMixin:
             "welcome": "欢迎使用个人助理 Agent。Enter 发送，Shift+Enter 换行。输入 / 查看命令。",
             "composer_meta": {
                 "session_short": self._thread_id[:8],
-                "voice_supported": voice_is_supported(),
+                "voice_enabled": voice_enabled,
+                "voice_supported": voice_is_supported() if voice_enabled else False,
             },
             "sessions": [
                 {"id": s.id, "title": s.title, "active": s.id == self._session_id}
@@ -87,6 +89,8 @@ class SettingsMixin:
             "providers": self._provider_payload(),
             "skill_dirs": "\n".join(str(x) for x in skill_dirs),
             "task_owner_name": (settings.get("tasks") or {}).get("owner_name") or "林若寒",
+            "voice_enabled": is_voice_input_enabled(),
+            "voice_supported": voice_is_supported(),
         }
 
     def save_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -126,9 +130,11 @@ class SettingsMixin:
         skill_dirs_raw = (payload.get("skill_dirs") or "").strip()
         skill_dirs = [line.strip() for line in skill_dirs_raw.splitlines() if line.strip()]
         task_owner = (payload.get("task_owner_name") or "").strip() or "林若寒"
+        voice_enabled = bool(payload.get("voice_enabled"))
         settings = load_user_settings()
         ui = settings.setdefault("ui", {})
         ui["skill_dirs"] = skill_dirs
+        ui["voice_enabled"] = voice_enabled
         tasks = settings.setdefault("tasks", {})
         tasks["owner_name"] = task_owner
         save_user_settings(settings)
@@ -140,6 +146,10 @@ class SettingsMixin:
             "ok": True,
             "theme_variables": vars_,
             "status_text": self._status_text("设置已更新"),
+            "composer_meta": {
+                "voice_enabled": voice_enabled,
+                "voice_supported": voice_is_supported() if voice_enabled else False,
+            },
         }
 
     def knowledge_stats_text(self) -> dict[str, str]:

@@ -154,3 +154,10 @@ def has_stored_api_key(env_name: str | None) -> bool:
         return False
     key = get_stored_api_key(env_name)
     return bool(key and key.strip())
+
+
+def is_voice_input_enabled() -> bool:
+    """是否启用语音输入（默认关闭）。"""
+    settings = load_user_settings()
+    ui = settings.get("ui", {}) or {}
+    return bool(ui.get("voice_enabled", False))

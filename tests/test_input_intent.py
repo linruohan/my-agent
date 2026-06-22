@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from src.ui.input_intent import (
+    INTENT_AGENT,
     INTENT_LINK,
     INTENT_OCR,
     INTENT_SEARCH,
@@ -27,6 +28,19 @@ def test_parse_slash_ocr():
     assert intent.kind == INTENT_SLASH_OCR
 
 
+def test_parse_slash_search():
+    intent = parse_slash_command("/search 今日头条")
+    assert intent is not None
+    assert intent.kind == INTENT_SEARCH
+    assert intent.search_query == "今日头条"
+    assert intent.reason == "slash:/search"
+
+    empty = parse_slash_command("/search")
+    assert empty is not None
+    assert empty.kind == INTENT_SEARCH
+    assert empty.search_query == ""
+
+
 def test_extract_link_instruction():
     text = "https://example.com/ 获取今日热榜前10条"
     urls = ["https://example.com/"]
@@ -48,7 +62,7 @@ def test_resolve_link_with_url_and_text():
     assert "toutiao.com" in intent.urls[0]
 
 
-def test_resolve_plain_text_search_fallback():
+def test_resolve_plain_text_agent_fallback():
     intent = resolve_input_intent("今日头条", [], llm=None)
-    assert intent.kind == INTENT_SEARCH
-    assert intent.search_query == "今日头条"
+    assert intent.kind == INTENT_AGENT
+    assert intent.reason == "fallback:agent"

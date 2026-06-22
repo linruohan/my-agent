@@ -103,7 +103,7 @@ def parse_slash_command(text: str) -> InputIntent | None:
     if cmd == "search":
         return InputIntent(
             kind=INTENT_SEARCH,
-            search_query=args or body,
+            search_query=args.strip(),
             slash_cmd="search",
             reason="slash:/search",
         )
@@ -304,17 +304,10 @@ def resolve_input_intent(
     *,
     llm: BaseChatModel | None = None,
 ) -> InputIntent:
+    """识别斜杠命令与规则意图；其余交给路由层（缓存 → Agent）。"""
+    del llm  # 不再用 LLM 做 search/agent 分流
     ruled = classify_intent_rules(text, attachments)
     if ruled:
         return ruled
 
-    if llm is not None:
-        llm_intent = classify_intent_llm(llm, text, attachments)
-        if llm_intent:
-            return llm_intent
-
-    body = normalize_user_message(text or "")
-    flags = _attachment_flags(attachments)
-    if not flags["has_images"] and not flags["has_files"] and not flags["has_link_att"] and body:
-        return InputIntent(kind=INTENT_SEARCH, search_query=body, reason="fallback:plain_text_search")
     return InputIntent(kind=INTENT_AGENT, reason="fallback:agent")
