@@ -9,8 +9,8 @@ DEFAULT_FONT_ID = "system"
 FONT_CATALOG: dict[str, dict[str, str]] = {
     "system": {
         "name": "系统默认",
-        "family": '"Segoe UI", system-ui, -apple-system, sans-serif',
-        "mono": 'Consolas, "Courier New", monospace',
+        "family": '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif',
+        "mono": '"SF Mono", "Cascadia Code", Consolas, monospace',
     },
     "lxgw-wenkai-gb": {
         "name": "LXGW WenKai GB",

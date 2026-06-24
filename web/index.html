@@ -23,7 +23,7 @@
       <div class="sidebar-header">
         <h1 class="sidebar-title">会话</h1>
       </div>
-      <button type="button" class="btn btn-secondary sidebar-btn" id="btn-new-session">＋ 新会话</button>
+      <button type="button" class="btn btn-primary sidebar-btn sidebar-btn-new" id="btn-new-session">＋ 新会话</button>
       <div class="session-list" id="session-list">
         <div class="session-item active">当前会话</div>
       </div>
@@ -35,7 +35,18 @@
 
     <main class="main">
       <div class="chat-surface">
-        <div class="chat-scroll" id="chat-scroll"></div>
+        <div class="chat-scroll" id="chat-scroll">
+          <div class="chat-welcome" id="chat-welcome">
+            <div class="chat-welcome-icon" aria-hidden="true">✦</div>
+            <h2 class="chat-welcome-title">个人助理 Agent</h2>
+            <p class="chat-welcome-desc">Enter 发送，Shift+Enter 换行。输入 / 查看命令与 Skill。</p>
+            <div class="chat-welcome-hints">
+              <span class="welcome-chip">💬 智能对话</span>
+              <span class="welcome-chip">🔧 工具调用</span>
+              <span class="welcome-chip">📚 知识库</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="composer-dock" id="composer-dock">

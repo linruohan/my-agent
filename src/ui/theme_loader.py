@@ -109,18 +109,18 @@ def list_theme_catalog() -> list[dict[str, Any]]:
 
 def get_theme_prefs() -> tuple[str, str]:
     settings = load_user_settings()
-    theme_id = settings.get("ui_theme") or "default"
+    theme_id = settings.get("ui_theme") or "macos"
     appearance = settings.get("appearance") or "dark"
     if appearance not in ("light", "dark", "system"):
         appearance = "dark"
     if not (THEMES_DIR / f"{theme_id}.json").exists():
-        theme_id = "default"
+        theme_id = "macos" if (THEMES_DIR / "macos.json").exists() else "default"
     return theme_id, appearance
 
 
 def persist_theme_prefs(theme_id: str, appearance: str) -> None:
     if not (THEMES_DIR / f"{theme_id}.json").exists():
-        theme_id = "default"
+        theme_id = "macos" if (THEMES_DIR / "macos.json").exists() else "default"
     if appearance not in ("light", "dark", "system"):
         appearance = "dark"
     settings = load_user_settings()

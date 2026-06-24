@@ -47,6 +47,9 @@ window.ChatApp = (() => {
     Object.entries(variables).forEach(([key, val]) => {
       root.style.setProperty(key, val);
     });
+    const mode = variables["--theme-mode"] || "dark";
+    root.dataset.themeMode = mode;
+    root.style.colorScheme = mode === "light" ? "light" : "dark";
     window.ChatUI?.refreshWeatherIframes?.();
   }
 
@@ -312,8 +315,12 @@ window.ChatApp = (() => {
     });
     if (state.session_events && state.session_events.length) {
       window.ChatUI.loadHistory(state.session_events);
-    } else if (state.welcome) {
-      window.ChatUI.handleEvent({ type: "meta", content: "⚙️ " + state.welcome });
+    } else {
+      if (state.welcome) {
+        const desc = document.querySelector(".chat-welcome-desc");
+        if (desc) desc.textContent = state.welcome;
+      }
+      window.ChatUI.showWelcome();
     }
   }
 

@@ -1,6 +1,20 @@
 /** 聊天消息 DOM 渲染 */
 window.ChatUI = (() => {
-  const scrollEl = () => document.getElementById("chat-scroll");
+  function scrollEl() {
+    return document.getElementById("chat-scroll");
+  }
+
+  function welcomeEl() {
+    return document.getElementById("chat-welcome");
+  }
+
+  function showWelcome() {
+    welcomeEl()?.classList.remove("hidden");
+  }
+
+  function hideWelcome() {
+    welcomeEl()?.classList.add("hidden");
+  }
 
   let assistantNode = null;
   let streamText = "";
@@ -378,6 +392,7 @@ window.ChatUI = (() => {
     }
 
     scrollEl().appendChild(row);
+    hideWelcome();
     scrollBottom();
     return bubble;
   }
@@ -625,6 +640,7 @@ window.ChatUI = (() => {
     span.textContent = text;
     wrap.appendChild(span);
     scrollEl().appendChild(wrap);
+    hideWelcome();
     scrollBottom();
   }
 
@@ -698,7 +714,9 @@ window.ChatUI = (() => {
     assistantNode = null;
     streamText = "";
     const el = scrollEl();
-    if (el) el.innerHTML = "";
+    if (!el) return;
+    el.querySelectorAll(".msg-row, .meta-capsule").forEach((node) => node.remove());
+    showWelcome();
   }
 
   function handleEvent(ev, options = {}) {
@@ -773,7 +791,13 @@ window.ChatUI = (() => {
 
   function loadHistory(events) {
     clear();
-    (events || []).forEach((ev) => handleEvent(ev, { skipScroll: true }));
+    const list = events || [];
+    if (!list.length) {
+      showWelcome();
+      return;
+    }
+    hideWelcome();
+    list.forEach((ev) => handleEvent(ev, { skipScroll: true }));
     scrollBottom();
   }
 
@@ -781,6 +805,8 @@ window.ChatUI = (() => {
     handleEvent,
     loadHistory,
     clear,
+    showWelcome,
+    hideWelcome,
     scrollBottom,
     copyText,
     refreshWeatherIframes,

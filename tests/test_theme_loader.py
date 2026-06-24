@@ -13,7 +13,14 @@ def test_list_theme_catalog_includes_default():
     catalog = list_theme_catalog()
     ids = {t["id"] for t in catalog}
     assert "default" in ids
+    assert "macos" in ids
     assert all("name" in t and "modes" in t for t in catalog)
+
+
+def test_build_macos_theme_variables():
+    vars_ = build_css_variables("macos", "light")
+    assert vars_["--primary-bg"] == "#007AFF"
+    assert vars_["--theme-name"] == "macOS"
 
 
 def test_build_css_variables_has_semantic_keys():
@@ -47,5 +54,5 @@ def test_get_theme_prefs_fallback(monkeypatch):
         lambda: {"ui_theme": "missing-theme", "appearance": "invalid"},
     )
     theme_id, appearance = get_theme_prefs()
-    assert theme_id == "default"
+    assert theme_id == "macos"
     assert appearance == "dark"
