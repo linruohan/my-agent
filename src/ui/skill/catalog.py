@@ -5,7 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from src.infra.paths import DATA_DIR
 from src.infra.user_settings import load_user_settings
+
+
+def default_skills_dir() -> Path:
+    path = DATA_DIR / "workspace" / "skills"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 # 系统内置斜杠命令（tool）
 SYSTEM_SLASH_TOOLS: list[dict[str, Any]] = [
@@ -30,6 +37,11 @@ def get_skill_dirs() -> list[Path]:
         p = Path(str(item)).expanduser()
         if p.is_dir():
             dirs.append(p.resolve())
+    from src.ui.skill.catalog import default_skills_dir
+
+    workspace_skills = default_skills_dir()
+    if workspace_skills not in dirs:
+        dirs.append(workspace_skills)
     return dirs
 
 

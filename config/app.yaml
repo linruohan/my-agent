@@ -20,4 +20,76 @@ agent:
     create_file/write_local_file 写入；delete_path 删除；copy_path/move_path/rename_path 复制移动重命名；
     create_directory/remove_directory 目录管理；get_path_info/set_file_attributes 属性；read_file_bytes/stream_read_file 进阶读写。
     写入/删除/移动等敏感操作会弹出确认对话框。
+    Skill：专用能力优先 list_skills → get_skill_details → run_skill_tool；复杂流程可用 create_skill / improve_skill 固化经验。
+    记忆：USER.md 存用户画像，MEMORY.md 存跨会话经验；需要时用 read/update 工具维护；不确定历史时可 search_past_conversations。
+    代码：数据分析或批量处理可用 execute_code（持久 Python 沙箱，同 session 变量保留；沙箱内可用 call_tool("工具名", key=val) 调用只读工具）。
+    自动化：可用 add_cron_job 创建定时任务（notify/skill/agent），list/pause/resume/delete 管理；delivery 支持 toast、session、gateway/default（读取 gateway.cron_default）、gateway:SOURCE:CHAT_ID。
+    历史：search_past_conversations 支持 auto/keyword/semantic 模式检索跨会话记录。
+    浏览器：动态网页、登录表单、复杂交互可用 browser_navigate → browser_get_page / browser_click / browser_fill（同 session_id 保持会话）；完成后 browser_close。
   max_history_messages: 40
+  user_file: USER.md
+  memory_file: MEMORY.md
+  code_sandbox:
+    allow_tool_call: true
+    allowed_tools:
+      - list_tasks
+      - search_tasks
+      - read_local_file
+      - list_directory
+      - find_files
+      - grep_files
+      - search_notes
+      - read_user_profile
+      - read_agent_memory
+      - search_past_conversations
+      - list_skills
+      - get_skill_details
+      - list_cron_jobs
+      - web_search
+      - get_weather_forecast
+      - read_calendar
+      - browser_get_page
+  learning_loop:
+    enabled: true
+    min_tool_calls: 3
+    auto_create_skill: true
+    auto_update_memory: true
+    dedupe:
+      enabled: true
+
+gateway:
+  enabled: false
+  http_enabled: true
+  http_host: "127.0.0.1"
+  http_port: 8765
+  http_token: ""
+  # 远程 HITL：auto_reject | approve_low | approve_medium
+  remote_hitl: auto_reject
+  # Cron 默认 Gateway 投递目标（delivery=gateway 或 default 时使用）
+  cron_default:
+    source: ""
+    chat_id: ""
+  telegram:
+    enabled: false
+    bot_token: ""
+    allowed_chat_ids: []
+    poll_interval: 2.0
+  discord:
+    enabled: false
+    bot_token: ""
+    allowed_channel_ids: []
+  slack:
+    enabled: false
+    bot_token: ""
+    app_token: ""
+    allowed_channel_ids: []
+
+browser:
+  headless: true
+  timeout_ms: 30000
+  navigation_timeout_ms: 45000
+  max_text_chars: 8000
+  screenshot_dir: "data/workspace/browser_screenshots"
+  idle_close_sec: 600
+  max_sessions: 8
+  idle_cleanup_interval_sec: 120

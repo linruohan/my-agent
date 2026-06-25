@@ -230,18 +230,23 @@ class TurnsMixin:
                 self.chat.set_running(False)
             self.chat.clear_tool_status()
             self._reset_turn_state()
+            self._gateway_fail("链接处理未完成，请重试。")
 
-    def _start_agent_turn(self, text: str) -> None:
+    def _start_agent_turn(self, text: str, *, thread_id: str | None = None) -> None:
         self._compose_busy = False
         self._turn_user_query = text
         self._turn_search_query = ""
+        self._turn_tool_calls = []
         self._turn_used_web_search = False
         self._turn_search_ok = False
         self._collecting_assistant = False
         self._running = True
         self.chat.set_running(True)
         self.chat.set_status(self._status_text("思考中…"))
-        self.runner.run_async(text, self._thread_id)
+        tid = thread_id
+        if tid is None and self._gateway_context:
+            tid = self._gateway_context.get("thread_id")
+        self.runner.run_async(text, tid or self._thread_id)
 
     def _deliver_cached_search(self, user_query: str, response: str) -> None:
         self.chat.append_assistant_complete(response)
@@ -313,3 +318,4 @@ class TurnsMixin:
                 self.chat.set_running(False)
             self.chat.clear_tool_status()
             self._reset_turn_state()
+            self._gateway_fail("搜索未完成，请重试。")

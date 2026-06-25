@@ -68,6 +68,13 @@ def run_app() -> None:
     finally:
         stop.set()
         controller._task_reminder.stop()
+        controller._cron_scheduler.stop()
+        controller._cron_store.close()
+        controller._gateway.stop()
+        controller._gateway_inbox.close()
+        from src.tools.browser.session import BrowserSessionManager
+
+        BrowserSessionManager.shared().close_all()
         controller._session_store.close()
         controller._task_store.close()
         controller._note_store.close()

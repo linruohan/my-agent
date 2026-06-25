@@ -26,3 +26,12 @@ rag:
     - .md
     - .pdf
     - .docx
+
+conversation_search:
+  semantic_enabled: true
+  index_enabled: true
+  candidate_pool: 400
+  index_search_pool: 2000
+  rebuild_batch_size: 100
+  min_keyword_hits: 2
+  similarity_threshold: 0.35

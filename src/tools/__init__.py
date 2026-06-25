@@ -3,9 +3,14 @@ from __future__ import annotations
 from typing import Any
 
 from src.infra.config import load_tools_config
+from src.tools.automation.tools import AUTOMATION_TOOLS
+from src.tools.browser.tools import BROWSER_TOOLS
+from src.tools.code.tools import CODE_TOOLS
 from src.tools.file.tools import FILE_TOOLS
+from src.tools.memory.tools import MEMORY_TOOLS
 from src.tools.note.tools import NOTE_TOOLS, add_note
 from src.tools.rag.tools import RAG_TOOLS, search_notes
+from src.tools.skill.tools import SKILL_TOOLS
 from src.tools.task.tools import TASK_TOOLS, add_task, complete_task, delete_task, list_tasks, search_tasks
 from src.tools.web.tools import WEB_TOOLS, web_search
 from src.tools.weather.tools import WEATHER_TOOLS, get_weather_forecast
@@ -17,7 +22,19 @@ from src.tools.workspace.tools import (
 )
 
 # 工具注册约定：按类别分包，各包导出 *_TOOLS 列表，在此汇总。
-OTHER_TOOLS = WEB_TOOLS + WEATHER_TOOLS + NOTE_TOOLS + TASK_TOOLS + RAG_TOOLS + WORKSPACE_TOOLS
+OTHER_TOOLS = (
+    WEB_TOOLS
+    + BROWSER_TOOLS
+    + WEATHER_TOOLS
+    + NOTE_TOOLS
+    + TASK_TOOLS
+    + RAG_TOOLS
+    + WORKSPACE_TOOLS
+    + MEMORY_TOOLS
+    + SKILL_TOOLS
+    + CODE_TOOLS
+    + AUTOMATION_TOOLS
+)
 
 ALL_TOOLS = FILE_TOOLS + OTHER_TOOLS
 

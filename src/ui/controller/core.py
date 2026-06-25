@@ -12,6 +12,8 @@ from loguru import logger
 
 from src.agent.graph import AgentGraphBundle, build_agent_graph
 from src.agent.runner import AgentRunner
+from src.automation import CronJobStore
+from src.automation.scheduler import CronSchedulerService
 from src.infra.config import ensure_data_dirs, load_app_config, load_merged_providers
 from src.infra.user_settings import has_stored_api_key
 from src.llm.factory import create_llm_with_fallback
@@ -48,6 +50,13 @@ class CoreMixin:
         migrate_legacy_todos_json(self._task_store)
         self._task_reminder = TaskReminderService(self._task_store)
         self._task_reminder.start()
+        self._cron_store = CronJobStore()
+        self._cron_scheduler = CronSchedulerService(self._cron_store)
+        self._cron_scheduler.set_graph_getter(self._cron_graph)
+        self._cron_scheduler.set_delivery_handler(self._on_cron_delivery)
+        self._cron_scheduler.set_gateway_deliver(self._gateway_deliver_cron)
+        self._cron_scheduler.bootstrap_next_runs()
+        self._cron_scheduler.start()
         self._running = False
         self._graph_bundle: AgentGraphBundle | None = None
         self._llm: Any = None
@@ -55,6 +64,7 @@ class CoreMixin:
         self._search_cache = SearchCache()
         self._turn_user_query = ""
         self._turn_search_query = ""
+        self._turn_tool_calls: list[dict[str, Any]] = []
         self._turn_used_web_search = False
         self._turn_search_ok = False
         self._collecting_assistant = False
@@ -65,13 +75,56 @@ class CoreMixin:
         self._compose_cancel = threading.Event()
         self._skip_persist_events = False
 
+        self._init_gateway()
         self._init_agent()
+
+    def _cron_graph(self):
+        if self._graph_bundle:
+            return self._graph_bundle.graph
+        return None
+
+    def _on_cron_delivery(self, job, result: str) -> None:
+        if job.delivery != "session":
+            return
+        title = f"⏰ {job.name}"
+        preview = (result or "").strip()[:800]
+        self.chat.append_system(f"{title}\n{preview}")
+
+    def _gateway_deliver_cron(self, source: str, chat_id: str, text: str) -> None:
+        if hasattr(self, "_gateway") and self._gateway:
+            self._gateway.deliver_reply(source, chat_id, text)
+
+    def _schedule_conversation_index(
+        self,
+        session_id: str,
+        message_id: int,
+        event: dict[str, Any],
+    ) -> None:
+        info = self._session_store.get(session_id)
+        if not info or not message_id:
+            return
+        from src.memory.conversation_index import schedule_index_chat_message
+
+        schedule_index_chat_message(
+            message_id=message_id,
+            session_id=session_id,
+            session_title=info.title,
+            event=event,
+        )
 
     def _on_chat_event(self, event: dict[str, Any]) -> None:
         if self._skip_persist_events:
             return
+        session_id = self._persist_session_id()
         if event.get("type") in ("user", "assistant_end", "meta"):
-            self._session_store.append_event(self._session_id, event)
+            message_id = self._session_store.append_event(session_id, event)
+            if message_id and event.get("type") in ("user", "assistant_end"):
+                self._schedule_conversation_index(session_id, message_id, event)
+        if event.get("type") == "assistant_end":
+            content = str(event.get("content") or "")
+            if self._gateway_context:
+                self._gateway_deliver_reply(content)
+            self._schedule_auto_learn(content)
 
     def attach_window(self, window: webview.Window) -> None:
         self._window = window
@@ -165,6 +218,33 @@ class CoreMixin:
         self._turn_used_web_search = False
         self._turn_search_ok = False
         self._collecting_assistant = False
+        self._turn_tool_calls = []
+
+    def _schedule_auto_learn(self, assistant_text: str) -> None:
+        from src.agent.learning import learning_loop_config, maybe_learn_from_turn
+
+        cfg = learning_loop_config()
+        if not cfg["enabled"] or not self._llm:
+            return
+        user = self._turn_user_query
+        tools = list(self._turn_tool_calls)
+        if len(tools) < cfg["min_tool_calls"]:
+            return
+
+        def worker() -> None:
+            try:
+                msg = maybe_learn_from_turn(
+                    self._llm,
+                    user_message=user,
+                    assistant_message=assistant_text,
+                    tool_calls=tools,
+                )
+                if msg:
+                    self.chat.append_system(f"📚 学习闭环：{msg}")
+            except Exception:
+                logger.exception("自动学习失败")
+
+        threading.Thread(target=worker, daemon=True, name="learning-loop").start()
 
     def stop_agent(self) -> None:
         if not self._is_busy():
@@ -184,3 +264,4 @@ class CoreMixin:
         self.chat.set_running(False)
         self.chat.set_status(self._status_text("就绪"))
         self._reset_turn_state()
+        self._gateway_fail("处理已中断。")

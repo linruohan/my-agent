@@ -10,6 +10,7 @@ from langgraph.prebuilt import create_react_agent
 from src.agent.history import make_pre_model_hook
 from src.infra.config import load_app_config
 from src.infra.time_context import current_date_context, current_year
+from src.memory.context_files import build_memory_prompt_block
 from src.tools import get_enabled_tools
 from src.tools.process_wrap import wrap_tools_for_process
 
@@ -27,7 +28,7 @@ class AgentGraphBundle:
 
 
 def build_system_prompt(base_prompt: str) -> str:
-    """在基础 Prompt 上注入当前日期与搜索行为约束。"""
+    """在基础 Prompt 上注入当前日期、搜索规则与记忆块。"""
     date_ctx = current_date_context()
     year = current_year()
     time_block = f"""
@@ -42,7 +43,20 @@ def build_system_prompt(base_prompt: str) -> str:
 6. 若搜索结果明显过时或不足，如实告知用户并建议换个关键词重搜。
 """
     base = base_prompt.strip() or "你是一个 helpful 的个人助理。"
-    return base + "\n" + time_block.strip()
+    memory_block = build_memory_prompt_block()
+    parts = [base, time_block.strip()]
+    if memory_block:
+        parts.append(memory_block)
+    return "\n\n".join(parts)
+
+
+def make_dynamic_system_prompt(base_prompt: str):
+    """每次模型调用前刷新 USER/MEMORY 注入。"""
+
+    def prompt_fn(_state: dict) -> str:
+        return build_system_prompt(base_prompt)
+
+    return prompt_fn
 
 
 def build_agent_graph(llm: BaseChatModel, checkpoint_path: str | Path) -> AgentGraphBundle:
@@ -59,7 +73,7 @@ def build_agent_graph(llm: BaseChatModel, checkpoint_path: str | Path) -> AgentG
     base_prompt = agent_cfg.get("system_prompt", "").strip()
     max_history = int(agent_cfg.get("max_history_messages", 0) or 0)
     tools = wrap_tools_for_process(get_enabled_tools())
-    prompt = build_system_prompt(base_prompt)
+    prompt = make_dynamic_system_prompt(base_prompt)
     pre_model_hook = make_pre_model_hook(max_history)
 
     graph = create_react_agent(

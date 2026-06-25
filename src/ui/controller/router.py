@@ -32,7 +32,7 @@ from src.ui.ocr import ocr_progress_text
 class RouterMixin:
     """消息发送入口与意图分发。"""
 
-    def send_message(self, payload: dict[str, Any]) -> bool:
+    def send_message(self, payload: dict[str, Any], *, gateway_label: str | None = None) -> bool:
         if self._is_busy():
             return False
 
@@ -43,10 +43,11 @@ class RouterMixin:
             self.chat.append_error("请输入内容或添加附件")
             return False
 
-        display_text = normalize_user_message(text)
+        display_text = normalize_user_message(gateway_label or text)
         images = build_image_previews(attachments)
         self.chat.append_user(display_text, images=images)
-        append_history(display_text)
+        if not gateway_label:
+            append_history(display_text)
 
         self._compose_cancel.clear()
         self._compose_busy = True
@@ -187,6 +188,7 @@ class RouterMixin:
 
             self._start_agent_turn(message)
         finally:
+            self._gateway_compose_aborted()
             if not self._running:
                 self._compose_busy = False
                 if not self._compose_cancel.is_set():

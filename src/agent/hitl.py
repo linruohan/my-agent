@@ -37,6 +37,21 @@ def format_approval_description(tool_calls: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def gateway_should_auto_approve(tool_calls: list[dict[str, Any]], policy: str) -> bool:
+    """远程 Gateway HITL 策略：True=自动批准，False=自动拒绝。"""
+    policy = (policy or "auto_reject").strip().lower()
+    if policy == "auto_reject":
+        return False
+    if not tool_calls:
+        return True
+    risks = [get_tool_meta(tc.get("name", "")).get("risk", "unknown") for tc in tool_calls]
+    if policy == "approve_low":
+        return all(r == "low" for r in risks)
+    if policy == "approve_medium":
+        return all(r in ("low", "medium") for r in risks)
+    return False
+
+
 def reject_pending_tools(state_values: dict[str, Any]) -> list[ToolMessage]:
     """为待执行的工具调用生成拒绝消息。"""
     messages = []

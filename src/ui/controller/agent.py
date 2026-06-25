@@ -5,7 +5,9 @@ from __future__ import annotations
 import queue
 from typing import Any
 
+from src.agent.hitl import gateway_should_auto_approve
 from src.agent.runner import StreamEvent
+from src.gateway.config import load_gateway_config
 
 
 class AgentMixin:
@@ -20,6 +22,17 @@ class AgentMixin:
 
     def _handle_approval(self, payload: dict) -> None:
         if self._awaiting_approval:
+            return
+        tool_calls = list(payload.get("tool_calls") or [])
+        if self._gateway_context:
+            policy = load_gateway_config().get("remote_hitl", "auto_reject")
+            approved = gateway_should_auto_approve(tool_calls, policy)
+            if approved:
+                names = ", ".join(str(tc.get("name", "")) for tc in tool_calls)
+                self.chat.append_system(f"远程入站：已按策略「{policy}」自动批准：{names}")
+            else:
+                self.chat.append_system(f"远程入站：按策略「{policy}」已拒绝敏感操作。")
+            self.runner.resume_after_approval(approved)
             return
         self._awaiting_approval = True
         description = payload.get("description", "确认执行敏感操作？")
@@ -68,6 +81,7 @@ class AgentMixin:
             self.chat.append_token(event.payload)
         elif event.kind == "tool_call":
             p = event.payload
+            self._turn_tool_calls.append({"name": p["name"], "args": p.get("args", {})})
             if p["name"] == "web_search":
                 self.chat.reset_assistant_for_tool()
                 self._turn_used_web_search = True
@@ -100,10 +114,12 @@ class AgentMixin:
             self._reset_turn_state()
             self._running = False
             self.chat.set_running(False)
+            self._gateway_fail("Agent 执行出错，请稍后重试。")
             return False
         elif event.kind == "stopped":
             self._reset_turn_state()
             self._running = False
             self.chat.set_running(False)
+            self._gateway_fail("处理已中断。")
             return False
         return True

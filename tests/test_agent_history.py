@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from src.agent.history import make_pre_model_hook, trim_messages_for_model
 from src.infra.config import invalidate_yaml_cache, load_tools_config
@@ -13,6 +13,25 @@ def test_trim_messages_keeps_tail():
     trimmed = trim_messages_for_model(messages, 4)
     assert len(trimmed) == 4
     assert trimmed[0].content == "6"
+
+
+def test_trim_messages_preserves_tool_chain():
+    ai = AIMessage(content="", tool_calls=[{"id": "t1", "name": "web_search", "args": {}}])
+    tool = ToolMessage(content="result", tool_call_id="t1", name="web_search")
+    messages = [
+        HumanMessage(content="old"),
+        ai,
+        tool,
+        HumanMessage(content="new"),
+        AIMessage(content="done"),
+    ]
+    trimmed = trim_messages_for_model(messages, 2)
+    assert trimmed[0].content == "new"
+    assert not isinstance(trimmed[0], ToolMessage)
+
+    trimmed3 = trim_messages_for_model(messages, 3)
+    assert isinstance(trimmed3[0], AIMessage)
+    assert isinstance(trimmed3[1], ToolMessage)
 
 
 def test_trim_messages_noop_when_under_limit():

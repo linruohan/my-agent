@@ -156,3 +156,142 @@ tools:
     enabled: true
     risk: high
     requires_confirmation: true
+
+  read_user_profile:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
+  update_user_profile:
+    enabled: true
+    risk: medium
+    requires_confirmation: false
+
+  read_agent_memory:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
+  update_agent_memory:
+    enabled: true
+    risk: medium
+    requires_confirmation: false
+
+  search_past_conversations:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
+  list_skills:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
+  get_skill_details:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
+  run_skill_tool:
+    enabled: true
+    risk: medium
+    requires_confirmation: true
+
+  list_cron_jobs:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
+  add_cron_job:
+    enabled: true
+    risk: medium
+    requires_confirmation: false
+
+  pause_cron_job:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
+  resume_cron_job:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
+  delete_cron_job:
+    enabled: true
+    risk: high
+    requires_confirmation: true
+
+  execute_code:
+    enabled: true
+    risk: medium
+    requires_confirmation: false
+
+  reset_code_session_tool:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+
+  create_skill:
+    enabled: true
+    risk: medium
+    requires_confirmation: false
+
+  improve_skill:
+    enabled: true
+    risk: medium
+    requires_confirmation: false
+
+  browser_navigate:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+    run_in_process: false
+
+  browser_get_page:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+    run_in_process: false
+
+  browser_click:
+    enabled: true
+    risk: medium
+    requires_confirmation: false
+    run_in_process: false
+
+  browser_fill:
+    enabled: true
+    risk: medium
+    requires_confirmation: true
+    run_in_process: false
+
+  browser_wait_selector:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+    run_in_process: false
+
+  browser_scroll:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+    run_in_process: false
+
+  browser_screenshot:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+    run_in_process: false
+
+  browser_close:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+    run_in_process: false
+
+  browser_list_sessions:
+    enabled: true
+    risk: low
+    requires_confirmation: false
+    run_in_process: false
