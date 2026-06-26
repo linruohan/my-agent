@@ -84,8 +84,6 @@ def search_conversations_semantic(
         index = shared_conversation_index()
         if index.count() == 0:
             backfill_conversation_index(batch_size=cfg.get("rebuild_batch_size", 100), store=store)
-        else:
-            backfill_conversation_index(batch_size=min(20, cfg.get("rebuild_batch_size", 100)), store=store)
         hits = index.search(query_vec, limit=limit, threshold=min_score)
         if hits:
             return hits

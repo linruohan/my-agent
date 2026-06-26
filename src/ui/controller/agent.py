@@ -24,7 +24,8 @@ class AgentMixin:
         if self._awaiting_approval:
             return
         tool_calls = list(payload.get("tool_calls") or [])
-        if self._gateway_context:
+        ctx = self._gateway_context
+        if ctx:
             policy = load_gateway_config().get("remote_hitl", "auto_reject")
             approved = gateway_should_auto_approve(tool_calls, policy)
             if approved:
@@ -75,6 +76,8 @@ class AgentMixin:
             if not still_running and self._running:
                 self._running = False
                 self.chat.set_running(False)
+
+        self.chat.flush_tokens()
 
     def _handle_agent_event(self, event: StreamEvent) -> bool:
         if event.kind == "token":

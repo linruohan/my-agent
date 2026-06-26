@@ -69,26 +69,33 @@ class SearchCacheStore(ReusableSqliteStore):
         with self._connect() as conn:
             rows = conn.execute(
                 """
-                SELECT cache_key, search_query, response, search_ok,
-                       created_at, expires_at, hit_count
-                FROM search_cache
-                WHERE expires_at > ?
-                ORDER BY created_at DESC
+                SELECT c.cache_key, c.search_query, c.response, c.search_ok,
+                       c.created_at, c.expires_at, c.hit_count,
+                       (
+                           SELECT GROUP_CONCAT(user_query, char(31))
+                           FROM search_cache_user_queries uq
+                           WHERE uq.cache_key = c.cache_key
+                       ) AS user_queries_g
+                FROM search_cache c
+                WHERE c.expires_at > ?
+                ORDER BY c.created_at DESC
                 """,
                 (now,),
             ).fetchall()
             result: list[CacheRow] = []
             for row in rows:
-                uq_rows = conn.execute(
-                    "SELECT user_query FROM search_cache_user_queries WHERE cache_key = ?",
-                    (row["cache_key"],),
-                ).fetchall()
+                raw_uq = row["user_queries_g"]
+                user_queries = (
+                    [part for part in str(raw_uq).split(chr(31)) if part]
+                    if raw_uq
+                    else []
+                )
                 result.append(
                     CacheRow(
                         cache_key=row["cache_key"],
                         search_query=row["search_query"],
                         response=row["response"],
-                        user_queries=[r["user_query"] for r in uq_rows],
+                        user_queries=user_queries,
                         search_ok=bool(row["search_ok"]),
                         created_at=row["created_at"],
                         expires_at=row["expires_at"],

@@ -29,6 +29,36 @@ _MAX_USER_CHARS = 3500
 _MAX_MEMORY_CHARS = 4500
 _MAX_INJECT_CHARS = _MAX_USER_CHARS
 
+# path -> (mtime_ns, size, raw_text)
+_file_cache: dict[Path, tuple[int, int, str]] = {}
+
+
+def invalidate_context_file_cache(path: Path | None = None) -> None:
+    """写入后或测试热重载时清除缓存。"""
+    if path is None:
+        _file_cache.clear()
+        return
+    _file_cache.pop(Path(path), None)
+
+
+def _read_file_raw(path: Path) -> str:
+    if not path.is_file():
+        return ""
+    try:
+        st = path.stat()
+    except OSError:
+        return ""
+    key = (st.st_mtime_ns, st.st_size)
+    cached = _file_cache.get(path)
+    if cached and cached[0:2] == key:
+        return cached[2]
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore").strip()
+    except OSError:
+        return ""
+    _file_cache[path] = (st.st_mtime_ns, st.st_size, text)
+    return text
+
 
 def workspace_dir() -> Path:
     cfg = load_app_config()
@@ -67,11 +97,8 @@ def read_context_file(
     max_chars: int = _MAX_INJECT_CHARS,
     prefer_tail: bool = False,
 ) -> str:
-    if not path.is_file():
-        return ""
-    try:
-        text = path.read_text(encoding="utf-8", errors="ignore").strip()
-    except OSError:
+    text = _read_file_raw(path)
+    if not text:
         return ""
     if len(text) <= max_chars:
         return text
@@ -87,10 +114,11 @@ def write_context_file(path: Path, content: str, *, mode: str = "replace") -> No
     if not body.endswith("\n"):
         body += "\n"
     if mode == "append" and path.is_file():
-        existing = path.read_text(encoding="utf-8", errors="ignore").rstrip()
+        existing = _read_file_raw(path).rstrip()
         if existing:
             body = existing + "\n\n" + body.strip() + "\n"
     path.write_text(body, encoding="utf-8")
+    invalidate_context_file_cache(path)
 
 
 def build_memory_prompt_block() -> str:

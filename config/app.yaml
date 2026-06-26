@@ -1,8 +1,8 @@
 app:
   title: "个人助理 Agent"
   theme: "dark"
-  window_width: 1100
-  window_height: 720
+  window_width: 1280
+  window_height: 800
 
 paths:
   checkpoints: "data/checkpoints"

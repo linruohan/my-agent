@@ -39,7 +39,14 @@ class MetricsStore(ReusableSqliteStore):
     def __init__(self, db_path: Path | None = None) -> None:
         super().__init__(db_path or (DATA_DIR / "metrics.db"))
         self._write_lock = threading.Lock()
+        self._approx_rows = 0
         self._init_schema()
+        self._sync_row_count()
+
+    def _sync_row_count(self) -> None:
+        with self._connect() as conn:
+            row = conn.execute("SELECT COUNT(*) AS c FROM timing_events").fetchone()
+        self._approx_rows = int(row["c"]) if row else 0
 
     def _init_schema(self) -> None:
         with self._connect() as conn:
@@ -54,8 +61,8 @@ class MetricsStore(ReusableSqliteStore):
                     "INSERT INTO timing_events (label, elapsed_ms, fields_json, created_at) VALUES (?, ?, ?, ?)",
                     (label, elapsed_ms, payload, now),
                 )
-                row = conn.execute("SELECT COUNT(*) AS c FROM timing_events").fetchone()
-                overflow = int(row["c"]) - _MAX_ROWS if row else 0
+                self._approx_rows += 1
+                overflow = self._approx_rows - _MAX_ROWS
                 if overflow > 0:
                     conn.execute(
                         """
@@ -65,6 +72,7 @@ class MetricsStore(ReusableSqliteStore):
                         """,
                         (overflow,),
                     )
+                    self._approx_rows -= overflow
 
     def summarize(self, label: str | None = None, *, limit: int = 500) -> dict[str, Any]:
         with self._connect() as conn:

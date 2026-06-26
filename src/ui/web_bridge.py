@@ -11,6 +11,9 @@ from loguru import logger
 
 WindowGetter = Callable[[], Any]
 
+_TOKEN_FLUSH_CHARS = 48
+_TOKEN_FLUSH_SEC = 0.05
+
 
 class WebChatBridge:
     """替代 ChatPanel，通过 evaluate_js 驱动前端 ChatUI。"""
@@ -21,6 +24,8 @@ class WebChatBridge:
         self._stream_buffer = ""
         self._streaming = False
         self._turn_started_at: float | None = None
+        self._pending_token_ui = ""
+        self._last_token_flush = 0.0
 
     @property
     def assistant_stream_buffer(self) -> str:
@@ -75,6 +80,7 @@ class WebChatBridge:
         self._emit(event)
 
     def begin_assistant(self, *, initial: str = "") -> None:
+        self.flush_tokens()
         self._streaming = True
         self._stream_buffer = initial
         event: dict[str, Any] = {"type": "assistant_start"}
@@ -86,12 +92,32 @@ class WebChatBridge:
         self.begin_assistant(initial=text)
 
     def append_token(self, token: str) -> None:
+        if not token:
+            return
         self._stream_buffer += token
         if not self._streaming:
             self.begin_assistant()
-        self._emit({"type": "assistant_token", "content": token})
+        self._pending_token_ui += token
+        self._maybe_flush_tokens()
+
+    def _maybe_flush_tokens(self, *, force: bool = False) -> None:
+        if not self._pending_token_ui:
+            return
+        now = time.perf_counter()
+        if not force and len(self._pending_token_ui) < _TOKEN_FLUSH_CHARS:
+            if self._last_token_flush and (now - self._last_token_flush) < _TOKEN_FLUSH_SEC:
+                return
+        chunk = self._pending_token_ui
+        self._pending_token_ui = ""
+        self._last_token_flush = now
+        self._emit({"type": "assistant_token", "content": chunk})
+
+    def flush_tokens(self) -> None:
+        """将缓冲中的流式 token 推送到前端（轮询批次结束或回合结束时调用）。"""
+        self._maybe_flush_tokens(force=True)
 
     def end_assistant(self) -> None:
+        self.flush_tokens()
         event: dict[str, Any] = {"type": "assistant_end", "content": self._stream_buffer}
         elapsed = self._elapsed_ms()
         if elapsed is not None:
@@ -102,8 +128,10 @@ class WebChatBridge:
         self._turn_started_at = None
 
     def reset_assistant_for_tool(self) -> None:
+        self.flush_tokens()
         self._streaming = False
         self._stream_buffer = ""
+        self._pending_token_ui = ""
         self._emit({"type": "assistant_reset"})
 
     def append_tool_call(self, name: str, args: dict) -> None:
@@ -160,6 +188,7 @@ class WebChatBridge:
         from_cache: bool = False,
         content_format: str = "markdown",
     ) -> None:
+        self.flush_tokens()
         if from_cache:
             pass
         self._stream_buffer = content
@@ -192,6 +221,7 @@ class WebChatBridge:
         self._emit({"type": "tool_status", "content": ""})
 
     def clear(self) -> None:
+        self._pending_token_ui = ""
         self._streaming = False
         self._stream_buffer = ""
         self._turn_started_at = None

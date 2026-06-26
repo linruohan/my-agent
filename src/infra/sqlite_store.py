@@ -28,10 +28,9 @@ class ReusableSqliteStore:
         return conn
 
     def _get_conn(self) -> sqlite3.Connection:
-        with self._lock:
-            if self._conn is None:
-                self._conn = self._open_connection()
-            return self._conn
+        if self._conn is None:
+            self._conn = self._open_connection()
+        return self._conn
 
     def close(self) -> None:
         with self._lock:
@@ -41,10 +40,11 @@ class ReusableSqliteStore:
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
-        conn = self._get_conn()
-        try:
-            yield conn
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
+        with self._lock:
+            conn = self._get_conn()
+            try:
+                yield conn
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
