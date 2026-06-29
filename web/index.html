@@ -332,6 +332,22 @@
     </main>
   </div>
 
+  <!-- 通用操作确认 -->
+  <dialog class="modal" id="action-confirm-modal">
+    <div class="modal-panel confirm-panel">
+      <header class="modal-header">
+        <h2 id="action-confirm-title">确认操作</h2>
+      </header>
+      <div class="modal-body">
+        <p id="action-confirm-message" class="confirm-text"></p>
+      </div>
+      <footer class="modal-footer">
+        <button type="button" class="btn btn-muted" id="action-confirm-cancel">取消</button>
+        <button type="button" class="btn btn-primary" id="action-confirm-ok">确认</button>
+      </footer>
+    </div>
+  </dialog>
+
   <!-- HITL 确认 -->
   <dialog class="modal" id="confirm-modal">
     <div class="modal-panel confirm-panel">
@@ -422,6 +438,7 @@
   <script src="js/features/calendar.js"></script>
   <script src="js/features/chat.js"></script>
   <script src="js/features/composer.js"></script>
+  <script src="js/core/confirm.js"></script>
   <script src="js/features/sessions.js"></script>
   <script src="js/core/layout.js"></script>
   <script src="js/features/skills.js"></script>

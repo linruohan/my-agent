@@ -275,7 +275,11 @@ window.ChatApp = (() => {
     if (deleteBtn) {
       const item = findProvider(deleteBtn.dataset.id);
       const label = item?.display_name || deleteBtn.dataset.id;
-      const ok = window.confirm(`确定删除提供商「${label}」？`);
+      const ok = await window.ConfirmUI?.show(`确定删除提供商「${label}」？`, {
+        title: "删除提供商",
+        confirmText: "删除",
+        danger: true,
+      });
       if (!ok) return;
       const result = await api().delete_provider(deleteBtn.dataset.id);
       if (result?.ok) {

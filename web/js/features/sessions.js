@@ -136,7 +136,12 @@ window.SessionUI = (() => {
       btnDel.title = "删除";
       btnDel.addEventListener("click", async (e) => {
         e.stopPropagation();
-        if (!window.confirm(`删除会话「${s.title}」？`)) return;
+        const ok = await window.ConfirmUI?.show(`删除后无法恢复，确定删除会话「${s.title}」？`, {
+          title: "删除会话",
+          confirmText: "删除",
+          danger: true,
+        });
+        if (!ok) return;
         if (!api()) return;
         const res = await api().delete_session(s.id);
         if (res?.ok) {

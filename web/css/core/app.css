@@ -1376,6 +1376,16 @@ body {
   color: var(--fg);
 }
 
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--danger) 30%, transparent);
+}
+
+.btn-danger:hover {
+  background: color-mix(in srgb, var(--danger) 88%, #000 12%);
+}
+
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
