@@ -27,10 +27,12 @@ stage_release = _load_stage_release().stage_release
 @pytest.fixture
 def mini_project(tmp_path: Path) -> Path:
     project = tmp_path / "project"
-    for name in ("config", "themes", "web"):
+    for name in ("config", "web"):
         d = project / name
         d.mkdir(parents=True)
         (d / f"{name}.txt").write_text(name, encoding="utf-8")
+    (project / "web" / "themes").mkdir(parents=True)
+    (project / "web" / "themes" / "default.json").write_text("{}", encoding="utf-8")
     dist = project / "dist"
     dist.mkdir()
     (dist / "my-agent.exe").write_bytes(b"MZ")
@@ -47,13 +49,13 @@ def test_stage_release_copies_resources_and_inits_data(mini_project: Path, tmp_p
 
     assert (release / "my-agent.exe").is_file()
     assert (release / "config" / "config.txt").read_text(encoding="utf-8") == "config"
-    assert (release / "themes" / "themes.txt").read_text(encoding="utf-8") == "themes"
     assert (release / "web" / "web.txt").read_text(encoding="utf-8") == "web"
+    assert (release / "web" / "themes" / "default.json").is_file()
     assert (release / "data" / "checkpoints").is_dir()
     assert (release / "data" / "workspace" / "knowledge").is_dir()
     assert (release / "data" / "input_history.json").is_file()
     assert (release / "manifest.json").is_file()
-    assert manifest["copied_dirs"] == ["config", "themes", "web"]
+    assert manifest["copied_dirs"] == ["config", "web"]
 
 
 def test_stage_release_skips_secrets_when_include_dev_data(mini_project: Path, tmp_path: Path):

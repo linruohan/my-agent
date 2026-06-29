@@ -29,7 +29,7 @@ def install_root() -> Path:
 
 
 def resolve_resource_dir(name: str) -> Path:
-    """config / web / themes 等：优先 exe 旁目录，否则使用 bundle 内资源。"""
+    """config / web 等：优先 exe 旁目录，否则使用 bundle 内资源。"""
     external = install_root() / name
     if external.is_dir():
         return external
@@ -57,7 +57,7 @@ def _refresh_module_paths() -> None:
     DATA_DIR = INSTALL_ROOT / "data"
     CONFIG_DIR = resolve_config_dir()
     WEB_DIR = resolve_resource_dir("web")
-    THEMES_DIR = resolve_resource_dir("themes")
+    THEMES_DIR = WEB_DIR / "themes"
 
 
 _refresh_module_paths()

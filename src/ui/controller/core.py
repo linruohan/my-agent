@@ -21,9 +21,9 @@ from src.memory.rag import set_rag_provider
 from src.memory.search_cache import SearchCache
 from src.tools.note import NoteStore
 from src.tools.task import TaskReminderService, TaskStore, migrate_legacy_todos_json
-from src.ui.font_prefs import build_font_variables, get_font_prefs
+from src.ui.prefs import font_prefs, theme_prefs
 from src.ui.session_store import SessionStore
-from src.ui.theme_loader import build_css_variables, get_theme_prefs
+from src.ui.theme_loader import build_css_variables
 from src.ui.web_bridge import WebChatBridge
 
 
@@ -35,8 +35,8 @@ class CoreMixin:
         self.app_cfg = load_app_config()
         self._current_provider_name, self._providers = load_merged_providers()
         self._current_provider = self._providers[self._current_provider_name]
-        self._theme_id, self._appearance = get_theme_prefs()
-        self._font_id = get_font_prefs()
+        self._theme_id, self._appearance = theme_prefs.get_prefs()
+        self._font_id = font_prefs.get_font_id()
 
         self._window: webview.Window | None = None
         self._session_store = SessionStore()
@@ -139,7 +139,7 @@ class CoreMixin:
 
     def _ui_variables(self) -> dict[str, str]:
         vars_ = build_css_variables(self._theme_id, self._appearance)
-        vars_.update(build_font_variables(self._font_id))
+        vars_.update(font_prefs.build_variables(self._font_id))
         return vars_
 
     def _init_agent(self) -> None:

@@ -184,6 +184,11 @@ class BrowserSessionManager:
         for session in sessions:
             session.close()
 
+    def shutdown(self) -> None:
+        """停止空闲清理线程并关闭全部浏览器会话。"""
+        self._cleanup_stop.set()
+        self.close_all()
+
     def cleanup_idle(self) -> int:
         """关闭空闲超时的会话。"""
         limit = float(self._cfg.get("idle_close_sec", 600))

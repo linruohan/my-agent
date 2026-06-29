@@ -1,4 +1,4 @@
-"""从 themes/*.json 加载 gpui 主题并映射为 Web CSS 变量。"""
+"""从 web/themes/*.json 加载 gpui 主题并映射为 Web CSS 变量。"""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any
 
 from src.infra.paths import THEMES_DIR
-from src.infra.user_settings import load_user_settings, save_user_settings
 
 # 语义变量 -> gpui 键回退链（按优先级）
 _SEMANTIC: dict[str, tuple[str, ...]] = {
@@ -107,26 +106,15 @@ def list_theme_catalog() -> list[dict[str, Any]]:
     return catalog
 
 
+from src.ui.prefs import theme_prefs
+
+
 def get_theme_prefs() -> tuple[str, str]:
-    settings = load_user_settings()
-    theme_id = settings.get("ui_theme") or "macos"
-    appearance = settings.get("appearance") or "dark"
-    if appearance not in ("light", "dark", "system"):
-        appearance = "dark"
-    if not (THEMES_DIR / f"{theme_id}.json").exists():
-        theme_id = "macos" if (THEMES_DIR / "macos.json").exists() else "default"
-    return theme_id, appearance
+    return theme_prefs.get_prefs()
 
 
 def persist_theme_prefs(theme_id: str, appearance: str) -> None:
-    if not (THEMES_DIR / f"{theme_id}.json").exists():
-        theme_id = "macos" if (THEMES_DIR / "macos.json").exists() else "default"
-    if appearance not in ("light", "dark", "system"):
-        appearance = "dark"
-    settings = load_user_settings()
-    settings["ui_theme"] = theme_id
-    settings["appearance"] = appearance
-    save_user_settings(settings)
+    theme_prefs.persist(theme_id, appearance)
 
 
 def _flatten_highlight(highlight: dict[str, Any], prefix: str = "highlight") -> dict[str, str]:

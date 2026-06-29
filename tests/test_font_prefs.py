@@ -16,7 +16,11 @@ def test_list_font_catalog():
     assert "system" in ids
 
 
-def test_build_font_variables_lxgw():
+def test_build_font_variables_lxgw(monkeypatch):
+    monkeypatch.setattr(
+        "src.ui.prefs.font.FontPrefs.lxgw_font_installed",
+        staticmethod(lambda: True),
+    )
     vars_ = build_font_variables("lxgw-wenkai-gb")
     assert "LXGW WenKai GB" in vars_["--font-family"]
 
@@ -31,7 +35,7 @@ def test_persist_font_prefs(tmp_path, monkeypatch):
 
 def test_get_font_prefs_invalid(monkeypatch):
     monkeypatch.setattr(
-        "src.ui.font_prefs.load_user_settings",
+        "src.infra.user_settings.load_user_settings",
         lambda: {"ui_font": "unknown"},
     )
     assert get_font_prefs() == "system"

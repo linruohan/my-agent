@@ -34,7 +34,7 @@ window.ChatApp = (() => {
     const link = document.createElement("link");
     link.id = linkId;
     link.rel = "stylesheet";
-    link.href = "css/fonts-lxgw.css";
+    link.href = "css/core/fonts-lxgw.css";
     document.head.appendChild(link);
   }
 
@@ -215,7 +215,7 @@ window.ChatApp = (() => {
     });
   }
 
-  async function openSettings() {
+  async function loadSettingsForm() {
     if (!api()) return;
     const data = await api().get_settings_data();
     providers = data.providers || {};
@@ -240,14 +240,18 @@ window.ChatApp = (() => {
     }
     fillProviderSelect(data.current_provider);
     loadProviderFields(data.current_provider);
-    document.getElementById("settings-modal").showModal();
+  }
+
+  async function openSettings() {
+    await loadSettingsForm();
+    window.LayoutUI?.showView?.("settings");
   }
 
   function bindSettings() {
-    const modal = document.getElementById("settings-modal");
     document.getElementById("btn-settings").addEventListener("click", openSettings);
-    document.getElementById("settings-close").addEventListener("click", () => modal.close());
-    document.getElementById("settings-cancel").addEventListener("click", () => modal.close());
+    document.getElementById("settings-cancel").addEventListener("click", () => {
+      window.LayoutUI?.showView?.("chat");
+    });
 
     document.getElementById("provider-select").addEventListener("change", (e) => {
       loadProviderFields(e.target.value);
@@ -284,7 +288,7 @@ window.ChatApp = (() => {
         await window.Composer?.refreshSlashCatalog?.();
         await window.SkillsUI?.refresh?.();
         await window.LayoutUI?.refreshModels?.();
-        modal.close();
+        window.LayoutUI?.showView?.("chat");
       } else if (result && result.error) {
         const status = document.getElementById("api-key-status");
         status.textContent = result.error;

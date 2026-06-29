@@ -9,6 +9,7 @@ window.LayoutUI = (() => {
     skills: "btn-skills",
     knowledge: "btn-knowledge",
     calendar: "sidebar-calendar",
+    settings: "btn-settings",
   };
 
   function api() {
@@ -28,6 +29,7 @@ window.LayoutUI = (() => {
     document.querySelectorAll(".nav-item").forEach((node) => {
       node.classList.remove("active");
     });
+    el("btn-settings")?.classList.remove("active");
     const navId = NAV_BY_VIEW[currentView];
     if (navId) el(navId)?.classList.add("active");
     el("status-bar")?.classList.toggle("hidden", currentView !== "chat");

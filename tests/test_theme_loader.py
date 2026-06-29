@@ -50,7 +50,7 @@ def test_gpui_key_to_css_var():
 
 def test_get_theme_prefs_fallback(monkeypatch):
     monkeypatch.setattr(
-        "src.ui.theme_loader.load_user_settings",
+        "src.infra.user_settings.load_user_settings",
         lambda: {"ui_theme": "missing-theme", "appearance": "invalid"},
     )
     theme_id, appearance = get_theme_prefs()

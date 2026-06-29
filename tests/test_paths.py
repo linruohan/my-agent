@@ -22,7 +22,7 @@ def test_dev_layout():
     assert paths.DATA_DIR == root / "data"
     assert paths.CONFIG_DIR == root / "config"
     assert paths.WEB_DIR == root / "web"
-    assert paths.THEMES_DIR == root / "themes"
+    assert paths.THEMES_DIR == root / "web" / "themes"
 
 
 def test_frozen_layout_splits_bundle_and_install(tmp_path, monkeypatch):
@@ -32,7 +32,7 @@ def test_frozen_layout_splits_bundle_and_install(tmp_path, monkeypatch):
     install.mkdir()
     (bundle / "config").mkdir()
     (bundle / "web").mkdir()
-    (bundle / "themes").mkdir()
+    (bundle / "web" / "themes").mkdir()
     exe = install / "my-agent.exe"
     exe.write_bytes(b"")
 
@@ -47,7 +47,7 @@ def test_frozen_layout_splits_bundle_and_install(tmp_path, monkeypatch):
     assert paths.DATA_DIR == install / "data"
     assert paths.CONFIG_DIR == bundle / "config"
     assert paths.WEB_DIR == bundle / "web"
-    assert paths.THEMES_DIR == bundle / "themes"
+    assert paths.THEMES_DIR == bundle / "web" / "themes"
 
 
 def test_frozen_prefers_external_resources_beside_exe(tmp_path, monkeypatch):
@@ -59,7 +59,7 @@ def test_frozen_prefers_external_resources_beside_exe(tmp_path, monkeypatch):
     (bundle / "web").mkdir()
     (install / "config").mkdir()
     (install / "web").mkdir()
-    (install / "themes").mkdir()
+    (install / "web" / "themes").mkdir()
     exe = install / "my-agent.exe"
     exe.write_bytes(b"")
 
@@ -70,4 +70,4 @@ def test_frozen_prefers_external_resources_beside_exe(tmp_path, monkeypatch):
     paths = _reload_paths()
     assert paths.CONFIG_DIR == install / "config"
     assert paths.WEB_DIR == install / "web"
-    assert paths.THEMES_DIR == install / "themes"
+    assert paths.THEMES_DIR == install / "web" / "themes"

@@ -1,5 +1,5 @@
 :root {
-  /* 布局 token；语义色由 themes/*.json 注入，以下为扩展语义与派生 token */
+  /* 布局 token；语义色由 web/themes/*.json 注入，以下为扩展语义与派生 token */
   --radius-input: 8px;
   --radius-bubble: 10px;
   --radius-chip: 14px;
@@ -470,11 +470,6 @@ body {
   transition: background 0.12s ease, color 0.12s ease;
 }
 
-.sidebar-footer-btn:hover {
-  background: color-mix(in srgb, var(--bg-muted) 70%, transparent);
-  color: var(--fg);
-}
-
 /* ── 主区域 ── */
 .main {
   display: flex;
@@ -534,6 +529,37 @@ body {
 
 .feature-body.skills-body {
   max-width: 680px;
+}
+
+.settings-form {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.settings-body {
+  max-width: 560px;
+}
+
+.settings-footer {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 24px 20px;
+  max-width: 560px;
+}
+
+.sidebar-footer-btn:hover,
+.sidebar-footer-btn.active {
+  background: color-mix(in srgb, var(--bg-muted) 70%, transparent);
+  color: var(--fg);
+}
+
+.sidebar-footer-btn.active {
+  background: color-mix(in srgb, var(--primary-bg) 14%, var(--bg-muted));
 }
 
 .chat-header {

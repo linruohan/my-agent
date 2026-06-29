@@ -14,12 +14,11 @@ from src.infra.user_settings import has_stored_api_key, is_voice_input_enabled, 
 from src.memory.rag import get_knowledge_stats
 from src.memory.rag_worker import ingest_files_in_process
 from src.ui.file_dialog import create_file_dialog_safe
-from src.ui.font_prefs import get_font_prefs, list_font_catalog, lxgw_font_installed, persist_font_prefs
 from src.ui.input import append_history, list_history
+from src.ui.prefs import font_prefs, layout_prefs, theme_prefs
 from src.ui.skill import build_slash_catalog, get_skill_dirs
 from src.ui.speech import is_supported as voice_is_supported
-from src.ui.theme_loader import list_theme_catalog, persist_theme_prefs
-from src.ui.ui_prefs import get_chat_width_pct, get_work_dir, format_work_dir_display, persist_chat_width_pct, persist_work_dir
+from src.ui.theme_loader import list_theme_catalog
 from src.llm.models import list_provider_models_safe
 
 
@@ -40,14 +39,14 @@ class SettingsMixin:
         voice_enabled = is_voice_input_enabled()
         settings = load_user_settings()
         owner_name = (settings.get("tasks") or {}).get("owner_name") or "林若寒"
-        work_dir = get_work_dir()
+        work_dir = layout_prefs.get_work_dir()
         return {
             "title": app.get("title", "个人助理 Agent"),
             "theme_variables": self._ui_variables(),
             "theme_id": self._theme_id,
             "appearance": self._appearance,
             "font_id": self._font_id,
-            "lxgw_font_installed": lxgw_font_installed(),
+            "lxgw_font_installed": font_prefs.lxgw_font_installed(),
             "status_text": self._status_text("就绪"),
             "welcome": "欢迎使用个人助理 Agent。Enter 发送，Shift+Enter 换行。输入 / 查看命令。",
             "composer_meta": {
@@ -57,11 +56,11 @@ class SettingsMixin:
                 "current_provider": self._current_provider_name,
                 "current_model": self._current_provider.model,
             },
-            "chat_width_pct": get_chat_width_pct(),
+            "chat_width_pct": layout_prefs.get_chat_width_pct(),
             "workspace": {
                 "owner_name": owner_name,
                 "work_dir": str(work_dir) if work_dir else "",
-                "work_dir_label": format_work_dir_display(work_dir),
+                "work_dir_label": layout_prefs.format_work_dir_display(work_dir),
             },
             "sessions": [
                 {"id": s.id, "title": s.title, "active": s.id == self._session_id}
@@ -94,7 +93,7 @@ class SettingsMixin:
             "theme_catalog": list_theme_catalog(),
             "theme_id": self._theme_id,
             "appearance": self._appearance,
-            "font_catalog": list_font_catalog(),
+            "font_catalog": font_prefs.list_catalog(),
             "font_id": self._font_id,
             "current_provider": self._current_provider_name,
             "provider_names": list(self._providers.keys()),
@@ -108,13 +107,13 @@ class SettingsMixin:
     def save_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
         theme_id = payload.get("theme_id") or "default"
         appearance = payload.get("appearance") or "dark"
-        font_id = payload.get("font_id") or get_font_prefs()
-        persist_theme_prefs(theme_id, appearance)
-        persist_font_prefs(font_id)
+        font_id = payload.get("font_id") or font_prefs.get_font_id()
+        theme_prefs.persist(theme_id, appearance)
+        font_prefs.persist(font_id)
         self._theme_id = theme_id
         self._appearance = appearance
-        self._font_id = get_font_prefs()
-        if font_id == "lxgw-wenkai-gb" and not lxgw_font_installed():
+        self._font_id = font_prefs.get_font_id()
+        if font_id == "lxgw-wenkai-gb" and not font_prefs.lxgw_font_installed():
             self.chat.append_system(
                 "霞鹜文楷字体未安装，已使用系统字体。请运行 scripts/install-web-fonts.ps1 后重选字体。"
             )
@@ -154,7 +153,7 @@ class SettingsMixin:
         self._schedule_agent_reinit()
         self.chat.set_status(self._status_text("设置已更新"))
 
-        work_dir = get_work_dir()
+        work_dir = layout_prefs.get_work_dir()
         return {
             "ok": True,
             "theme_variables": vars_,
@@ -162,7 +161,7 @@ class SettingsMixin:
             "workspace": {
                 "owner_name": task_owner,
                 "work_dir": str(work_dir) if work_dir else "",
-                "work_dir_label": format_work_dir_display(work_dir),
+                "work_dir_label": layout_prefs.format_work_dir_display(work_dir),
             },
             "composer_meta": {
                 "voice_enabled": voice_enabled,
@@ -253,7 +252,7 @@ class SettingsMixin:
         }
 
     def save_chat_width(self, pct: int | float) -> dict[str, Any]:
-        value = persist_chat_width_pct(pct)
+        value = layout_prefs.persist_chat_width_pct(pct)
         return {"ok": True, "chat_width_pct": value}
 
     def pick_work_dir(self) -> dict[str, Any]:
@@ -261,7 +260,7 @@ class SettingsMixin:
         if window is None:
             return {"ok": False, "error": "窗口未就绪"}
 
-        current = get_work_dir()
+        current = layout_prefs.get_work_dir()
         try:
             paths = create_file_dialog_safe(
                 window,
@@ -279,11 +278,11 @@ class SettingsMixin:
             return {"ok": False, "error": "请选择有效文件夹"}
 
         try:
-            persist_work_dir(path)
+            layout_prefs.persist_work_dir(path)
         except OSError as exc:
             return {"ok": False, "error": str(exc)}
 
-        label = format_work_dir_display(path)
+        label = layout_prefs.format_work_dir_display(path)
         status = self._status_text(f"工作目录: {path.name}")
         self.chat.set_status(status)
         return {
