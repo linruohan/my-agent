@@ -1,6 +1,5 @@
 # Windows exe 构建脚本（PyInstaller 单文件 + 发布目录组装）
 param(
-    [switch]$SkipFonts,
     [switch]$IncludeDevData,
     [switch]$NoInitDatabases,
     [string]$Python = "python"
@@ -21,18 +20,6 @@ function Invoke-Checked {
 
 Write-Host "=== my-agent Windows 构建 ==="
 Write-Host "项目目录: $Root"
-
-if (-not $SkipFonts) {
-    $woffCount = (Get-ChildItem "web\fonts\lxgwwenkaigb-regular\*.woff2" -ErrorAction SilentlyContinue).Count
-    if ($woffCount -lt 1) {
-        Write-Host "未检测到 LXGW 字体，尝试安装（可用 -SkipFonts 跳过）…"
-        if (Get-Command npm -ErrorAction SilentlyContinue) {
-            & "$Root\scripts\install-web-fonts.ps1"
-        } else {
-            Write-Warning "未安装 npm，将使用系统字体打包。"
-        }
-    }
-}
 
 Invoke-Checked @($Python, "-m", "pip", "install", "--upgrade", "pip") "升级 pip"
 Invoke-Checked @($Python, "-m", "pip", "install", "-e", ".") "安装项目依赖"

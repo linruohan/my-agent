@@ -3,60 +3,45 @@
 from __future__ import annotations
 
 from src.ui.prefs.base import UserSettingsBacked
+from src.ui.prefs.system_fonts import (
+    DEFAULT_FONT_ID,
+    SYSTEM_DEFAULT_LABEL,
+    css_font_family,
+    list_system_fonts,
+    normalize_font_id,
+)
 
-DEFAULT_FONT_ID = "system"
-
-FONT_CATALOG: dict[str, dict[str, str]] = {
-    "system": {
-        "name": "系统默认",
-        "family": '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif',
-        "mono": '"SF Mono", "Cascadia Code", Consolas, monospace',
-    },
-    "lxgw-wenkai-gb": {
-        "name": "LXGW WenKai GB",
-        "family": '"LXGW WenKai GB", "Segoe UI", system-ui, sans-serif',
-        "mono": '"LXGW WenKai GB", Consolas, monospace',
-    },
-}
+__all__ = ["DEFAULT_FONT_ID", "FontPrefs"]
 
 
 class FontPrefs(UserSettingsBacked):
-    """字体选择与 CSS 变量生成。"""
+    """字体选择：从系统已安装字体中选取，写入 CSS 变量。"""
 
-    @staticmethod
-    def lxgw_font_installed() -> bool:
-        from src.infra.paths import WEB_DIR
-
-        font_dir = WEB_DIR / "fonts" / "lxgwwenkaigb-regular"
-        return any(font_dir.glob("*.woff2"))
-
-    @staticmethod
-    def list_catalog() -> list[dict[str, str]]:
-        return [{"id": fid, "name": meta["name"]} for fid, meta in FONT_CATALOG.items()]
+    def list_catalog(self) -> list[dict[str, str]]:
+        catalog: list[dict[str, str]] = [
+            {"id": DEFAULT_FONT_ID, "name": SYSTEM_DEFAULT_LABEL},
+        ]
+        for name in list_system_fonts():
+            catalog.append({"id": name, "name": name})
+        return catalog
 
     def get_font_id(self) -> str:
         settings = self._read_settings()
-        font_id = settings.get("ui_font") or DEFAULT_FONT_ID
-        if font_id not in FONT_CATALOG:
-            font_id = DEFAULT_FONT_ID
-        return font_id
+        return normalize_font_id(settings.get("ui_font"))
 
     def persist(self, font_id: str) -> None:
-        if font_id not in FONT_CATALOG:
-            font_id = DEFAULT_FONT_ID
+        value = normalize_font_id(font_id)
+        if value != DEFAULT_FONT_ID and value not in set(list_system_fonts()):
+            value = DEFAULT_FONT_ID
         settings = self._read_settings()
-        settings["ui_font"] = font_id
+        settings["ui_font"] = value
         self._write_settings(settings)
 
     def build_variables(self, font_id: str | None = None) -> dict[str, str]:
-        fid = font_id or self.get_font_id()
-        if fid not in FONT_CATALOG:
-            fid = DEFAULT_FONT_ID
-        if fid == "lxgw-wenkai-gb" and not self.lxgw_font_installed():
-            fid = "system"
-        meta = FONT_CATALOG[fid]
+        fid = normalize_font_id(font_id or self.get_font_id())
+        family, mono = css_font_family(fid)
         return {
-            "--font-family": meta["family"],
-            "--font-family-mono": meta["mono"],
+            "--font-family": family,
+            "--font-family-mono": mono,
             "--ui-font-id": fid,
         }

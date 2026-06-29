@@ -7,7 +7,7 @@
 ```
 pywebview 窗口
   └─ web/index.html
-       ├─ CSS: app.css, calendar.css, fonts-lxgw.css
+       ├─ CSS: app.css, calendar.css
        └─ JS:
             ├─ app.js       — API 桥、主题、设置
             ├─ chat.js      — 消息气泡、Markdown、工具卡片
@@ -82,11 +82,9 @@ pywebview 窗口
 
 ## 字体
 
-- 默认使用**系统字体**（`Segoe UI` / `system-ui`），首屏不加载 Web 字体
-- 可选 **LXGW 文楷 GB**：设置 → 字体 →「LXGW WenKai GB」
-- 安装字体分片：`scripts/install-web-fonts.ps1`（需 npm）
-- 分片文件位于 `web/fonts/lxgwwenkaigb-regular/`（`.woff2` 已加入 `.gitignore`，不随仓库分发）
-- 选择霞鹜文楷但未安装时，自动回退系统字体并提示安装脚本
+- 默认使用**系统字体**（`Segoe UI` / `system-ui`）
+- 设置 → 字体：从操作系统已安装字体列表中选择，即时生效
+- UI 通过 CSS 变量 `--font-family` 应用所选字体，无需下载或打包 Web 字体
 
 ## 设置面板
 

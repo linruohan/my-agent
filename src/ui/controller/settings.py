@@ -46,7 +46,6 @@ class SettingsMixin:
             "theme_id": self._theme_id,
             "appearance": self._appearance,
             "font_id": self._font_id,
-            "lxgw_font_installed": font_prefs.lxgw_font_installed(),
             "status_text": self._status_text("就绪"),
             "welcome": "欢迎使用个人助理 Agent。Enter 发送，Shift+Enter 换行。输入 / 查看命令。",
             "composer_meta": {
@@ -113,10 +112,6 @@ class SettingsMixin:
         self._theme_id = theme_id
         self._appearance = appearance
         self._font_id = font_prefs.get_font_id()
-        if font_id == "lxgw-wenkai-gb" and not font_prefs.lxgw_font_installed():
-            self.chat.append_system(
-                "霞鹜文楷字体未安装，已使用系统字体。请运行 scripts/install-web-fonts.ps1 后重选字体。"
-            )
         vars_ = self._ui_variables()
 
         name = payload.get("provider") or self._current_provider_name

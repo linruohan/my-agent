@@ -14,7 +14,7 @@ data/search_cache.db
 data/sessions.db
 data/task.db
 data/note.db
-web/fonts/lxgwwenkaigb-regular/*.woff2
+web/fonts/
 data/vectorstore/*
 !data/vectorstore/.gitkeep
 data/vectorstore/faiss_index/**
