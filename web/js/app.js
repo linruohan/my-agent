@@ -112,6 +112,7 @@ window.ChatApp = (() => {
     });
 
     document.getElementById("btn-home")?.addEventListener("click", () => {
+      window.LayoutUI?.showView?.("chat");
       const scroll = document.getElementById("chat-scroll");
       if (scroll) scroll.scrollTo({ top: 0, behavior: "smooth" });
       document.getElementById("input-box")?.focus();
@@ -251,7 +252,6 @@ window.ChatApp = (() => {
   }
 
   function bindKnowledge() {
-    const modal = document.getElementById("knowledge-modal");
     const logEl = document.getElementById("knowledge-log");
     const statsEl = document.getElementById("knowledge-stats");
 
@@ -264,10 +264,8 @@ window.ChatApp = (() => {
     document.getElementById("btn-knowledge").addEventListener("click", async () => {
       logEl.textContent = "";
       await refreshStats();
-      modal.showModal();
+      window.LayoutUI?.showView?.("knowledge");
     });
-    document.getElementById("knowledge-close").addEventListener("click", () => modal.close());
-    document.getElementById("knowledge-done").addEventListener("click", () => modal.close());
 
     async function doImport(kind) {
       if (!api()) return;

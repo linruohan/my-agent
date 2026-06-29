@@ -1,4 +1,4 @@
-/** 万年历 UI：侧栏入口 + 居中弹窗 */
+/** 万年历 UI：侧栏入口 + 主内容区视图 */
 window.CalendarUI = (() => {
   const WEEK_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
   const WEEK_NAMES = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
@@ -266,7 +266,7 @@ window.CalendarUI = (() => {
     renderDetail();
   }
 
-  function openModal() {
+  function openView() {
     syncToday();
     if (!selectedYear) {
       selectedYear = today.y;
@@ -276,23 +276,16 @@ window.CalendarUI = (() => {
     viewYear = selectedYear;
     viewMonth = selectedMonth;
     render();
-    document.getElementById("calendar-modal")?.showModal();
+    window.LayoutUI?.showView?.("calendar");
   }
 
   function bind() {
-    document.getElementById("sidebar-calendar")?.addEventListener("click", openModal);
-    document.getElementById("cal-close")?.addEventListener("click", () => {
-      document.getElementById("calendar-modal")?.close();
-    });
+    document.getElementById("sidebar-calendar")?.addEventListener("click", openView);
     document.getElementById("cal-prev-month")?.addEventListener("click", () => shiftMonth(-1));
     document.getElementById("cal-next-month")?.addEventListener("click", () => shiftMonth(1));
     document.getElementById("cal-prev-day")?.addEventListener("click", () => shiftDay(-1));
     document.getElementById("cal-next-day")?.addEventListener("click", () => shiftDay(1));
     document.getElementById("cal-today-btn")?.addEventListener("click", goToday);
-
-    document.getElementById("calendar-modal")?.addEventListener("click", (e) => {
-      if (e.target === e.currentTarget) e.currentTarget.close();
-    });
   }
 
   function init() {
@@ -313,5 +306,5 @@ window.CalendarUI = (() => {
     }
   }
 
-  return { init, renderSidebar, openModal };
+  return { init, renderSidebar, openView };
 })();

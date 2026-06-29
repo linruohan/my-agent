@@ -83,7 +83,39 @@
   letter-spacing: -0.03em;
 }
 
-/* 万年历弹窗 */
+/* 万年历主视图 */
+.calendar-feature-body {
+  max-width: min(920px, 100%);
+  padding-bottom: 32px;
+}
+
+.calendar-feature-body .calendar-layout {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  min-height: min(560px, calc(100vh - 160px));
+  border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--bg-popover, var(--bg-app));
+  box-shadow: var(--mac-shadow-sm);
+}
+
+.calendar-feature-body .calendar-grid-section {
+  padding: 20px 20px 16px;
+  border-right: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  background: color-mix(in srgb, var(--bg-popover) 95%, var(--bg-muted) 5%);
+}
+
+.calendar-feature-body .calendar-detail-section {
+  padding: 20px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: color-mix(in srgb, var(--bg-popover) 92%, transparent);
+  overflow-y: auto;
+}
+
+/* 保留旧弹窗样式供兼容（已移除弹窗 DOM） */
 .calendar-modal {
   width: min(860px, 96vw);
   max-height: none;
@@ -438,15 +470,18 @@
 }
 
 @media (max-width: 720px) {
+  .calendar-feature-body .calendar-layout,
   .calendar-layout {
     grid-template-columns: 1fr;
   }
 
+  .calendar-feature-body .calendar-grid-section,
   .calendar-grid-section {
     border-right: none;
     border-bottom: 1px solid var(--border);
   }
 
+  .calendar-feature-body .calendar-detail-section,
   .calendar-detail-section {
     max-height: 280px;
   }

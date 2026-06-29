@@ -1,8 +1,15 @@
-/** 聊天区宽度与模型选择 */
+/** 聊天区宽度、模型选择与主视图切换 */
 window.LayoutUI = (() => {
   let widthSaveTimer = null;
   let layoutPopoverOpen = false;
   let bindingsReady = false;
+  let currentView = "chat";
+
+  const NAV_BY_VIEW = {
+    skills: "btn-skills",
+    knowledge: "btn-knowledge",
+    calendar: "sidebar-calendar",
+  };
 
   function api() {
     return window.pywebview && window.pywebview.api;
@@ -10,6 +17,25 @@ window.LayoutUI = (() => {
 
   function el(id) {
     return document.getElementById(id);
+  }
+
+  function showView(view) {
+    currentView = view || "chat";
+    document.querySelectorAll(".main-view").forEach((node) => {
+      const active = node.dataset.view === currentView;
+      node.classList.toggle("hidden", !active);
+    });
+    document.querySelectorAll(".nav-item").forEach((node) => {
+      node.classList.remove("active");
+    });
+    const navId = NAV_BY_VIEW[currentView];
+    if (navId) el(navId)?.classList.add("active");
+    el("status-bar")?.classList.toggle("hidden", currentView !== "chat");
+    if (layoutPopoverOpen) closeLayoutPopover();
+  }
+
+  function getCurrentView() {
+    return currentView;
   }
 
   function applyChatWidth(pct) {
@@ -188,5 +214,5 @@ window.LayoutUI = (() => {
     applyChatWidth(85);
   }
 
-  return { init, applyChatWidth, refreshModels, fillModelSelect };
+  return { init, applyChatWidth, refreshModels, fillModelSelect, showView, getCurrentView };
 })();

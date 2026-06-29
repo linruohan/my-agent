@@ -155,12 +155,16 @@ window.SessionUI = (() => {
       item.appendChild(actions);
 
       item.addEventListener("click", async () => {
-        if (!api() || s.id === activeId) return;
+        if (!api() || s.id === activeId) {
+          window.LayoutUI?.showView?.("chat");
+          return;
+        }
         const res = await api().switch_session(s.id);
         if (res?.ok) {
           activeId = res.active_id || s.id;
           allSessions = res.sessions || [];
           renderSessions(allSessions);
+          window.LayoutUI?.showView?.("chat");
         } else if (res?.error) {
           window.ChatApp?.setComposerHint(res.error);
         }
@@ -201,6 +205,7 @@ window.SessionUI = (() => {
         allSessions = res.sessions || [];
         renderSessions(allSessions);
         window.ChatUI.clear();
+        window.LayoutUI?.showView?.("chat");
         if (res.events) {
           window.ChatUI.loadHistory(res.events);
         }

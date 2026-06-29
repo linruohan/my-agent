@@ -78,83 +78,178 @@
       </div>
     </aside>
 
-    <!-- 主聊天区 -->
+    <!-- 主内容区 -->
     <main class="main">
-      <header class="chat-header">
-        <button type="button" class="chat-title-btn" id="chat-title-btn">
-          <h1 class="chat-title" id="chat-title">个人助理 Agent</h1>
-          <svg class="chat-title-chevron" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-            <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 9l6 6 6-6"/>
-          </svg>
-        </button>
-        <div class="chat-header-actions">
-          <div class="chat-layout-wrap">
-            <button type="button" class="chat-header-btn" id="btn-chat-layout" title="聊天宽度">
-              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-                <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M4 6h16M4 12h10M4 18h16"/>
-              </svg>
-            </button>
-            <div class="chat-layout-popover hidden" id="chat-layout-popover">
-              <label class="chat-layout-label">
-                <span>聊天宽度</span>
-                <output id="chat-width-value">85%</output>
-              </label>
-              <input type="range" id="chat-width-slider" min="50" max="100" step="5" value="85" />
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <div class="chat-body">
-        <div class="chat-column">
-          <div class="chat-scroll" id="chat-scroll">
-            <div class="chat-welcome" id="chat-welcome">
-              <h2 class="chat-welcome-title">个人助理 Agent</h2>
-              <p class="chat-welcome-desc">Enter 发送，Shift+Enter 换行。输入 / 查看命令与 Skill。</p>
-            </div>
-          </div>
-
-          <div class="composer-dock" id="composer-dock">
-          <div class="attachment-strip hidden" id="attachment-strip"></div>
-          <div class="composer-pill" id="composer-pill">
-            <div class="pill-left">
-              <button type="button" class="pill-btn pill-add" id="btn-attach" title="添加附件">+</button>
-              <div class="attach-menu hidden" id="attach-menu">
-                <button type="button" id="attach-pick-image">🖼 图片</button>
-                <button type="button" id="attach-pick-file">📎 文件</button>
-                <button type="button" id="attach-add-link">🔗 链接</button>
+      <!-- 对话视图 -->
+      <div class="main-view" id="view-chat" data-view="chat">
+        <header class="chat-header">
+          <button type="button" class="chat-title-btn" id="chat-title-btn">
+            <h1 class="chat-title" id="chat-title">个人助理 Agent</h1>
+            <svg class="chat-title-chevron" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+              <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 9l6 6 6-6"/>
+            </svg>
+          </button>
+          <div class="chat-header-actions">
+            <div class="chat-layout-wrap">
+              <button type="button" class="chat-header-btn" id="btn-chat-layout" title="聊天宽度">
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                  <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M4 6h16M4 12h10M4 18h16"/>
+                </svg>
+              </button>
+              <div class="chat-layout-popover hidden" id="chat-layout-popover">
+                <label class="chat-layout-label">
+                  <span>聊天宽度</span>
+                  <output id="chat-width-value">85%</output>
+                </label>
+                <input type="range" id="chat-width-slider" min="50" max="100" step="5" value="85" />
               </div>
             </div>
-            <textarea
-              id="input-box"
-              class="pill-input"
-              rows="1"
-              placeholder="提问或继续… 输入 / 查看命令"
-            ></textarea>
-            <div class="slash-menu hidden" id="slash-menu"></div>
-            <div class="pill-model-wrap">
-              <select id="model-select" class="pill-model-select" title="选择模型">
-                <option value="">加载中…</option>
-              </select>
-            </div>
-            <button type="button" class="pill-voice hidden" id="btn-voice" title="语音输入">
-              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                <path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/>
-              </svg>
-            </button>
-            <button type="button" class="pill-action" id="btn-action" title="发送">
-              <svg class="icon-send" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-                <path fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M12 19V5M12 5l-6 6M12 5l6 6"/>
-              </svg>
-              <svg class="icon-stop hidden" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-                <rect x="7" y="7" width="10" height="10" rx="1" fill="currentColor"/>
-              </svg>
-            </button>
           </div>
-          <div class="composer-meta">
-            <span class="meta-item meta-hint" id="composer-hint"></span>
+        </header>
+
+        <div class="chat-body">
+          <div class="chat-column">
+            <div class="chat-scroll" id="chat-scroll">
+              <div class="chat-welcome" id="chat-welcome">
+                <h2 class="chat-welcome-title">个人助理 Agent</h2>
+                <p class="chat-welcome-desc">Enter 发送，Shift+Enter 换行。输入 / 查看命令与 Skill。</p>
+              </div>
+            </div>
+
+            <div class="composer-dock" id="composer-dock">
+              <div class="attachment-strip hidden" id="attachment-strip"></div>
+              <div class="composer-pill" id="composer-pill">
+                <div class="pill-left">
+                  <button type="button" class="pill-btn pill-add" id="btn-attach" title="添加附件">+</button>
+                  <div class="attach-menu hidden" id="attach-menu">
+                    <button type="button" id="attach-pick-image">🖼 图片</button>
+                    <button type="button" id="attach-pick-file">📎 文件</button>
+                    <button type="button" id="attach-add-link">🔗 链接</button>
+                  </div>
+                </div>
+                <textarea
+                  id="input-box"
+                  class="pill-input"
+                  rows="1"
+                  placeholder="提问或继续… 输入 / 查看命令"
+                ></textarea>
+                <div class="slash-menu hidden" id="slash-menu"></div>
+                <div class="pill-model-wrap">
+                  <select id="model-select" class="pill-model-select" title="选择模型">
+                    <option value="">加载中…</option>
+                  </select>
+                </div>
+                <button type="button" class="pill-voice hidden" id="btn-voice" title="语音输入">
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                    <path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/>
+                  </svg>
+                </button>
+                <button type="button" class="pill-action" id="btn-action" title="发送">
+                  <svg class="icon-send" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                    <path fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M12 19V5M12 5l-6 6M12 5l6 6"/>
+                  </svg>
+                  <svg class="icon-stop hidden" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                    <rect x="7" y="7" width="10" height="10" rx="1" fill="currentColor"/>
+                  </svg>
+                </button>
+              </div>
+              <div class="composer-meta">
+                <span class="meta-item meta-hint" id="composer-hint"></span>
+              </div>
+            </div>
           </div>
         </div>
+      </div>
+
+      <!-- 技能与工具 -->
+      <div class="main-view hidden" id="view-skills" data-view="skills">
+        <header class="feature-header">
+          <h1 class="feature-title">技能与工具</h1>
+        </header>
+        <div class="feature-body skills-body">
+          <input
+            type="search"
+            id="skills-search"
+            class="skills-search"
+            placeholder="搜索命令或 Skill…"
+            autocomplete="off"
+          />
+          <section class="skills-section">
+            <h3 class="skills-section-title">
+              系统内置工具 <span class="skills-count" id="skills-tools-count"></span>
+            </h3>
+            <div class="skills-list" id="skills-tools-list"></div>
+          </section>
+          <section class="skills-section">
+            <h3 class="skills-section-title">
+              Skill <span class="skills-count" id="skills-skills-count"></span>
+            </h3>
+            <div class="skills-list" id="skills-skills-list"></div>
+          </section>
+          <p class="skills-footer-hint">点击条目可填入输入框并返回对话；在聊天中输入 / 可快速调用。Skill 目录请在设置中配置。</p>
+        </div>
+      </div>
+
+      <!-- 知识库 -->
+      <div class="main-view hidden" id="view-knowledge" data-view="knowledge">
+        <header class="feature-header">
+          <h1 class="feature-title">知识库管理</h1>
+        </header>
+        <div class="feature-body knowledge-body">
+          <pre id="knowledge-stats" class="knowledge-stats"></pre>
+          <p class="hint">支持 .txt / .md / .pdf / .docx</p>
+          <div class="modal-actions-row">
+            <button type="button" class="btn btn-secondary" id="knowledge-pick-files">选择文件</button>
+            <button type="button" class="btn btn-secondary" id="knowledge-pick-folder">选择文件夹</button>
+          </div>
+          <pre id="knowledge-log" class="knowledge-log"></pre>
+        </div>
+      </div>
+
+      <!-- 万年历 -->
+      <div class="main-view hidden" id="view-calendar" data-view="calendar">
+        <header class="feature-header">
+          <h1 class="feature-title">万年历</h1>
+        </header>
+        <div class="feature-body calendar-feature-body">
+          <div class="calendar-layout">
+            <section class="calendar-grid-section">
+              <div class="cal-toolbar">
+                <button type="button" class="cal-nav-btn" id="cal-prev-month" aria-label="上个月">◀</button>
+                <span class="cal-month-label" id="cal-month-label">—</span>
+                <button type="button" class="cal-nav-btn" id="cal-next-month" aria-label="下个月">▶</button>
+                <button type="button" class="cal-today-btn" id="cal-today-btn">今天</button>
+              </div>
+              <div class="cal-week-head" id="cal-week-head"></div>
+              <div class="cal-grid" id="cal-grid"></div>
+            </section>
+            <section class="calendar-detail-section">
+              <div class="cal-detail-header" id="cal-detail-header">—</div>
+              <div class="cal-today-tag hidden" id="cal-today-tag">今天</div>
+              <span class="cal-holiday-tag hidden" id="cal-holiday-tag"></span>
+              <div class="cal-day-nav">
+                <button type="button" class="cal-day-arrow" id="cal-prev-day" aria-label="前一天">◀</button>
+                <span class="cal-big-day" id="cal-big-day">—</span>
+                <button type="button" class="cal-day-arrow" id="cal-next-day" aria-label="后一天">▶</button>
+              </div>
+              <div class="cal-lunar-info" id="cal-lunar-info">—</div>
+              <div class="cal-ganzhi" id="cal-ganzhi">—</div>
+              <div class="cal-yiji">
+                <div class="cal-yiji-row">
+                  <span class="cal-yiji-label yi">宜</span>
+                  <span class="cal-yiji-text" id="cal-yi">—</span>
+                </div>
+                <div class="cal-yiji-row">
+                  <span class="cal-yiji-label ji">忌</span>
+                  <span class="cal-yiji-text" id="cal-ji">—</span>
+                </div>
+              </div>
+              <div class="cal-jieqi">
+                <div id="cal-prev-jieqi"></div>
+                <div id="cal-next-jieqi"></div>
+              </div>
+            </section>
+          </div>
         </div>
       </div>
 
@@ -167,41 +262,6 @@
       </footer>
     </main>
   </div>
-
-  <!-- 技能与工具 -->
-  <dialog class="modal" id="skills-modal">
-    <div class="modal-panel skills-panel">
-      <header class="modal-header">
-        <h2>技能与工具</h2>
-        <button type="button" class="btn-icon" id="skills-close" aria-label="关闭">✕</button>
-      </header>
-      <div class="modal-body skills-body">
-        <input
-          type="search"
-          id="skills-search"
-          class="skills-search"
-          placeholder="搜索命令或 Skill…"
-          autocomplete="off"
-        />
-        <section class="skills-section">
-          <h3 class="skills-section-title">
-            系统内置工具 <span class="skills-count" id="skills-tools-count"></span>
-          </h3>
-          <div class="skills-list" id="skills-tools-list"></div>
-        </section>
-        <section class="skills-section">
-          <h3 class="skills-section-title">
-            Skill <span class="skills-count" id="skills-skills-count"></span>
-          </h3>
-          <div class="skills-list" id="skills-skills-list"></div>
-        </section>
-        <p class="skills-footer-hint">点击条目可填入输入框；在聊天中输入 / 可快速调用。Skill 目录请在设置中配置。</p>
-      </div>
-      <footer class="modal-footer">
-        <button type="button" class="btn btn-muted" id="skills-done">关闭</button>
-      </footer>
-    </div>
-  </dialog>
 
   <!-- 设置 -->
   <dialog class="modal" id="settings-modal">
@@ -322,76 +382,6 @@
         <button type="submit" class="btn btn-primary" id="session-rename-save">保存</button>
       </footer>
     </form>
-  </dialog>
-
-  <!-- 万年历 -->
-  <dialog class="modal calendar-modal" id="calendar-modal">
-    <div class="modal-panel calendar-panel">
-      <header class="modal-header">
-        <h2>万年历</h2>
-        <button type="button" class="btn-icon" id="cal-close" aria-label="关闭">✕</button>
-      </header>
-      <div class="calendar-layout">
-        <section class="calendar-grid-section">
-          <div class="cal-toolbar">
-            <button type="button" class="cal-nav-btn" id="cal-prev-month" aria-label="上个月">◀</button>
-            <span class="cal-month-label" id="cal-month-label">—</span>
-            <button type="button" class="cal-nav-btn" id="cal-next-month" aria-label="下个月">▶</button>
-            <button type="button" class="cal-today-btn" id="cal-today-btn">今天</button>
-          </div>
-          <div class="cal-week-head" id="cal-week-head"></div>
-          <div class="cal-grid" id="cal-grid"></div>
-        </section>
-        <section class="calendar-detail-section">
-          <div class="cal-detail-header" id="cal-detail-header">—</div>
-          <div class="cal-today-tag hidden" id="cal-today-tag">今天</div>
-          <span class="cal-holiday-tag hidden" id="cal-holiday-tag"></span>
-          <div class="cal-day-nav">
-            <button type="button" class="cal-day-arrow" id="cal-prev-day" aria-label="前一天">◀</button>
-            <span class="cal-big-day" id="cal-big-day">—</span>
-            <button type="button" class="cal-day-arrow" id="cal-next-day" aria-label="后一天">▶</button>
-          </div>
-          <div class="cal-lunar-info" id="cal-lunar-info">—</div>
-          <div class="cal-ganzhi" id="cal-ganzhi">—</div>
-          <div class="cal-yiji">
-            <div class="cal-yiji-row">
-              <span class="cal-yiji-label yi">宜</span>
-              <span class="cal-yiji-text" id="cal-yi">—</span>
-            </div>
-            <div class="cal-yiji-row">
-              <span class="cal-yiji-label ji">忌</span>
-              <span class="cal-yiji-text" id="cal-ji">—</span>
-            </div>
-          </div>
-          <div class="cal-jieqi">
-            <div id="cal-prev-jieqi"></div>
-            <div id="cal-next-jieqi"></div>
-          </div>
-        </section>
-      </div>
-    </div>
-  </dialog>
-
-  <!-- 知识库 -->
-  <dialog class="modal" id="knowledge-modal">
-    <div class="modal-panel">
-      <header class="modal-header">
-        <h2>知识库管理</h2>
-        <button type="button" class="btn-icon" id="knowledge-close" aria-label="关闭">✕</button>
-      </header>
-      <div class="modal-body">
-        <pre id="knowledge-stats" class="knowledge-stats"></pre>
-        <p class="hint">支持 .txt / .md / .pdf / .docx</p>
-        <div class="modal-actions-row">
-          <button type="button" class="btn btn-secondary" id="knowledge-pick-files">选择文件</button>
-          <button type="button" class="btn btn-secondary" id="knowledge-pick-folder">选择文件夹</button>
-        </div>
-        <pre id="knowledge-log" class="knowledge-log"></pre>
-      </div>
-      <footer class="modal-footer">
-        <button type="button" class="btn btn-muted" id="knowledge-done">关闭</button>
-      </footer>
-    </div>
   </dialog>
 
   <script src="js/vendor/lunar.js"></script>

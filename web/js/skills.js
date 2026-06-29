@@ -67,7 +67,7 @@ window.SkillsUI = (() => {
       box.focus();
       box.dispatchEvent(new Event("input", { bubbles: true }));
     }
-    document.getElementById("skills-modal")?.close();
+    window.LayoutUI?.showView?.("chat");
   }
 
   async function refresh() {
@@ -78,20 +78,15 @@ window.SkillsUI = (() => {
   }
 
   async function open() {
-    const modal = document.getElementById("skills-modal");
-    if (!modal) return;
     const search = document.getElementById("skills-search");
     if (search) search.value = "";
     await refresh();
-    modal.showModal();
+    window.LayoutUI?.showView?.("skills");
     search?.focus();
   }
 
   function bind() {
-    const modal = document.getElementById("skills-modal");
     document.getElementById("btn-skills")?.addEventListener("click", open);
-    document.getElementById("skills-close")?.addEventListener("click", () => modal?.close());
-    document.getElementById("skills-done")?.addEventListener("click", () => modal?.close());
     document.getElementById("skills-search")?.addEventListener("input", (e) => {
       render(e.target.value);
     });
