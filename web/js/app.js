@@ -106,16 +106,57 @@ window.ChatApp = (() => {
     return running;
   }
 
+  function profileInitial(name) {
+    const trimmed = (name || "").trim();
+    if (!trimmed) return "A";
+    const parts = trimmed.split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return trimmed.slice(0, 1).toUpperCase();
+  }
+
+  function updateWorkspaceProfile(workspace) {
+    if (!workspace) return;
+    const nameEl = document.getElementById("profile-name");
+    const subEl = document.getElementById("profile-work-dir");
+    const avatarEl = document.getElementById("profile-avatar");
+    const owner = workspace.owner_name || "个人助理";
+    if (nameEl) nameEl.textContent = owner;
+    if (subEl) subEl.textContent = workspace.work_dir_label || "点击选择工作目录";
+    if (avatarEl) avatarEl.textContent = profileInitial(owner);
+    const btn = document.getElementById("btn-work-dir");
+    if (btn && workspace.work_dir) {
+      btn.title = `工作目录: ${workspace.work_dir}\n点击更换`;
+    } else if (btn) {
+      btn.title = "选择工作目录";
+    }
+  }
+
   function bindShell() {
     document.getElementById("sidebar-toggle")?.addEventListener("click", () => {
       document.getElementById("app")?.classList.toggle("sidebar-collapsed");
     });
+  }
 
-    document.getElementById("btn-home")?.addEventListener("click", () => {
-      window.LayoutUI?.showView?.("chat");
-      const scroll = document.getElementById("chat-scroll");
-      if (scroll) scroll.scrollTo({ top: 0, behavior: "smooth" });
-      document.getElementById("input-box")?.focus();
+  function bindWorkDir() {
+    document.getElementById("btn-work-dir")?.addEventListener("click", async () => {
+      if (!api()?.pick_work_dir) return;
+      try {
+        const res = await api().pick_work_dir();
+        if (res?.ok) {
+          updateWorkspaceProfile({
+            owner_name: document.getElementById("profile-name")?.textContent,
+            work_dir: res.work_dir,
+            work_dir_label: res.work_dir_label,
+          });
+          if (res.status_text) setStatus(res.status_text);
+        } else if (res?.error && !res?.cancelled) {
+          setComposerHint(res.error);
+        }
+      } catch (err) {
+        setComposerHint(`选择目录失败: ${err}`);
+      }
     });
   }
 
@@ -236,6 +277,7 @@ window.ChatApp = (() => {
       if (result && result.ok) {
         applyTheme(result.theme_variables);
         setStatus(result.status_text);
+        if (result.workspace) updateWorkspaceProfile(result.workspace);
         if (result.composer_meta) {
           window.Composer?.updateVoiceMeta?.(result.composer_meta);
         }
@@ -328,6 +370,7 @@ window.ChatApp = (() => {
 
   async function bootstrap() {
     bindShell();
+    bindWorkDir();
     bindSettings();
     bindKnowledge();
     bindConfirm();
@@ -338,6 +381,7 @@ window.ChatApp = (() => {
     lxgwFontInstalled = state.lxgw_font_installed !== false;
     document.title = state.title || document.title;
     applyTheme(state.theme_variables);
+    updateWorkspaceProfile(state.workspace);
     setStatus(state.status_text);
     setRunning(false);
     window.LayoutUI?.init(state);
@@ -361,5 +405,5 @@ window.ChatApp = (() => {
 
   window.addEventListener("pywebviewready", bootstrap);
 
-  return { handleEvent, applyTheme, setRunning, isRunning, setComposerHint, setStatus };
+  return { handleEvent, applyTheme, setRunning, isRunning, setComposerHint, setStatus, updateWorkspaceProfile };
 })();

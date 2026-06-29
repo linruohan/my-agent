@@ -17,8 +17,22 @@ def load_files_config() -> dict[str, Any]:
 
 
 def get_search_roots() -> list[Path]:
+    from src.ui.ui_prefs import get_work_dir
+
     cfg = load_files_config().get("filesystem", {})
     roots: list[Path] = []
+    seen: set[str] = set()
+
+    def add_root(p: Path) -> None:
+        key = str(p.resolve())
+        if key not in seen:
+            seen.add(key)
+            roots.append(p.resolve())
+
+    work = get_work_dir()
+    if work:
+        add_root(work)
+
     for raw in cfg.get("search_roots", ["~", "data/workspace"]):
         p = Path(raw).expanduser()
         if not p.is_absolute():
@@ -26,7 +40,7 @@ def get_search_roots() -> list[Path]:
         else:
             p = p.resolve()
         if p.exists():
-            roots.append(p)
+            add_root(p)
     if not roots:
         roots.append(Path.home())
     return roots

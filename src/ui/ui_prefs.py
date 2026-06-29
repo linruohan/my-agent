@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from src.infra.user_settings import load_user_settings, save_user_settings
 
 DEFAULT_CHAT_WIDTH_PCT = 85
@@ -30,3 +32,30 @@ def persist_chat_width_pct(pct: int | float) -> int:
     ui["chat_width_pct"] = value
     save_user_settings(settings)
     return value
+
+
+def get_work_dir() -> Path | None:
+    settings = load_user_settings()
+    ui = settings.get("ui", {}) or {}
+    raw = (ui.get("work_dir") or "").strip()
+    if not raw:
+        return None
+    p = Path(raw).expanduser().resolve()
+    return p if p.is_dir() else None
+
+
+def persist_work_dir(path: str | Path) -> Path:
+    p = Path(path).expanduser().resolve()
+    if not p.is_dir():
+        raise NotADirectoryError(f"不是有效目录: {p}")
+    settings = load_user_settings()
+    ui = settings.setdefault("ui", {})
+    ui["work_dir"] = str(p)
+    save_user_settings(settings)
+    return p
+
+
+def format_work_dir_display(path: Path | None) -> str:
+    if path is None:
+        return "点击选择工作目录"
+    return str(path)

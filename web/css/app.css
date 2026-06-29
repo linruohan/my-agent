@@ -386,6 +386,76 @@ body {
   margin-top: auto;
 }
 
+.sidebar-profile {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  transition: background 0.12s ease;
+}
+
+.sidebar-profile:hover {
+  background: color-mix(in srgb, var(--bg-muted) 70%, transparent);
+}
+
+.sidebar-profile-avatar {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary-fg, #fff);
+  background: color-mix(in srgb, var(--primary-bg) 85%, var(--fg) 15%);
+  letter-spacing: -0.02em;
+}
+
+.sidebar-profile-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sidebar-profile-name {
+  font-size: var(--font-meta);
+  font-weight: 600;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-profile-sub {
+  font-size: 11px;
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app.sidebar-collapsed .sidebar-profile-text {
+  display: none;
+}
+
+.app.sidebar-collapsed .sidebar-profile {
+  justify-content: center;
+  padding: 6px;
+}
+
 .sidebar-footer-btn {
   border: none;
   background: transparent;

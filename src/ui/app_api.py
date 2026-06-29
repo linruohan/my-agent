@@ -99,6 +99,9 @@ class AppApi:
     def save_chat_width(self, pct: int | float) -> dict[str, Any]:
         return self._ctrl.save_chat_width(pct)
 
+    def pick_work_dir(self) -> dict[str, Any]:
+        return self._ctrl.pick_work_dir()
+
     def copy_to_clipboard(self, text: str) -> bool:
         return sys_copy_to_clipboard(text)
 
