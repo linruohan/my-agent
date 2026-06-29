@@ -9,20 +9,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from src.infra.paths import DATA_DIR
+from src.database import app_db_path
+from src.database.schemas.learning_records import SCHEMA
 from src.infra.sqlite_store import ReusableSqliteStore
 from src.memory.context_files import memory_file_path, read_context_file
 from src.ui.skill.catalog import resolve_skill
-
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS learning_records (
-    fingerprint   TEXT PRIMARY KEY,
-    skill_name      TEXT,
-    memory_note     TEXT,
-    created_at      TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_learning_created ON learning_records(created_at);
-"""
 
 
 def normalize_text(text: str) -> str:
@@ -75,12 +66,12 @@ def turn_fingerprint(user_message: str, tool_calls: list[dict[str, Any]]) -> str
 
 class LearningLedger(ReusableSqliteStore):
     def __init__(self, db_path: Path | None = None) -> None:
-        super().__init__(db_path or (DATA_DIR / "learning.db"))
+        super().__init__(db_path or app_db_path())
         self._init_schema()
 
     def _init_schema(self) -> None:
         with self._connect() as conn:
-            conn.executescript(_SCHEMA)
+            conn.executescript(SCHEMA)
 
     @staticmethod
     def _now() -> str:

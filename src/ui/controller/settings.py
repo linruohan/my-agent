@@ -9,15 +9,26 @@ from typing import Any
 import webview
 from loguru import logger
 
-from src.infra.config import save_api_key
-from src.infra.user_settings import has_stored_api_key, is_voice_input_enabled, load_user_settings, persist_provider_choice, save_user_settings
+from src.infra.config import load_llm_providers_config, save_api_key
+from src.infra.user_settings import (
+    activate_provider,
+    create_user_provider,
+    delete_provider_entry,
+    has_stored_api_key,
+    is_user_provider,
+    load_user_settings,
+    persist_provider_choice,
+    provider_display_name,
+    save_provider_entry,
+    save_user_settings,
+)
+from src.llm.providers import parse_providers
 from src.memory.rag import get_knowledge_stats
 from src.memory.rag_worker import ingest_files_in_process
 from src.ui.file_dialog import create_file_dialog_safe
 from src.ui.input import append_history, list_history
 from src.ui.prefs import font_prefs, layout_prefs, theme_prefs
 from src.ui.skill import build_slash_catalog, get_skill_dirs
-from src.ui.speech import is_supported as voice_is_supported
 from src.ui.theme_loader import list_theme_catalog
 from src.llm.models import list_provider_models_safe
 
@@ -36,7 +47,6 @@ class SettingsMixin:
 
     def build_initial_state(self) -> dict[str, Any]:
         app = self.app_cfg.get("app", {})
-        voice_enabled = is_voice_input_enabled()
         settings = load_user_settings()
         owner_name = (settings.get("tasks") or {}).get("owner_name") or "林若寒"
         work_dir = layout_prefs.get_work_dir()
@@ -50,8 +60,6 @@ class SettingsMixin:
             "welcome": "欢迎使用个人助理 Agent。Enter 发送，Shift+Enter 换行。输入 / 查看命令。",
             "composer_meta": {
                 "session_short": self._thread_id[:8],
-                "voice_enabled": voice_enabled,
-                "voice_supported": voice_is_supported() if voice_enabled else False,
                 "current_provider": self._current_provider_name,
                 "current_model": self._current_provider.model,
             },
@@ -71,16 +79,31 @@ class SettingsMixin:
             "session_events": self._session_store.load_events(self._session_id),
         }
 
-    def _provider_payload(self) -> dict[str, dict[str, Any]]:
-        out: dict[str, dict[str, Any]] = {}
+    def _base_provider_names(self) -> set[str]:
+        _, base = parse_providers(load_llm_providers_config())
+        return set(base.keys())
+
+    def _provider_list_payload(self) -> list[dict[str, Any]]:
+        settings = load_user_settings()
+        base_names = self._base_provider_names()
+        rows: list[dict[str, Any]] = []
         for name, p in self._providers.items():
-            out[name] = {
-                "model": p.model,
-                "base_url": p.base_url or "",
-                "temperature": p.temperature,
-                "has_api_key": has_stored_api_key(p.api_key_env),
-            }
-        return out
+            rows.append(
+                {
+                    "id": name,
+                    "display_name": provider_display_name(name, settings),
+                    "model": p.model,
+                    "active": name == self._current_provider_name,
+                    "deletable": is_user_provider(name, settings),
+                    "type": p.type,
+                    "base_url": p.base_url or "",
+                    "temperature": p.temperature,
+                    "has_api_key": has_stored_api_key(p.api_key_env),
+                    "is_builtin": name in base_names and not is_user_provider(name, settings),
+                }
+            )
+        rows.sort(key=lambda r: (not r["active"], r["display_name"].lower()))
+        return rows
 
     def build_settings_data(self) -> dict[str, Any]:
         settings = load_user_settings()
@@ -95,12 +118,9 @@ class SettingsMixin:
             "font_catalog": font_prefs.list_catalog(),
             "font_id": self._font_id,
             "current_provider": self._current_provider_name,
-            "provider_names": list(self._providers.keys()),
-            "providers": self._provider_payload(),
+            "provider_list": self._provider_list_payload(),
             "skill_dirs": "\n".join(str(x) for x in skill_dirs),
             "task_owner_name": (settings.get("tasks") or {}).get("owner_name") or "林若寒",
-            "voice_enabled": is_voice_input_enabled(),
-            "voice_supported": voice_is_supported(),
         }
 
     def save_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -114,39 +134,15 @@ class SettingsMixin:
         self._font_id = font_prefs.get_font_id()
         vars_ = self._ui_variables()
 
-        name = payload.get("provider") or self._current_provider_name
-        if name not in self._providers:
-            return {"ok": False, "error": "无效的 Provider"}
-
-        p = self._providers[name]
-        p.model = (payload.get("model") or p.model).strip() or p.model
-        p.base_url = (payload.get("base_url") or p.base_url or "").strip()
-        p.temperature = float(payload.get("temperature", p.temperature))
-
-        api_key = (payload.get("api_key") or "").strip()
-        if api_key and p.api_key_env:
-            save_api_key(p.api_key_env, api_key)
-        elif not has_stored_api_key(p.api_key_env):
-            return {"ok": False, "error": "请填写 API Key"}
-
-        persist_provider_choice(name, p)
-        self._current_provider_name = name
-        self._current_provider = p
-
         skill_dirs_raw = (payload.get("skill_dirs") or "").strip()
         skill_dirs = [line.strip() for line in skill_dirs_raw.splitlines() if line.strip()]
         task_owner = (payload.get("task_owner_name") or "").strip() or "林若寒"
-        voice_enabled = bool(payload.get("voice_enabled"))
         settings = load_user_settings()
         ui = settings.setdefault("ui", {})
         ui["skill_dirs"] = skill_dirs
-        ui["voice_enabled"] = voice_enabled
         tasks = settings.setdefault("tasks", {})
         tasks["owner_name"] = task_owner
         save_user_settings(settings)
-        self._providers[name] = p
-        self._schedule_agent_reinit()
-        self.chat.set_status(self._status_text("设置已更新"))
 
         work_dir = layout_prefs.get_work_dir()
         return {
@@ -159,12 +155,119 @@ class SettingsMixin:
                 "work_dir_label": layout_prefs.format_work_dir_display(work_dir),
             },
             "composer_meta": {
-                "voice_enabled": voice_enabled,
-                "voice_supported": voice_is_supported() if voice_enabled else False,
                 "current_provider": self._current_provider_name,
-                "current_model": p.model,
+                "current_model": self._current_provider.model,
             },
         }
+
+    def save_provider(self, payload: dict[str, Any]) -> dict[str, Any]:
+        provider_id = (payload.get("id") or "").strip()
+        display_name = (payload.get("display_name") or "").strip()
+        model = (payload.get("model") or "").strip()
+        if not display_name:
+            return {"ok": False, "error": "请填写显示名称"}
+        if not model:
+            return {"ok": False, "error": "请填写模型"}
+
+        settings = load_user_settings()
+        is_new = not provider_id
+        if is_new:
+            provider_id, p = create_user_provider(payload)
+        else:
+            if provider_id not in self._providers:
+                return {"ok": False, "error": "提供商不存在"}
+            p = self._providers[provider_id]
+            p.model = model
+            p.base_url = (payload.get("base_url") or p.base_url or "").strip()
+            p.temperature = float(payload.get("temperature", p.temperature))
+            if is_user_provider(provider_id, settings):
+                ptype = (payload.get("type") or p.type).strip()
+                if ptype:
+                    p.type = ptype
+            save_provider_entry(
+                provider_id,
+                p,
+                display_name=display_name,
+                is_user=is_user_provider(provider_id, settings),
+            )
+
+        api_key = (payload.get("api_key") or "").strip()
+        if api_key and p.api_key_env:
+            save_api_key(p.api_key_env, api_key)
+        elif is_new and not has_stored_api_key(p.api_key_env):
+            return {"ok": False, "error": "请填写 API Key"}
+
+        self._reload_providers()
+        self._schedule_agent_reinit()
+        self.chat.set_status(self._status_text("提供商已保存"))
+        return {
+            "ok": True,
+            "provider_list": self._provider_list_payload(),
+            "composer_meta": {
+                "current_provider": self._current_provider_name,
+                "current_model": self._current_provider.model,
+            },
+            "status_text": self._status_text("提供商已保存"),
+        }
+
+    def delete_provider(self, provider_id: str) -> dict[str, Any]:
+        name = (provider_id or "").strip()
+        if not name or name not in self._providers:
+            return {"ok": False, "error": "提供商不存在"}
+
+        settings = load_user_settings()
+        is_user = is_user_provider(name, settings)
+        if not is_user and name in self._base_provider_names():
+            delete_provider_entry(name, is_user=False)
+        elif is_user:
+            delete_provider_entry(name, is_user=True)
+        else:
+            return {"ok": False, "error": "无法删除该提供商"}
+
+        self._reload_providers()
+        self._schedule_agent_reinit()
+        self.chat.set_status(self._status_text("提供商已删除"))
+        return {
+            "ok": True,
+            "provider_list": self._provider_list_payload(),
+            "composer_meta": {
+                "current_provider": self._current_provider_name,
+                "current_model": self._current_provider.model,
+            },
+            "status_text": self._status_text("提供商已删除"),
+        }
+
+    def activate_provider_api(self, provider_id: str) -> dict[str, Any]:
+        name = (provider_id or "").strip()
+        if not name or name not in self._providers:
+            return {"ok": False, "error": "提供商不存在"}
+
+        p = self._providers[name]
+        if not has_stored_api_key(p.api_key_env):
+            return {"ok": False, "error": "请先配置 API Key"}
+
+        activate_provider(name)
+        settings = load_user_settings()
+        persist_provider_choice(name, p, display_name=provider_display_name(name, settings))
+        self._reload_providers()
+        self._schedule_agent_reinit()
+        status = self._status_text("已切换提供商")
+        self.chat.set_status(status)
+        return {
+            "ok": True,
+            "provider_list": self._provider_list_payload(),
+            "composer_meta": {
+                "current_provider": self._current_provider_name,
+                "current_model": self._current_provider.model,
+            },
+            "status_text": status,
+        }
+
+    def _reload_providers(self) -> None:
+        from src.infra.config import load_merged_providers
+
+        self._current_provider_name, self._providers = load_merged_providers()
+        self._current_provider = self._providers[self._current_provider_name]
 
     def knowledge_stats_text(self) -> dict[str, str]:
         stats = get_knowledge_stats()
@@ -234,7 +337,12 @@ class SettingsMixin:
             return {"ok": False, "error": "模型不能为空"}
         p = self._current_provider
         p.model = name
-        persist_provider_choice(self._current_provider_name, p)
+        settings = load_user_settings()
+        persist_provider_choice(
+            self._current_provider_name,
+            p,
+            display_name=provider_display_name(self._current_provider_name, settings),
+        )
         self._providers[self._current_provider_name] = p
         self._current_provider = p
         self._schedule_agent_reinit()

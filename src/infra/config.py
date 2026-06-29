@@ -87,9 +87,11 @@ def ensure_data_dirs() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     for sub in ("checkpoints", "workspace", "vectorstore"):
         (DATA_DIR / sub).mkdir(parents=True, exist_ok=True)
+    from src.database import ensure_database
     from src.memory.context_files import ensure_context_files
 
     ensure_context_files()
+    ensure_database()
 
 
 def get_env_or_keyring(env_name: str, service: str = "my-agent") -> str | None:
@@ -102,12 +104,12 @@ def save_api_key(env_name: str, api_key: str, service: str = "my-agent") -> None
 
 def load_merged_providers():
     """加载默认 Provider 配置并合并用户覆盖项。"""
-    from src.infra.user_settings import load_user_settings, merge_provider_configs
+    from src.infra.user_settings import load_user_settings, merge_all_providers
     from src.llm.providers import parse_providers
 
     raw = load_llm_providers_config()
     yaml_default, base_providers = parse_providers(raw)
     user_settings = load_user_settings()
     if user_settings:
-        return merge_provider_configs(base_providers, user_settings)
+        return merge_all_providers(base_providers, user_settings)
     return yaml_default, base_providers

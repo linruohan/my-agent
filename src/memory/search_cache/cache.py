@@ -11,8 +11,9 @@ from typing import Any
 
 from loguru import logger
 
+from src.database import app_db_path
 from src.infra.config import load_search_config
-from src.infra.paths import DATA_DIR, INSTALL_ROOT
+from src.infra.paths import DATA_DIR
 from src.memory.search_cache.db import CacheRow, SearchCacheStore
 from src.memory.search_cache.stats import CacheSessionStats
 
@@ -73,7 +74,9 @@ class SearchCache:
         if db_path is not None:
             self.db_path = db_path
         else:
-            rel = cfg.get("db_path", "data/search_cache.db")
+            rel = cfg.get("db_path", "data/app.db")
+            from src.infra.paths import INSTALL_ROOT
+
             self.db_path = (INSTALL_ROOT / rel).resolve()
         self._store = SearchCacheStore(self.db_path)
         self._lock = threading.Lock()

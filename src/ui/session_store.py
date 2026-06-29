@@ -9,26 +9,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from src.infra.paths import DATA_DIR
+from src.database import app_db_path
+from src.database.schemas.sessions import SCHEMA
 from src.infra.sqlite_store import ReusableSqliteStore
-
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS sessions (
-    id         TEXT PRIMARY KEY,
-    thread_id  TEXT NOT NULL,
-    title      TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS session_messages (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
-    seq        INTEGER NOT NULL,
-    event_json TEXT NOT NULL,
-    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS idx_session_messages_sid ON session_messages(session_id, seq);
-"""
 
 
 @dataclass
@@ -42,13 +25,13 @@ class SessionInfo:
 
 class SessionStore(ReusableSqliteStore):
     def __init__(self, db_path: Path | None = None) -> None:
-        super().__init__(db_path or (DATA_DIR / "sessions.db"), foreign_keys=True)
+        super().__init__(db_path or app_db_path(), foreign_keys=True)
         self._init_schema()
         self._ensure_default()
 
     def _init_schema(self) -> None:
         with self._connect() as conn:
-            conn.executescript(_SCHEMA)
+            conn.executescript(SCHEMA)
 
     @staticmethod
     def _now() -> str:

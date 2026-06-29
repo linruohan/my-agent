@@ -539,17 +539,158 @@ body {
   overflow: hidden;
 }
 
-.settings-body {
-  max-width: 560px;
+.settings-header {
+  justify-content: space-between;
+  gap: 16px;
 }
 
-.settings-footer {
-  flex-shrink: 0;
+.settings-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.settings-body {
+  max-width: none;
+}
+
+.settings-grid {
+  display: grid;
+  gap: 12px 16px;
+}
+
+.settings-grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-grid .field {
+  margin-bottom: 0;
+}
+
+@media (max-width: 900px) {
+  .settings-grid-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .settings-grid-2,
+  .settings-grid-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.section-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.section-header-row h3 {
+  margin: 0;
+}
+
+.btn-sm {
+  padding: 5px 10px;
+  font-size: var(--font-meta);
+}
+
+.provider-table-wrap {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+}
+
+.provider-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-meta);
+}
+
+.provider-table th,
+.provider-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 35%, transparent);
+}
+
+.provider-table th {
+  font-weight: 600;
+  color: var(--fg-muted);
+  background: color-mix(in srgb, var(--bg-muted) 50%, transparent);
+  font-size: var(--font-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.provider-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.provider-table tbody tr:hover {
+  background: color-mix(in srgb, var(--bg-muted) 40%, transparent);
+}
+
+.provider-table .col-actions {
+  width: 140px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.provider-table .provider-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 24px 20px;
-  max-width: 560px;
+  gap: 6px;
+}
+
+.provider-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--font-caption);
+  font-weight: 500;
+  background: color-mix(in srgb, var(--primary-bg) 18%, transparent);
+  color: var(--primary-bg);
+}
+
+.provider-badge.inactive {
+  background: color-mix(in srgb, var(--bg-muted) 80%, transparent);
+  color: var(--fg-muted);
+}
+
+.provider-table .btn-link {
+  border: none;
+  background: none;
+  color: var(--primary-bg);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--font-meta);
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.provider-table .btn-link:hover {
+  background: color-mix(in srgb, var(--primary-bg) 10%, transparent);
+}
+
+.provider-table .btn-link.danger {
+  color: var(--danger, #e5484d);
+}
+
+.provider-table .btn-link.danger:hover {
+  background: color-mix(in srgb, var(--danger, #e5484d) 10%, transparent);
+}
+
+.provider-table .provider-model {
+  color: var(--fg-muted);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--font-caption);
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sidebar-footer-btn:hover,
@@ -980,42 +1121,6 @@ body {
   padding: 6px 0;
 }
 
-
-.pill-voice {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: none;
-  background: color-mix(in srgb, var(--bg-muted) 80%, transparent);
-  color: var(--fg-muted);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.12s ease, background 0.12s ease, color 0.12s ease;
-}
-
-.pill-voice:hover {
-  background: var(--bg-muted);
-  color: var(--fg);
-  transform: scale(1.05);
-}
-
-.pill-voice.listening {
-  animation: pulse-mic 1.2s infinite;
-  background: var(--danger);
-  color: var(--danger-fg, var(--overlay-fg));
-}
-
-.pill-voice.disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.pill-voice.hidden {
-  display: none;
-}
 
 .pill-model-wrap {
   flex-shrink: 1;
@@ -2094,6 +2199,10 @@ body {
 
 .field-checkbox span {
   color: var(--fg);
+}
+
+.field:last-child {
+  margin-bottom: 0;
 }
 
 .hint {

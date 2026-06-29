@@ -41,11 +41,13 @@ def test_metrics_export_csv(tmp_path, monkeypatch):
 
 
 def test_export_metrics_csv_helper(tmp_path, monkeypatch):
+    from src.database import close_database
     from src.infra.metrics import close_metrics_store, export_metrics_csv, get_metrics_store
 
     close_metrics_store()
+    close_database()
     monkeypatch.setenv("AGENT_METRICS", "1")
-    monkeypatch.setattr("src.infra.metrics.DATA_DIR", tmp_path)
+    monkeypatch.setattr("src.infra.paths.DATA_DIR", tmp_path)
     get_metrics_store().record_timing("search_turn", 100)
     count, path = export_metrics_csv(tmp_path / "export.csv")
     assert count == 1
@@ -54,11 +56,13 @@ def test_export_metrics_csv_helper(tmp_path, monkeypatch):
 
 
 def test_cache_export_command(tmp_path, monkeypatch):
+    from src.database import close_database
     from src.infra.metrics import close_metrics_store, get_metrics_store
 
     close_metrics_store()
+    close_database()
     monkeypatch.setenv("AGENT_METRICS", "1")
-    monkeypatch.setattr("src.infra.metrics.DATA_DIR", tmp_path)
+    monkeypatch.setattr("src.infra.paths.DATA_DIR", tmp_path)
     get_metrics_store().record_timing("agent_turn", 200)
     cache = SearchCache(db_path=tmp_path / "c.db")
     msg = handle_cache_command("export", cache)
@@ -92,12 +96,14 @@ def test_cache_session_stats(tmp_path):
 
 
 def test_metrics_command_stats(tmp_path, monkeypatch):
+    from src.database import close_database
     from src.infra.metrics import close_metrics_store, get_metrics_store
     from src.infra.metrics_admin import handle_metrics_command
 
     close_metrics_store()
+    close_database()
     monkeypatch.setenv("AGENT_METRICS", "1")
-    monkeypatch.setattr("src.infra.metrics.DATA_DIR", tmp_path)
+    monkeypatch.setattr("src.infra.paths.DATA_DIR", tmp_path)
     get_metrics_store().record_timing("agent_turn", 150)
     text = handle_metrics_command("stats")
     assert "agent_turn" in text
@@ -106,12 +112,14 @@ def test_metrics_command_stats(tmp_path, monkeypatch):
 
 
 def test_metrics_command_export(tmp_path, monkeypatch):
+    from src.database import close_database
     from src.infra.metrics import close_metrics_store, get_metrics_store
     from src.infra.metrics_admin import handle_metrics_command
 
     close_metrics_store()
+    close_database()
     monkeypatch.setenv("AGENT_METRICS", "1")
-    monkeypatch.setattr("src.infra.metrics.DATA_DIR", tmp_path)
+    monkeypatch.setattr("src.infra.paths.DATA_DIR", tmp_path)
     get_metrics_store().record_timing("tool", 42, {"name": "list_tasks"})
     msg = handle_metrics_command(f"export {tmp_path / 'm.csv'}")
     assert "已导出" in msg

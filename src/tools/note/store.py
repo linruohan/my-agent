@@ -1,4 +1,4 @@
-"""笔记 SQLite 存储（note.db）。"""
+"""笔记 SQLite 存储（app.db / notes 表）。"""
 
 from __future__ import annotations
 
@@ -8,19 +8,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from src.infra.paths import DATA_DIR
+from src.database import app_db_path
+from src.database.schemas.notes import SCHEMA
 from src.infra.sqlite_store import ReusableSqliteStore
-
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS notes (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    title      TEXT NOT NULL,
-    content    TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_notes_title ON notes(title);
-"""
 
 
 @dataclass
@@ -34,12 +24,12 @@ class NoteRow:
 
 class NoteStore(ReusableSqliteStore):
     def __init__(self, db_path: Path | None = None) -> None:
-        super().__init__(db_path or (DATA_DIR / "note.db"))
+        super().__init__(db_path or app_db_path())
         self._init_schema()
 
     def _init_schema(self) -> None:
         with self._connect() as conn:
-            conn.executescript(_SCHEMA)
+            conn.executescript(SCHEMA)
 
     @staticmethod
     def _now() -> str:

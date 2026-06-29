@@ -1,9 +1,6 @@
-/** 底部 Pill 输入区：附件、语音、斜杠补全、历史 */
+/** 底部 Pill 输入区：附件、斜杠补全、历史 */
 window.Composer = (() => {
   let attachments = [];
-  let voiceListening = false;
-  let voiceEnabled = false;
-  let voiceSupported = false;
   let attachMenuOpen = false;
   let actionRunning = false;
   let slashCatalog = [];
@@ -381,76 +378,6 @@ window.Composer = (() => {
     }
   }
 
-  function voiceLog(...args) {
-    console.debug("[voice]", ...args);
-  }
-
-  function applyVoiceUi() {
-    const voiceBtn = el("btn-voice");
-    if (!voiceBtn) return;
-    voiceBtn.classList.remove("listening", "disabled", "hidden");
-    if (!voiceEnabled) {
-      voiceBtn.classList.add("hidden");
-      voiceBtn.title = "语音输入未启用，请在设置中开启";
-      return;
-    }
-    if (!voiceSupported) {
-      voiceBtn.title = "语音输入仅 Windows 可用";
-      voiceBtn.classList.add("disabled");
-      return;
-    }
-    voiceBtn.title = "语音输入";
-  }
-
-  async function startVoice() {
-    voiceLog("click", { voiceListening, voiceEnabled, hasApi: !!api() });
-    if (!voiceEnabled) {
-      window.ChatApp?.setComposerHint("语音输入未启用，请在设置中开启");
-      return;
-    }
-    if (voiceListening) return;
-    if (!api()) {
-      window.ChatApp?.setComposerHint("语音 API 未就绪，请稍候重试");
-      return;
-    }
-    voiceListening = true;
-    el("btn-voice")?.classList.add("listening");
-    window.ChatApp?.setComposerHint("正在启动语音…");
-    try {
-      const info = await api().get_voice_info();
-      if (!info.supported) {
-        voiceListening = false;
-        el("btn-voice")?.classList.remove("listening");
-        window.ChatApp?.setComposerHint(info.error || "当前平台不支持语音输入");
-        return;
-      }
-      const started = await api().start_voice_input();
-      if (!started || started.ok === false) {
-        voiceListening = false;
-        el("btn-voice")?.classList.remove("listening");
-        window.ChatApp?.setComposerHint(started?.error || "语音启动失败");
-        return;
-      }
-      window.ChatApp?.setComposerHint("正在聆听…");
-    } catch (err) {
-      voiceListening = false;
-      el("btn-voice")?.classList.remove("listening");
-      window.ChatApp?.setComposerHint(`语音启动失败: ${err?.message || err}`);
-    }
-  }
-
-  function onVoiceResult(result) {
-    voiceListening = false;
-    el("btn-voice")?.classList.remove("listening");
-    if (!result?.ok || !result.text) return;
-    const box = el("input-box");
-    if (box) {
-      box.value = box.value.trimEnd() ? `${box.value.trimEnd()} ${result.text.trim()}` : result.text.trim();
-      onInputChange();
-      box.focus();
-    }
-  }
-
   function bind() {
     const box = el("input-box");
     const pill = el("composer-pill");
@@ -503,7 +430,6 @@ window.Composer = (() => {
     el("attach-pick-image")?.addEventListener("click", pickImage);
     el("attach-pick-file")?.addEventListener("click", pickFile);
     el("attach-add-link")?.addEventListener("click", promptLink);
-    el("btn-voice")?.addEventListener("click", startVoice);
     el("btn-action")?.addEventListener("click", toggleAction);
 
     document.addEventListener("click", () => closeAttachMenu());
@@ -525,11 +451,9 @@ window.Composer = (() => {
     }
   }
 
-  function updateVoiceMeta(meta) {
+  function updateProviderMeta(meta) {
     if (!meta) return;
-    if (typeof meta.voice_enabled === "boolean") voiceEnabled = meta.voice_enabled;
-    if (typeof meta.voice_supported === "boolean") voiceSupported = meta.voice_supported;
-    applyVoiceUi();
+    if (meta.status_text) window.ChatApp?.setStatus?.(meta.status_text);
   }
 
   function init(meta) {
@@ -537,7 +461,6 @@ window.Composer = (() => {
     if (meta?.slash_catalog) slashCatalog = meta.slash_catalog;
     else refreshSlashCatalog();
     if (meta?.input_history) inputHistory = meta.input_history;
-    updateVoiceMeta(meta);
     autoResizeInput();
   }
 
@@ -547,9 +470,8 @@ window.Composer = (() => {
     toggleAction,
     setRunning,
     clearInput,
-    onVoiceResult,
     getPayload,
     refreshSlashCatalog,
-    updateVoiceMeta,
+    updateProviderMeta,
   };
 })();

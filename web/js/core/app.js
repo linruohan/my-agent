@@ -1,8 +1,7 @@
 /** 主应用：pywebview 桥接、主题、设置 */
 window.ChatApp = (() => {
   let running = false;
-  let providers = {};
-  let providerNames = [];
+  let providerList = [];
   let appliedThemeKeys = [];
   function api() {
     return window.pywebview && window.pywebview.api;
@@ -141,36 +140,6 @@ window.ChatApp = (() => {
     });
   }
 
-  function fillProviderSelect(current) {
-    const sel = document.getElementById("provider-select");
-    sel.innerHTML = "";
-    providerNames.forEach((name) => {
-      const opt = document.createElement("option");
-      opt.value = name;
-      opt.textContent = name;
-      if (name === current) opt.selected = true;
-      sel.appendChild(opt);
-    });
-  }
-
-  function loadProviderFields(name) {
-    const p = providers[name];
-    if (!p) return;
-    document.getElementById("model-input").value = p.model || "";
-    document.getElementById("base-url-input").value = p.base_url || "";
-    document.getElementById("temp-slider").value = p.temperature ?? 0.7;
-    document.getElementById("temp-value").textContent = p.temperature ?? 0.7;
-    document.getElementById("api-key-input").value = "";
-    const status = document.getElementById("api-key-status");
-    if (p.has_api_key) {
-      status.textContent = "✓ 已配置 API Key（留空保留，输入新值覆盖）";
-      status.className = "hint ok";
-    } else {
-      status.textContent = "尚未配置 API Key";
-      status.className = "hint err";
-    }
-  }
-
   function fillFontSelect(catalog, currentId) {
     const sel = document.getElementById("font-select");
     if (!sel) return;
@@ -184,31 +153,152 @@ window.ChatApp = (() => {
     });
   }
 
+  function renderProviderTable(list) {
+    providerList = list || [];
+    const tbody = document.getElementById("provider-table-body");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+    if (!providerList.length) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = '<td colspan="4" class="hint">暂无提供商，点击「添加提供商」创建</td>';
+      tbody.appendChild(tr);
+      return;
+    }
+    providerList.forEach((item) => {
+      const tr = document.createElement("tr");
+      tr.dataset.providerId = item.id;
+      const statusHtml = item.active
+        ? '<span class="provider-badge">当前</span>'
+        : `<button type="button" class="btn-link provider-activate" data-id="${item.id}">设为当前</button>`;
+      const deleteBtn = item.deletable
+        ? `<button type="button" class="btn-link danger provider-delete" data-id="${item.id}">删除</button>`
+        : `<button type="button" class="btn-link danger provider-delete" data-id="${item.id}">移除</button>`;
+      tr.innerHTML = `
+        <td>${escapeHtml(item.display_name)}</td>
+        <td><span class="provider-model" title="${escapeHtml(item.model)}">${escapeHtml(item.model)}</span></td>
+        <td>${statusHtml}</td>
+        <td class="col-actions">
+          <div class="provider-actions">
+            <button type="button" class="btn-link provider-edit" data-id="${item.id}">编辑</button>
+            ${deleteBtn}
+          </div>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function escapeHtml(text) {
+    return String(text || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function findProvider(id) {
+    return providerList.find((p) => p.id === id);
+  }
+
+  function openProviderModal(provider) {
+    const modal = document.getElementById("provider-modal");
+    const isNew = !provider;
+    document.getElementById("provider-modal-title").textContent = isNew ? "添加提供商" : "编辑提供商";
+    document.getElementById("provider-id-input").value = provider?.id || "";
+    document.getElementById("provider-display-name").value = provider?.display_name || "";
+    document.getElementById("provider-type").value = provider?.type || "openai_compatible";
+    document.getElementById("provider-model").value = provider?.model || "";
+    document.getElementById("provider-base-url").value = provider?.base_url || "";
+    document.getElementById("provider-api-key").value = "";
+    const temp = provider?.temperature ?? 0.7;
+    document.getElementById("provider-temp-slider").value = temp;
+    document.getElementById("provider-temp-value").textContent = temp;
+    const typeSel = document.getElementById("provider-type");
+    if (typeSel) typeSel.disabled = !!(provider && provider.is_builtin);
+    const status = document.getElementById("provider-api-key-status");
+    if (provider?.has_api_key) {
+      status.textContent = "✓ 已配置 API Key（留空保留，输入新值覆盖）";
+      status.className = "hint ok";
+    } else {
+      status.textContent = isNew ? "请填写 API Key" : "尚未配置 API Key";
+      status.className = isNew ? "hint err" : "hint";
+    }
+    modal?.showModal();
+  }
+
+  async function handleProviderSave(e) {
+    e.preventDefault();
+    if (!api()?.save_provider) return;
+    const payload = {
+      id: document.getElementById("provider-id-input").value,
+      display_name: document.getElementById("provider-display-name").value,
+      type: document.getElementById("provider-type").value,
+      model: document.getElementById("provider-model").value,
+      base_url: document.getElementById("provider-base-url").value,
+      api_key: document.getElementById("provider-api-key").value,
+      temperature: parseFloat(document.getElementById("provider-temp-slider").value),
+    };
+    const result = await api().save_provider(payload);
+    if (result?.ok) {
+      renderProviderTable(result.provider_list);
+      if (result.status_text) setStatus(result.status_text);
+      if (result.composer_meta) window.Composer?.updateProviderMeta?.(result.composer_meta);
+      await window.LayoutUI?.refreshModels?.();
+      document.getElementById("provider-modal")?.close();
+    } else if (result?.error) {
+      const status = document.getElementById("provider-api-key-status");
+      status.textContent = result.error;
+      status.className = "hint err";
+    }
+  }
+
+  async function handleProviderAction(e) {
+    const editBtn = e.target.closest(".provider-edit");
+    const deleteBtn = e.target.closest(".provider-delete");
+    const activateBtn = e.target.closest(".provider-activate");
+    if (editBtn) {
+      openProviderModal(findProvider(editBtn.dataset.id));
+      return;
+    }
+    if (!api()) return;
+    if (activateBtn) {
+      const result = await api().activate_provider(activateBtn.dataset.id);
+      if (result?.ok) {
+        renderProviderTable(result.provider_list);
+        if (result.status_text) setStatus(result.status_text);
+        if (result.composer_meta) window.Composer?.updateProviderMeta?.(result.composer_meta);
+        await window.LayoutUI?.refreshModels?.();
+      } else if (result?.error) {
+        setComposerHint(result.error);
+      }
+      return;
+    }
+    if (deleteBtn) {
+      const item = findProvider(deleteBtn.dataset.id);
+      const label = item?.display_name || deleteBtn.dataset.id;
+      const ok = window.confirm(`确定删除提供商「${label}」？`);
+      if (!ok) return;
+      const result = await api().delete_provider(deleteBtn.dataset.id);
+      if (result?.ok) {
+        renderProviderTable(result.provider_list);
+        if (result.status_text) setStatus(result.status_text);
+        if (result.composer_meta) window.Composer?.updateProviderMeta?.(result.composer_meta);
+        await window.LayoutUI?.refreshModels?.();
+      } else if (result?.error) {
+        setComposerHint(result.error);
+      }
+    }
+  }
+
   async function loadSettingsForm() {
     if (!api()) return;
     const data = await api().get_settings_data();
-    providers = data.providers || {};
-    providerNames = data.provider_names || [];
     fillThemeSelect(data.theme_catalog, data.theme_id);
     fillFontSelect(data.font_catalog, data.font_id);
     document.getElementById("font-select").value = data.font_id;
     document.getElementById("appearance-select").value = data.appearance || "dark";
     document.getElementById("skill-dirs-input").value = data.skill_dirs || "";
     document.getElementById("task-owner-input").value = data.task_owner_name || "林若寒";
-    const voiceInput = document.getElementById("voice-enabled-input");
-    if (voiceInput) voiceInput.checked = !!data.voice_enabled;
-    const voiceHint = document.getElementById("voice-settings-hint");
-    if (voiceHint) {
-      if (!data.voice_supported) {
-        voiceHint.textContent = "当前平台不支持语音输入（仅 Windows）";
-        voiceHint.className = "hint err";
-      } else {
-        voiceHint.textContent = "开启后，输入框旁显示话筒按钮，点击开始识别";
-        voiceHint.className = "hint";
-      }
-    }
-    fillProviderSelect(data.current_provider);
-    loadProviderFields(data.current_provider);
+    renderProviderTable(data.provider_list || []);
   }
 
   async function openSettings() {
@@ -222,12 +312,14 @@ window.ChatApp = (() => {
       window.LayoutUI?.showView?.("chat");
     });
 
-    document.getElementById("provider-select").addEventListener("change", (e) => {
-      loadProviderFields(e.target.value);
+    document.getElementById("provider-add")?.addEventListener("click", () => openProviderModal(null));
+    document.getElementById("provider-table-body")?.addEventListener("click", handleProviderAction);
+    document.getElementById("provider-form")?.addEventListener("submit", handleProviderSave);
+    document.getElementById("provider-modal-cancel")?.addEventListener("click", () => {
+      document.getElementById("provider-modal")?.close();
     });
-
-    document.getElementById("temp-slider").addEventListener("input", (e) => {
-      document.getElementById("temp-value").textContent = e.target.value;
+    document.getElementById("provider-temp-slider")?.addEventListener("input", (e) => {
+      document.getElementById("provider-temp-value").textContent = e.target.value;
     });
 
     document.getElementById("settings-form").addEventListener("submit", async (e) => {
@@ -237,31 +329,19 @@ window.ChatApp = (() => {
         theme_id: document.getElementById("theme-select").value,
         appearance: document.getElementById("appearance-select").value,
         font_id: document.getElementById("font-select").value,
-        provider: document.getElementById("provider-select").value,
-        model: document.getElementById("model-input").value,
-        base_url: document.getElementById("base-url-input").value,
-        api_key: document.getElementById("api-key-input").value,
-        temperature: parseFloat(document.getElementById("temp-slider").value),
         skill_dirs: document.getElementById("skill-dirs-input").value,
         task_owner_name: document.getElementById("task-owner-input").value,
-        voice_enabled: document.getElementById("voice-enabled-input")?.checked || false,
       };
       const result = await api().save_settings(payload);
       if (result && result.ok) {
         applyTheme(result.theme_variables);
         setStatus(result.status_text);
         if (result.workspace) updateWorkspaceProfile(result.workspace);
-        if (result.composer_meta) {
-          window.Composer?.updateVoiceMeta?.(result.composer_meta);
-        }
         await window.Composer?.refreshSlashCatalog?.();
         await window.SkillsUI?.refresh?.();
-        await window.LayoutUI?.refreshModels?.();
         window.LayoutUI?.showView?.("chat");
       } else if (result && result.error) {
-        const status = document.getElementById("api-key-status");
-        status.textContent = result.error;
-        status.className = "hint err";
+        setComposerHint(result.error);
       }
     });
   }

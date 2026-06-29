@@ -9,19 +9,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from src.database.paths import app_db_path
+from src.database.schemas.timing_events import SCHEMA
 from src.infra.paths import DATA_DIR
 from src.infra.sqlite_store import ReusableSqliteStore
-
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS timing_events (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    label       TEXT NOT NULL,
-    elapsed_ms  INTEGER NOT NULL,
-    fields_json TEXT NOT NULL DEFAULT '{}',
-    created_at  TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_timing_label_time ON timing_events(label, created_at);
-"""
 
 _MAX_ROWS = 10_000
 
@@ -37,7 +28,7 @@ def metrics_enabled() -> bool:
 
 class MetricsStore(ReusableSqliteStore):
     def __init__(self, db_path: Path | None = None) -> None:
-        super().__init__(db_path or (DATA_DIR / "metrics.db"))
+        super().__init__(db_path or app_db_path())
         self._write_lock = threading.Lock()
         self._approx_rows = 0
         self._init_schema()
@@ -50,7 +41,7 @@ class MetricsStore(ReusableSqliteStore):
 
     def _init_schema(self) -> None:
         with self._connect() as conn:
-            conn.executescript(_SCHEMA)
+            conn.executescript(SCHEMA)
 
     def record_timing(self, label: str, elapsed_ms: int, fields: dict[str, Any] | None = None) -> None:
         now = datetime.now(timezone.utc).isoformat()
@@ -163,6 +154,8 @@ def export_metrics_csv(path: Path | None = None, *, limit: int = 5000) -> tuple[
     """导出 metrics 为 CSV。返回 (行数, 路径)。"""
     if not metrics_enabled():
         raise RuntimeError("metrics 已关闭（AGENT_METRICS=0）")
-    out = path or (DATA_DIR / "metrics_export.csv")
+    from src.infra.paths import DATA_DIR as data_root
+
+    out = path or (data_root / "metrics_export.csv")
     count = get_metrics_store().export_csv(out, limit=limit)
     return count, out

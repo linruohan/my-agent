@@ -10,29 +10,9 @@ from pathlib import Path
 
 from loguru import logger
 
+from src.database import app_db_path
+from src.database.schemas.search_cache import SCHEMA
 from src.infra.sqlite_store import ReusableSqliteStore
-
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS search_cache (
-    cache_key    TEXT PRIMARY KEY,
-    search_query TEXT NOT NULL,
-    response     TEXT NOT NULL,
-    search_ok    INTEGER NOT NULL DEFAULT 1,
-    created_at   TEXT NOT NULL,
-    expires_at   TEXT NOT NULL,
-    hit_count    INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE TABLE IF NOT EXISTS search_cache_user_queries (
-    cache_key  TEXT NOT NULL,
-    user_query TEXT NOT NULL,
-    added_at   TEXT NOT NULL,
-    PRIMARY KEY (cache_key, user_query),
-    FOREIGN KEY (cache_key) REFERENCES search_cache(cache_key) ON DELETE CASCADE
-);
-
-CREATE INDEX IF NOT EXISTS idx_search_cache_expires ON search_cache(expires_at);
-"""
 
 
 @dataclass
@@ -48,13 +28,13 @@ class CacheRow:
 
 
 class SearchCacheStore(ReusableSqliteStore):
-    def __init__(self, db_path: Path) -> None:
-        super().__init__(db_path, foreign_keys=True)
+    def __init__(self, db_path: Path | None = None) -> None:
+        super().__init__(db_path or app_db_path(), foreign_keys=True)
         self._init_schema()
 
     def _init_schema(self) -> None:
         with self._connect() as conn:
-            conn.executescript(_SCHEMA)
+            conn.executescript(SCHEMA)
 
     def count(self) -> int:
         with self._connect() as conn:

@@ -16,6 +16,15 @@ class SettingsApiMixin(ApiBase):
     def save_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self._ctrl.save_settings(payload)
 
+    def save_provider(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self._ctrl.save_provider(payload)
+
+    def delete_provider(self, provider_id: str) -> dict[str, Any]:
+        return self._ctrl.delete_provider(provider_id)
+
+    def activate_provider(self, provider_id: str) -> dict[str, Any]:
+        return self._ctrl.activate_provider_api(provider_id)
+
     def get_knowledge_stats(self) -> dict[str, str]:
         return self._ctrl.knowledge_stats_text()
 

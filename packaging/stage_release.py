@@ -31,6 +31,30 @@ SKIP_DATA_NAMES = frozenset({
     "metrics.db",
     "metrics.db-shm",
     "metrics.db-wal",
+    "sessions.db",
+    "sessions.db-shm",
+    "sessions.db-wal",
+    "task.db",
+    "task.db-shm",
+    "task.db-wal",
+    "note.db",
+    "note.db-shm",
+    "note.db-wal",
+    "search_cache.db",
+    "search_cache.db-shm",
+    "search_cache.db-wal",
+    "gateway.db",
+    "gateway.db-shm",
+    "gateway.db-wal",
+    "cron_jobs.db",
+    "cron_jobs.db-shm",
+    "cron_jobs.db-wal",
+    "conversation_index.db",
+    "conversation_index.db-shm",
+    "conversation_index.db-wal",
+    "learning.db",
+    "learning.db-shm",
+    "learning.db-wal",
     "metrics_export.csv",
     "temp",
 })
@@ -101,21 +125,10 @@ def stage_data_dir(
 
 def _init_sqlite_databases(data_dir: Path) -> None:
     sys.path.insert(0, str(ROOT))
-    from src.infra.metrics import MetricsStore
-    from src.memory.search_cache.db import SearchCacheStore
-    from src.tools.note.store import NoteStore
-    from src.tools.task.store import TaskStore
-    from src.ui.session_store import SessionStore
+    from src.database import close_database, ensure_database
 
-    stores = [
-        SessionStore(data_dir / "sessions.db"),
-        TaskStore(data_dir / "task.db"),
-        NoteStore(data_dir / "note.db"),
-        SearchCacheStore(data_dir / "search_cache.db"),
-        MetricsStore(data_dir / "metrics.db"),
-    ]
-    for store in stores:
-        store.close()
+    ensure_database(data_dir)
+    close_database()
 
 
 def stage_release(

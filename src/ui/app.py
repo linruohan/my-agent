@@ -62,6 +62,13 @@ def _shutdown_controller(controller: AssistantController) -> None:
     from src.infra.metrics import close_metrics_store
 
     close_metrics_store()
+    from src.agent.learning_dedupe import shared_ledger
+    from src.memory.conversation_index import shared_conversation_index
+    from src.database import close_database
+
+    shared_conversation_index().close()
+    shared_ledger().close()
+    close_database()
     shutdown_process_pools(wait=True)
     if controller._graph_bundle:
         controller._graph_bundle.close()

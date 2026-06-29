@@ -10,27 +10,11 @@ from typing import Any
 
 from loguru import logger
 
-from src.infra.paths import DATA_DIR
+from src.database import app_db_path
+from src.database.schemas.conversation_index import SCHEMA
 from src.infra.sqlite_store import ReusableSqliteStore
 from src.memory.conversation_search import _cosine, _embeddings, conversation_search_config
 from src.ui.session_store import SessionStore
-
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS conversation_vectors (
-    message_id     INTEGER PRIMARY KEY,
-    session_id     TEXT NOT NULL,
-    session_title  TEXT NOT NULL,
-    role           TEXT NOT NULL,
-    text           TEXT NOT NULL,
-    embedding_json TEXT NOT NULL,
-    created_at     TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_conv_vec_created ON conversation_vectors(message_id DESC);
-CREATE TABLE IF NOT EXISTS conversation_index_meta (
-    key   TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-);
-"""
 
 _index_lock = threading.Lock()
 _shared_index: ConversationIndex | None = None
@@ -38,12 +22,12 @@ _shared_index: ConversationIndex | None = None
 
 class ConversationIndex(ReusableSqliteStore):
     def __init__(self, db_path: Path | None = None) -> None:
-        super().__init__(db_path or (DATA_DIR / "conversation_index.db"))
+        super().__init__(db_path or app_db_path())
         self._init_schema()
 
     def _init_schema(self) -> None:
         with self._connect() as conn:
-            conn.executescript(_SCHEMA)
+            conn.executescript(SCHEMA)
 
     @staticmethod
     def _now() -> str:

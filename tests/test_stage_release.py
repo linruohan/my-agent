@@ -70,7 +70,7 @@ def test_stage_release_init_databases(mini_project: Path, tmp_path: Path):
     release = tmp_path / "release"
     stage_release(mini_project, release, init_databases=True)
 
-    for name in ("sessions.db", "task.db", "note.db", "search_cache.db", "metrics.db"):
+    for name in ("app.db",):
         db = release / "data" / name
         assert db.is_file()
         assert db.stat().st_size > 0

@@ -70,7 +70,6 @@ class CoreMixin:
         self._collecting_assistant = False
         self._poll_stop = threading.Event()
         self._agent_reinit_lock = threading.Lock()
-        self._voice_running = False
         self._compose_busy = False
         self._compose_cancel = threading.Event()
         self._skip_persist_events = False

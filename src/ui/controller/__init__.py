@@ -9,7 +9,7 @@ from src.ui.controller.router import RouterMixin
 from src.ui.controller.session import SessionMixin
 from src.ui.controller.settings import SettingsMixin
 from src.ui.controller.turns import TurnsMixin
-from src.ui.controller.voice import FilesMixin, VoiceMixin
+from src.ui.controller.files import FilesMixin
 
 
 class AssistantController(
@@ -20,7 +20,6 @@ class AssistantController(
     TurnsMixin,
     AgentMixin,
     GatewayMixin,
-    VoiceMixin,
     FilesMixin,
 ):
     """Agent 与 Web UI 控制器。"""

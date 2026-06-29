@@ -101,7 +101,7 @@ def test_apply_learning_skips_duplicate_skill(tmp_path, monkeypatch):
 
 def test_maybe_learn_skips_duplicate_fingerprint(tmp_path, monkeypatch):
     db = tmp_path / "learning.db"
-    monkeypatch.setattr("src.agent.learning_dedupe.shared_ledger", lambda: LearningLedger(db))
+    monkeypatch.setattr("src.agent.learning.shared_ledger", lambda: LearningLedger(db))
 
     llm = MagicMock()
     tools = [{"name": "a", "args": {}}, {"name": "b", "args": {}}, {"name": "c", "args": {}}]

@@ -1,4 +1,4 @@
-"""任务 SQLite 存储（task.db）与到期提醒。"""
+"""任务 SQLite 存储（app.db / tasks 表）与到期提醒。"""
 
 from __future__ import annotations
 
@@ -13,33 +13,12 @@ from typing import Any
 
 from loguru import logger
 
+from src.database import app_db_path
+from src.database.schemas.tasks import SCHEMA
 from src.infra.paths import DATA_DIR
 from src.infra.sqlite_store import ReusableSqliteStore
 from src.tools.task.attachments import apply_content_attachments, merge_attachments
 from src.tools.task.parse import parse_task_add_with_defaults, parse_task_edit
-
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS tasks (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    title       TEXT NOT NULL,
-    content     TEXT NOT NULL DEFAULT '',
-    due_at      TEXT,
-    repeat_rule TEXT,
-    remind_at   TEXT,
-    created_at  TEXT NOT NULL,
-    updated_at  TEXT NOT NULL,
-    tags        TEXT NOT NULL DEFAULT '[]',
-    status      TEXT NOT NULL DEFAULT 'pending',
-    owner       TEXT,
-    repeat_end  TEXT,
-    repeat_count INTEGER NOT NULL DEFAULT 0,
-    remind_spec TEXT,
-    remind_schedule TEXT,
-    attachments TEXT NOT NULL DEFAULT '[]'
-);
-CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
-CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(due_at);
-"""
 
 VALID_STATUS = {"pending", "done", "expired", "planned"}
 
@@ -99,12 +78,12 @@ class TaskRow:
 
 class TaskStore(ReusableSqliteStore):
     def __init__(self, db_path: Path | None = None) -> None:
-        super().__init__(db_path or (DATA_DIR / "task.db"))
+        super().__init__(db_path or app_db_path())
         self._init_schema()
 
     def _init_schema(self) -> None:
         with self._connect() as conn:
-            conn.executescript(_SCHEMA)
+            conn.executescript(SCHEMA)
             self._migrate_columns(conn)
 
     @staticmethod

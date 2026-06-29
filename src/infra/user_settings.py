@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -76,11 +78,59 @@ def merge_provider_configs(
     return default, merged
 
 
-def provider_to_user_dict(provider: ProviderConfig) -> dict[str, Any]:
+def merge_all_providers(
+    base_providers: dict[str, ProviderConfig],
+    user_settings: dict[str, Any],
+) -> tuple[str, dict[str, ProviderConfig]]:
+    """合并内置 Provider、用户覆盖与用户自定义 Provider。"""
+    default, merged = merge_provider_configs(base_providers, user_settings)
+
+    user_provs = user_settings.get("user_providers", {}) or {}
+    for name, data in user_provs.items():
+        merged[name] = ProviderConfig.from_dict(name, dict(data))
+
+    hidden = set(user_settings.get("hidden_providers", []) or [])
+    for name in hidden:
+        merged.pop(name, None)
+
+    if default not in merged and merged:
+        default = next(iter(merged))
+    return default, merged
+
+
+def provider_display_name(name: str, user_settings: dict[str, Any] | None = None) -> str:
+    settings = user_settings if user_settings is not None else load_user_settings()
+    for bucket in ("providers", "user_providers"):
+        ov = (settings.get(bucket) or {}).get(name, {})
+        dn = (ov.get("display_name") or "").strip()
+        if dn:
+            return dn
+    return name
+
+
+def is_user_provider(name: str, user_settings: dict[str, Any] | None = None) -> bool:
+    settings = user_settings if user_settings is not None else load_user_settings()
+    return name in (settings.get("user_providers") or {})
+
+
+def _api_key_env_for_user_provider(name: str) -> str:
+    safe = re.sub(r"[^A-Z0-9_]", "_", name.upper())
+    return f"USER_PROVIDER_{safe}"
+
+
+def _new_user_provider_id(display_name: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", display_name.strip().lower()).strip("-")
+    suffix = uuid.uuid4().hex[:6]
+    return f"user-{slug or 'provider'}-{suffix}"
+
+
+def provider_to_user_dict(provider: ProviderConfig, display_name: str | None = None) -> dict[str, Any]:
     data: dict[str, Any] = {
         "model": provider.model,
         "temperature": provider.temperature,
     }
+    if display_name:
+        data["display_name"] = display_name
     if provider.base_url:
         data["base_url"] = provider.base_url
     if provider.timeout != 60:
@@ -88,12 +138,103 @@ def provider_to_user_dict(provider: ProviderConfig) -> dict[str, Any]:
     return data
 
 
-def persist_provider_choice(name: str, provider: ProviderConfig) -> None:
+def user_provider_to_dict(provider: ProviderConfig, display_name: str) -> dict[str, Any]:
+    data: dict[str, Any] = {
+        "display_name": display_name,
+        "type": provider.type,
+        "model": provider.model,
+        "temperature": provider.temperature,
+        "api_key_env": provider.api_key_env or _api_key_env_for_user_provider(provider.name),
+        "timeout": provider.timeout,
+        "supports_tool_call": provider.supports_tool_call,
+    }
+    if provider.base_url:
+        data["base_url"] = provider.base_url
+    return data
+
+
+def save_provider_entry(
+    name: str,
+    provider: ProviderConfig,
+    *,
+    display_name: str,
+    is_user: bool,
+) -> None:
+    settings = load_user_settings()
+    dn = display_name.strip() or name
+    if is_user:
+        bucket = settings.setdefault("user_providers", {})
+        bucket[name] = user_provider_to_dict(provider, dn)
+    else:
+        bucket = settings.setdefault("providers", {})
+        entry = provider_to_user_dict(provider, dn)
+        bucket[name] = entry
+    save_user_settings(settings)
+
+
+def delete_provider_entry(name: str, *, is_user: bool) -> None:
+    settings = load_user_settings()
+    if is_user:
+        user_provs = settings.get("user_providers") or {}
+        user_provs.pop(name, None)
+        settings["user_providers"] = user_provs
+    else:
+        hidden = settings.setdefault("hidden_providers", [])
+        if name not in hidden:
+            hidden.append(name)
+    if settings.get("default_provider") == name:
+        remaining = _list_visible_provider_names(settings)
+        settings["default_provider"] = remaining[0] if remaining else settings.get("default_provider")
+    save_user_settings(settings)
+
+
+def _list_visible_provider_names(settings: dict[str, Any]) -> list[str]:
+    from src.infra.config import load_llm_providers_config
+    from src.llm.providers import parse_providers
+
+    _, base = parse_providers(load_llm_providers_config())
+    _, merged = merge_all_providers(base, settings)
+    return list(merged.keys())
+
+
+def activate_provider(name: str) -> None:
+    settings = load_user_settings()
+    settings["default_provider"] = name
+    save_user_settings(settings)
+
+
+def create_user_provider(payload: dict[str, Any]) -> tuple[str, ProviderConfig]:
+    display_name = (payload.get("display_name") or "").strip() or "自定义提供商"
+    name = _new_user_provider_id(display_name)
+    api_key_env = _api_key_env_for_user_provider(name)
+    provider = ProviderConfig.from_dict(
+        name,
+        {
+            "type": payload.get("type") or "openai_compatible",
+            "base_url": (payload.get("base_url") or "").strip() or None,
+            "model": (payload.get("model") or "").strip(),
+            "api_key_env": api_key_env,
+            "temperature": float(payload.get("temperature", 0.7)),
+            "timeout": int(payload.get("timeout", 60)),
+            "supports_tool_call": True,
+        },
+    )
+    save_provider_entry(name, provider, display_name=display_name, is_user=True)
+    return name, provider
+
+
+def persist_provider_choice(name: str, provider: ProviderConfig, display_name: str | None = None) -> None:
     """保存当前 Provider 选择与参数覆盖。"""
     settings = load_user_settings()
     settings["default_provider"] = name
-    providers = settings.setdefault("providers", {})
-    providers[name] = provider_to_user_dict(provider)
+    is_user = is_user_provider(name, settings)
+    dn = display_name or provider_display_name(name, settings)
+    if is_user:
+        providers = settings.setdefault("user_providers", {})
+        providers[name] = user_provider_to_dict(provider, dn)
+    else:
+        providers = settings.setdefault("providers", {})
+        providers[name] = provider_to_user_dict(provider, dn)
     save_user_settings(settings)
     logger.info("用户设置已保存: provider={}", name)
 
@@ -154,10 +295,3 @@ def has_stored_api_key(env_name: str | None) -> bool:
         return False
     key = get_stored_api_key(env_name)
     return bool(key and key.strip())
-
-
-def is_voice_input_enabled() -> bool:
-    """是否启用语音输入（默认关闭）。"""
-    settings = load_user_settings()
-    ui = settings.get("ui", {}) or {}
-    return bool(ui.get("voice_enabled", False))

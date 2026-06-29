@@ -9,26 +9,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from src.infra.paths import DATA_DIR
+from src.database import app_db_path
+from src.database.schemas.cron_jobs import SCHEMA
 from src.infra.sqlite_store import ReusableSqliteStore
-
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS cron_jobs (
-    id           TEXT PRIMARY KEY,
-    name         TEXT NOT NULL,
-    action_type  TEXT NOT NULL,
-    action_json  TEXT NOT NULL,
-    schedule_json TEXT NOT NULL,
-    delivery     TEXT NOT NULL DEFAULT 'toast',
-    enabled      INTEGER NOT NULL DEFAULT 1,
-    last_run_at  TEXT,
-    next_run_at  TEXT,
-    last_result  TEXT,
-    created_at   TEXT NOT NULL,
-    updated_at   TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_cron_next ON cron_jobs(enabled, next_run_at);
-"""
 
 
 @dataclass
@@ -49,12 +32,12 @@ class CronJob:
 
 class CronJobStore(ReusableSqliteStore):
     def __init__(self, db_path: Path | None = None) -> None:
-        super().__init__(db_path or (DATA_DIR / "cron_jobs.db"), foreign_keys=True)
+        super().__init__(db_path or app_db_path(), foreign_keys=True)
         self._init_schema()
 
     def _init_schema(self) -> None:
         with self._connect() as conn:
-            conn.executescript(_SCHEMA)
+            conn.executescript(SCHEMA)
 
     @staticmethod
     def _now() -> str:
