@@ -11,10 +11,13 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules
 block_cipher = None
 root = Path(SPECPATH).resolve().parent
 
+icon_path = root / "resources" / "windows" / "app-icon.ico"
+
 datas = [
     (str(root / "config"), "config"),
     (str(root / "web"), "web"),
     (str(root / "themes"), "themes"),
+    (str(root / "resources"), "resources"),
 ]
 
 binaries: list[tuple[str, str, str]] = []
@@ -111,5 +114,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,
+    icon=str(icon_path) if icon_path.is_file() else None,
 )

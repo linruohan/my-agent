@@ -3,6 +3,10 @@
   display: none !important;
 }
 
+:root {
+  --cal-accent: var(--primary-bg);
+}
+
 .sidebar-calendar {
   display: flex;
   align-items: center;
@@ -12,19 +16,19 @@
   margin-bottom: 6px;
   border: 1px solid color-mix(in srgb, var(--border-sidebar, var(--border)) 50%, transparent);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--bg-sidebar) 70%, var(--primary-bg, #007aff) 6%);
+  background: color-mix(in srgb, var(--bg-sidebar) 70%, var(--primary-bg) 6%);
   color: var(--fg-sidebar, var(--fg));
   cursor: pointer;
   text-align: left;
   font: inherit;
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
-  box-shadow: var(--mac-shadow-sm, 0 1px 2px color-mix(in srgb, #000 5%, transparent));
+  box-shadow: var(--mac-shadow-sm);
 }
 
 .sidebar-calendar:hover {
-  border-color: color-mix(in srgb, var(--primary-bg, #007aff) 35%, var(--border));
-  background: color-mix(in srgb, var(--bg-sidebar) 55%, var(--primary-bg, #007aff) 10%);
-  box-shadow: var(--mac-shadow-md, 0 4px 12px color-mix(in srgb, #000 8%, transparent));
+  border-color: color-mix(in srgb, var(--primary-bg) 35%, var(--border));
+  background: color-mix(in srgb, var(--bg-sidebar) 55%, var(--primary-bg) 10%);
+  box-shadow: var(--mac-shadow-md);
 }
 
 .sidebar-calendar:active {
@@ -65,14 +69,14 @@
 
 .sidebar-cal-sub {
   font-size: var(--font-caption);
-  color: var(--cal-accent, var(--primary-bg, #007aff));
+  color: var(--cal-accent, var(--primary-bg));
 }
 
 .sidebar-cal-day-num {
   font-size: 26px;
   font-weight: 700;
   line-height: 1;
-  color: var(--cal-accent, var(--primary-bg, #007aff));
+  color: var(--cal-accent, var(--primary-bg));
   flex-shrink: 0;
   min-width: 36px;
   text-align: center;
@@ -91,7 +95,7 @@
   padding: 0;
   overflow: hidden;
   border-radius: 14px;
-  box-shadow: var(--mac-shadow-lg, 0 12px 40px color-mix(in srgb, #000 14%, transparent));
+  box-shadow: var(--mac-shadow-lg);
 }
 
 .calendar-layout {
@@ -157,8 +161,8 @@
   padding: 5px 12px;
   border: none;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--primary-bg, #007aff) 12%, transparent);
-  color: var(--primary-bg, #007aff);
+  background: color-mix(in srgb, var(--primary-bg) 12%, transparent);
+  color: var(--primary-bg);
   font-size: var(--font-caption);
   font-weight: 600;
   cursor: pointer;
@@ -166,7 +170,7 @@
 }
 
 .cal-today-btn:hover {
-  background: color-mix(in srgb, var(--primary-bg, #007aff) 20%, transparent);
+  background: color-mix(in srgb, var(--primary-bg) 20%, transparent);
 }
 
 .cal-week-head {
@@ -179,7 +183,7 @@
 }
 
 .cal-week-head .weekend {
-  color: var(--cal-accent, var(--primary-bg, #007aff));
+  color: var(--cal-accent, var(--primary-bg));
 }
 
 .cal-grid {
@@ -214,34 +218,34 @@
 }
 
 .cal-cell.weekend .cal-num {
-  color: var(--cal-accent, var(--primary-bg, #007aff));
+  color: var(--cal-accent, var(--primary-bg));
 }
 
 .cal-cell.holiday-rest {
-  background: color-mix(in srgb, #22c55e 10%, var(--bg-popover));
+  background: color-mix(in srgb, var(--success) 10%, var(--bg-popover));
 }
 
 .cal-cell.holiday-work {
-  background: color-mix(in srgb, #f97316 8%, var(--bg-popover));
+  background: color-mix(in srgb, var(--warning) 8%, var(--bg-popover));
 }
 
 .cal-cell.today:not(.selected) .cal-num {
-  color: var(--cal-accent, var(--primary-bg, #007aff));
+  color: var(--cal-accent, var(--primary-bg));
   font-weight: 700;
 }
 
 .cal-cell.selected {
-  background: var(--cal-accent, var(--primary-bg, #007aff));
+  background: var(--cal-accent, var(--primary-bg));
 }
 
 .cal-cell.selected .cal-num,
 .cal-cell.selected .cal-sub,
 .cal-cell.selected.weekend .cal-num {
-  color: #fff;
+  color: var(--primary-fg);
 }
 
 .cal-cell.selected .cal-sub.festive {
-  color: #ffe0e0;
+  color: color-mix(in srgb, var(--primary-fg) 85%, var(--danger));
 }
 
 .cal-badge {
@@ -257,14 +261,14 @@
 
 .cal-badge.badge-rest {
   opacity: 1;
-  background: #22c55e;
-  color: #fff;
+  background: var(--success);
+  color: var(--success-fg, var(--primary-fg));
 }
 
 .cal-badge.badge-work {
   opacity: 1;
-  background: #f97316;
-  color: #fff;
+  background: var(--warning);
+  color: var(--primary-fg);
 }
 
 .cal-num {
@@ -285,7 +289,7 @@
 }
 
 .cal-sub.festive {
-  color: var(--cal-accent, var(--primary-bg, #007aff));
+  color: var(--cal-accent, var(--primary-bg));
 }
 
 /* 右侧详情 */
@@ -303,7 +307,7 @@
   display: inline-block;
   font-size: var(--font-caption);
   font-weight: 600;
-  color: var(--cal-accent, var(--primary-bg, #007aff));
+  color: var(--cal-accent, var(--primary-bg));
   margin-top: -6px;
 }
 
@@ -319,7 +323,7 @@
   font-size: 52px;
   font-weight: 700;
   line-height: 1;
-  color: var(--cal-accent, var(--primary-bg, #007aff));
+  color: var(--cal-accent, var(--primary-bg));
   min-width: 72px;
   text-align: center;
   letter-spacing: -0.04em;
@@ -330,8 +334,8 @@
   height: 34px;
   border: none;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--primary-bg, #007aff) 10%, transparent);
-  color: var(--cal-accent, var(--primary-bg, #007aff));
+  background: color-mix(in srgb, var(--primary-bg) 10%, transparent);
+  color: var(--cal-accent, var(--primary-bg));
   cursor: pointer;
   font-size: 16px;
   display: inline-flex;
@@ -341,7 +345,7 @@
 }
 
 .cal-day-arrow:hover {
-  background: color-mix(in srgb, var(--primary-bg, #007aff) 18%, transparent);
+  background: color-mix(in srgb, var(--primary-bg) 18%, transparent);
 }
 
 .cal-day-arrow:active {
@@ -388,15 +392,15 @@
   justify-content: center;
   font-size: 12px;
   font-weight: 700;
-  color: #fff;
+  color: var(--primary-fg);
 }
 
 .cal-yiji-label.yi {
-  background: #22c55e;
+  background: var(--success);
 }
 
 .cal-yiji-label.ji {
-  background: var(--cal-accent, var(--primary-bg, #007aff));
+  background: var(--cal-accent, var(--primary-bg));
 }
 
 .cal-yiji-text {
@@ -418,15 +422,15 @@
   border-radius: 4px;
   font-size: var(--font-meta);
   font-weight: 700;
-  color: #fff;
+  color: var(--primary-fg);
 }
 
 .cal-holiday-tag.tag-rest {
-  background: #22c55e;
+  background: var(--success);
 }
 
 .cal-holiday-tag.tag-work {
-  background: #f97316;
+  background: var(--warning);
 }
 
 .calendar-panel .modal-header {

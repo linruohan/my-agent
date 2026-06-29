@@ -20,6 +20,8 @@ from src.ui.input import append_history, list_history
 from src.ui.skill import build_slash_catalog, get_skill_dirs
 from src.ui.speech import is_supported as voice_is_supported
 from src.ui.theme_loader import list_theme_catalog, persist_theme_prefs
+from src.ui.ui_prefs import get_chat_width_pct, persist_chat_width_pct
+from src.llm.models import list_provider_models_safe
 
 
 class SettingsMixin:
@@ -50,7 +52,10 @@ class SettingsMixin:
                 "session_short": self._thread_id[:8],
                 "voice_enabled": voice_enabled,
                 "voice_supported": voice_is_supported() if voice_enabled else False,
+                "current_provider": self._current_provider_name,
+                "current_model": self._current_provider.model,
             },
+            "chat_width_pct": get_chat_width_pct(),
             "sessions": [
                 {"id": s.id, "title": s.title, "active": s.id == self._session_id}
                 for s in self._session_store.list_sessions()
@@ -149,6 +154,8 @@ class SettingsMixin:
             "composer_meta": {
                 "voice_enabled": voice_enabled,
                 "voice_supported": voice_is_supported() if voice_enabled else False,
+                "current_provider": self._current_provider_name,
+                "current_model": p.model,
             },
         }
 
@@ -202,3 +209,36 @@ class SettingsMixin:
 
         threading.Thread(target=_worker, daemon=True, name="knowledge-import").start()
         return {"log": "已在后台开始导入，完成后会在会话中提示。", **self.knowledge_stats_text()}
+
+    def list_provider_models_api(self) -> dict[str, Any]:
+        p = self._current_provider
+        models, error = list_provider_models_safe(p)
+        return {
+            "ok": error is None,
+            "models": models,
+            "current_model": p.model,
+            "provider": self._current_provider_name,
+            "error": error,
+        }
+
+    def set_model(self, model: str) -> dict[str, Any]:
+        name = (model or "").strip()
+        if not name:
+            return {"ok": False, "error": "模型不能为空"}
+        p = self._current_provider
+        p.model = name
+        persist_provider_choice(self._current_provider_name, p)
+        self._providers[self._current_provider_name] = p
+        self._current_provider = p
+        self._schedule_agent_reinit()
+        status = self._status_text("模型已更新")
+        self.chat.set_status(status)
+        return {
+            "ok": True,
+            "model": name,
+            "status_text": status,
+        }
+
+    def save_chat_width(self, pct: int | float) -> dict[str, Any]:
+        value = persist_chat_width_pct(pct)
+        return {"ok": True, "chat_width_pct": value}

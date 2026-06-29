@@ -7,7 +7,7 @@ import threading
 
 from loguru import logger
 
-from src.infra.paths import WEB_DIR
+from src.infra.paths import WEB_DIR, app_icon_path
 from src.infra.process_executor import shutdown_process_pools
 from src.ui.app_api import AppApi
 from src.ui.controller import AssistantController
@@ -87,7 +87,11 @@ def run_app() -> None:
     )
     controller.attach_window(window)
     logger.info("WebView 窗口启动中…")
+    icon = app_icon_path()
+    start_kwargs: dict[str, object] = {"debug": webview_debug}
+    if icon is not None:
+        start_kwargs["icon"] = str(icon)
     try:
-        webview.start(debug=webview_debug)
+        webview.start(**start_kwargs)
     finally:
         _shutdown_controller(controller)

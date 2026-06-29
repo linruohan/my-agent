@@ -53,12 +53,37 @@ window.ChatApp = (() => {
     window.ChatUI?.refreshWeatherIframes?.();
   }
 
-  function setStatus(text) {
-    const el = document.getElementById("status-bar");
-    if (el) {
-      el.textContent = text || "";
-      el.classList.toggle("hidden", !text);
+  function parseStatusText(text) {
+    const raw = text || "";
+    let model = "—";
+    let session = "—";
+    const modelMatch = raw.match(/模型:\s*([^|]+)/);
+    if (modelMatch) {
+      const parts = modelMatch[1].trim().split(/\s*\/\s*/);
+      model = parts.length > 1 ? parts[parts.length - 1].trim() : modelMatch[1].trim();
     }
+    const sessionMatch = raw.match(/会话:\s*(.+)/);
+    if (sessionMatch) session = sessionMatch[1].trim();
+    return { model, session, raw };
+  }
+
+  function updateStatusDisplay(text) {
+    const { model, session, raw } = parseStatusText(text);
+    const modelEl = document.getElementById("status-model");
+    const sessionEl = document.getElementById("status-session");
+    const modelSelect = document.getElementById("model-select");
+    if (modelEl) modelEl.textContent = model;
+    if (sessionEl) sessionEl.textContent = session;
+    if (modelSelect && model && model !== "—") {
+      const hasOption = Array.from(modelSelect.options).some((o) => o.value === model);
+      if (hasOption) modelSelect.value = model;
+    }
+    const bar = document.getElementById("status-bar");
+    if (bar) bar.classList.toggle("hidden", !raw);
+  }
+
+  function setStatus(text) {
+    updateStatusDisplay(text);
   }
 
   function setComposerHint(text) {
@@ -81,8 +106,16 @@ window.ChatApp = (() => {
     return running;
   }
 
-  function bindComposer() {
-    /* 会话按钮由 SessionUI 绑定 */
+  function bindShell() {
+    document.getElementById("sidebar-toggle")?.addEventListener("click", () => {
+      document.getElementById("app")?.classList.toggle("sidebar-collapsed");
+    });
+
+    document.getElementById("btn-home")?.addEventListener("click", () => {
+      const scroll = document.getElementById("chat-scroll");
+      if (scroll) scroll.scrollTo({ top: 0, behavior: "smooth" });
+      document.getElementById("input-box")?.focus();
+    });
   }
 
   function fillThemeSelect(catalog, currentId) {
@@ -206,6 +239,8 @@ window.ChatApp = (() => {
           window.Composer?.updateVoiceMeta?.(result.composer_meta);
         }
         await window.Composer?.refreshSlashCatalog?.();
+        await window.SkillsUI?.refresh?.();
+        await window.LayoutUI?.refreshModels?.();
         modal.close();
       } else if (result && result.error) {
         const status = document.getElementById("api-key-status");
@@ -294,7 +329,7 @@ window.ChatApp = (() => {
   }
 
   async function bootstrap() {
-    bindComposer();
+    bindShell();
     bindSettings();
     bindKnowledge();
     bindConfirm();
@@ -307,7 +342,9 @@ window.ChatApp = (() => {
     applyTheme(state.theme_variables);
     setStatus(state.status_text);
     setRunning(false);
+    window.LayoutUI?.init(state);
     window.SessionUI?.init(state);
+    window.SkillsUI?.init(state);
     window.Composer?.init({
       ...state.composer_meta,
       slash_catalog: state.slash_catalog,

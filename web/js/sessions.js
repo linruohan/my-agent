@@ -1,6 +1,8 @@
 /** 左侧会话列表管理 */
 window.SessionUI = (() => {
   let activeId = "";
+  let allSessions = [];
+  let searchQuery = "";
   let renameResolve = null;
   let renameSessionId = null;
 
@@ -10,6 +12,13 @@ window.SessionUI = (() => {
 
   function el(id) {
     return document.getElementById(id);
+  }
+
+  function updateChatTitle(sessions) {
+    const titleEl = el("chat-title");
+    if (!titleEl) return;
+    const active = (sessions || allSessions).find((s) => s.active);
+    titleEl.textContent = active?.title || "个人助理 Agent";
   }
 
   function finishRename(value) {
@@ -57,7 +66,8 @@ window.SessionUI = (() => {
       if (!api() || !renameSessionId) return;
       const res = await api().rename_session(renameSessionId, title);
       if (res?.ok) {
-        renderSessions(res.sessions);
+        allSessions = res.sessions || [];
+        renderSessions(allSessions);
         finishRename(title);
       }
     });
@@ -71,11 +81,31 @@ window.SessionUI = (() => {
     });
   }
 
+  function filteredSessions() {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return allSessions;
+    return allSessions.filter((s) => (s.title || "").toLowerCase().includes(q));
+  }
+
   function renderSessions(sessions) {
+    allSessions = sessions || allSessions;
+    activeId = allSessions.find((s) => s.active)?.id || activeId;
+    updateChatTitle(allSessions);
+
     const list = el("session-list");
     if (!list) return;
     list.innerHTML = "";
-    (sessions || []).forEach((s) => {
+
+    const visible = filteredSessions();
+    if (!visible.length && searchQuery.trim()) {
+      const empty = document.createElement("div");
+      empty.className = "session-empty";
+      empty.textContent = "无匹配会话";
+      list.appendChild(empty);
+      return;
+    }
+
+    visible.forEach((s) => {
       const item = document.createElement("div");
       item.className = "session-item" + (s.active ? " active" : "");
       item.dataset.id = s.id;
@@ -110,7 +140,8 @@ window.SessionUI = (() => {
         if (!api()) return;
         const res = await api().delete_session(s.id);
         if (res?.ok) {
-          renderSessions(res.sessions);
+          allSessions = res.sessions || [];
+          renderSessions(allSessions);
           if (res.events) {
             window.ChatUI.loadHistory(res.events);
           }
@@ -128,7 +159,8 @@ window.SessionUI = (() => {
         const res = await api().switch_session(s.id);
         if (res?.ok) {
           activeId = res.active_id || s.id;
-          renderSessions(res.sessions);
+          allSessions = res.sessions || [];
+          renderSessions(allSessions);
         } else if (res?.error) {
           window.ChatApp?.setComposerHint(res.error);
         }
@@ -138,22 +170,49 @@ window.SessionUI = (() => {
     });
   }
 
+  function bindSearch() {
+    el("session-search")?.addEventListener("input", (e) => {
+      searchQuery = e.target.value || "";
+      renderSessions(allSessions);
+    });
+  }
+
+  function bindTitleRename() {
+    el("chat-title-btn")?.addEventListener("click", async () => {
+      const active = allSessions.find((s) => s.active);
+      if (!active) return;
+      await openRenameDialog(active.id, active.title);
+    });
+  }
+
   function init(state) {
     bindRenameDialog();
+    bindSearch();
+    bindTitleRename();
     activeId = (state.sessions || []).find((s) => s.active)?.id || "";
-    renderSessions(state.sessions || []);
+    allSessions = state.sessions || [];
+    renderSessions(allSessions);
+
     el("btn-new-session")?.addEventListener("click", async () => {
       if (!api()) return;
       const res = await api().new_session();
       if (res?.ok) {
         activeId = res.active_id || "";
-        renderSessions(res.sessions);
+        allSessions = res.sessions || [];
+        renderSessions(allSessions);
         window.ChatUI.clear();
         if (res.events) {
           window.ChatUI.loadHistory(res.events);
         }
-        const newSession = (res.sessions || []).find((s) => s.id === activeId);
+        const newSession = allSessions.find((s) => s.id === activeId);
         await openRenameDialog(activeId, newSession?.title || "新会话");
+      }
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "n") {
+        e.preventDefault();
+        el("btn-new-session")?.click();
       }
     });
   }

@@ -90,6 +90,15 @@ class AppApi:
     def import_knowledge(self, kind: str) -> dict[str, Any]:
         return self._ctrl.import_knowledge(kind)
 
+    def list_provider_models(self) -> dict[str, Any]:
+        return self._ctrl.list_provider_models_api()
+
+    def set_model(self, model: str) -> dict[str, Any]:
+        return self._ctrl.set_model(model)
+
+    def save_chat_width(self, pct: int | float) -> dict[str, Any]:
+        return self._ctrl.save_chat_width(pct)
+
     def copy_to_clipboard(self, text: str) -> bool:
         return sys_copy_to_clipboard(text)
 

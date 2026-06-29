@@ -40,6 +40,15 @@ def resolve_config_dir() -> Path:
     return resolve_resource_dir("config")
 
 
+def app_icon_path() -> Path | None:
+    """应用图标（exe / 窗口 / favicon 同源）。"""
+    for base in (bundle_root(), install_root()):
+        icon = base / "resources" / "windows" / "app-icon.ico"
+        if icon.is_file():
+            return icon
+    return None
+
+
 def _refresh_module_paths() -> None:
     global BUNDLE_ROOT, INSTALL_ROOT, PROJECT_ROOT, DATA_DIR, CONFIG_DIR, WEB_DIR, THEMES_DIR
     BUNDLE_ROOT = bundle_root()

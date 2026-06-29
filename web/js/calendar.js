@@ -62,15 +62,18 @@ window.CalendarUI = (() => {
   function renderSidebar() {
     const el = document.getElementById("sidebar-calendar");
     if (!el) return;
+    const dateEl = el.querySelector(".sidebar-cal-date");
+    const dayNumEl = el.querySelector(".sidebar-cal-day-num");
+    const lunarEl = el.querySelector(".sidebar-cal-lunar");
+    const subEl = el.querySelector(".sidebar-cal-sub");
+    if (!dateEl || !dayNumEl || !lunarEl) return;
     syncToday();
     const lunar = getLunar(today.y, today.m, today.d);
     const weekName = WEEK_NAMES[new Date(today.y, today.m - 1, today.d).getDay()];
-    el.querySelector(".sidebar-cal-date").textContent = `${today.y}年${today.m}月${today.d}日 ${weekName}`;
-    el.querySelector(".sidebar-cal-day-num").textContent = today.d;
-    el.querySelector(".sidebar-cal-lunar").textContent =
-      `农历${lunar.getMonthInChinese()}月${lunar.getDayInChinese()}`;
+    dateEl.textContent = `${today.y}年${today.m}月${today.d}日 ${weekName}`;
+    dayNumEl.textContent = today.d;
+    lunarEl.textContent = `农历${lunar.getMonthInChinese()}月${lunar.getDayInChinese()}`;
     const sub = getDayLabel(today.y, today.m, today.d);
-    const subEl = el.querySelector(".sidebar-cal-sub");
     if (subEl) subEl.textContent = sub !== lunar.getDayInChinese() ? sub : "";
   }
 

@@ -366,10 +366,6 @@ window.ChatUI = (() => {
     const row = document.createElement("div");
     row.className = `msg-row ${role}`;
 
-    const avatar = document.createElement("div");
-    avatar.className = "avatar";
-    avatar.textContent = role === "user" ? "👤" : "🤖";
-
     const col = document.createElement("div");
     col.className = "msg-col";
 
@@ -382,14 +378,7 @@ window.ChatUI = (() => {
 
     col.appendChild(meta);
     col.appendChild(bubble);
-
-    if (role === "user") {
-      row.appendChild(col);
-      row.appendChild(avatar);
-    } else {
-      row.appendChild(avatar);
-      row.appendChild(col);
-    }
+    row.appendChild(col);
 
     scrollEl().appendChild(row);
     hideWelcome();
