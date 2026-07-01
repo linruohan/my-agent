@@ -93,7 +93,10 @@ def merge_all_providers(
     for name in hidden:
         merged.pop(name, None)
 
-    if default not in merged and merged:
+    user_default = user_settings.get("default_provider")
+    if user_default and user_default in merged:
+        default = user_default
+    elif default not in merged and merged:
         default = next(iter(merged))
     return default, merged
 
@@ -295,3 +298,12 @@ def has_stored_api_key(env_name: str | None) -> bool:
         return False
     key = get_stored_api_key(env_name)
     return bool(key and key.strip())
+
+
+def provider_is_ready(provider: ProviderConfig) -> bool:
+    """Provider 是否已具备运行条件（Ollama 等本地服务无需 API Key）。"""
+    if provider.type == "ollama":
+        return True
+    if not provider.api_key_env:
+        return False
+    return has_stored_api_key(provider.api_key_env)

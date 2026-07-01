@@ -16,6 +16,7 @@ from src.infra.user_settings import (
     delete_provider_entry,
     has_stored_api_key,
     is_user_provider,
+    provider_is_ready,
     load_user_settings,
     persist_provider_choice,
     provider_display_name,
@@ -98,7 +99,7 @@ class SettingsMixin:
                     "type": p.type,
                     "base_url": p.base_url or "",
                     "temperature": p.temperature,
-                    "has_api_key": has_stored_api_key(p.api_key_env),
+                    "has_api_key": provider_is_ready(p),
                     "is_builtin": name in base_names and not is_user_provider(name, settings),
                 }
             )
@@ -243,7 +244,7 @@ class SettingsMixin:
             return {"ok": False, "error": "提供商不存在"}
 
         p = self._providers[name]
-        if not has_stored_api_key(p.api_key_env):
+        if not provider_is_ready(p):
             return {"ok": False, "error": "请先配置 API Key"}
 
         activate_provider(name)

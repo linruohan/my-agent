@@ -59,6 +59,14 @@ window.ChatApp = (() => {
     if (el) el.textContent = text || "";
   }
 
+  function setProviderSettingsHint(text) {
+    const el = document.getElementById("provider-settings-hint");
+    if (!el) return;
+    const msg = text || "";
+    el.textContent = msg;
+    el.classList.toggle("hidden", !msg);
+  }
+
   function setRunning(isRunning) {
     running = isRunning;
     const actionBtn = document.getElementById("btn-action");
@@ -261,6 +269,7 @@ window.ChatApp = (() => {
     }
     if (!api()) return;
     if (activateBtn) {
+      setProviderSettingsHint("");
       const result = await api().activate_provider(activateBtn.dataset.id);
       if (result?.ok) {
         renderProviderTable(result.provider_list);
@@ -268,7 +277,7 @@ window.ChatApp = (() => {
         if (result.composer_meta) window.Composer?.updateProviderMeta?.(result.composer_meta);
         await window.LayoutUI?.refreshModels?.();
       } else if (result?.error) {
-        setComposerHint(result.error);
+        setProviderSettingsHint(result.error);
       }
       return;
     }
@@ -288,7 +297,7 @@ window.ChatApp = (() => {
         if (result.composer_meta) window.Composer?.updateProviderMeta?.(result.composer_meta);
         await window.LayoutUI?.refreshModels?.();
       } else if (result?.error) {
-        setComposerHint(result.error);
+        setProviderSettingsHint(result.error);
       }
     }
   }
@@ -306,6 +315,7 @@ window.ChatApp = (() => {
   }
 
   async function openSettings() {
+    setProviderSettingsHint("");
     await loadSettingsForm();
     window.LayoutUI?.showView?.("settings");
   }
