@@ -12,6 +12,7 @@ from src.ui.input import (
     INTENT_OCR,
     INTENT_SEARCH,
     INTENT_SLASH_CACHE,
+    INTENT_SLASH_FILE,
     INTENT_SLASH_METRICS,
     INTENT_SLASH_NOTE,
     INTENT_SLASH_OCR,
@@ -19,12 +20,12 @@ from src.ui.input import (
     INTENT_SLASH_TASK,
     INTENT_SLASH_WEATHER,
     INTENT_WEATHER,
+    append_history,
+    build_image_previews,
     compose_user_message,
     has_sendable_content,
     resolve_input_intent,
 )
-from src.ui.input import append_history
-from src.ui.input import build_image_previews
 from src.ui.message_utils import normalize_user_message
 from src.ui.ocr import ocr_progress_text
 
@@ -32,7 +33,12 @@ from src.ui.ocr import ocr_progress_text
 class RouterMixin:
     """消息发送入口与意图分发。"""
 
-    def send_message(self, payload: dict[str, Any], *, gateway_label: str | None = None) -> bool:
+    def send_message(
+        self,
+        payload: dict[str, Any],
+        *,
+        gateway_label: str | None = None,
+    ) -> bool:
         if self._is_busy():
             return False
 
@@ -89,7 +95,11 @@ class RouterMixin:
                 return hit
         return None
 
-    def _process_send_message(self, text: str, attachments: list[dict[str, Any]]) -> None:
+    def _process_send_message(
+        self,
+        text: str,
+        attachments: list[dict[str, Any]],
+    ) -> None:
         try:
             if self._compose_cancel.is_set():
                 return
@@ -113,6 +123,10 @@ class RouterMixin:
                 self._handle_slash_task(intent)
                 return
 
+            if intent.kind == INTENT_SLASH_FILE:
+                self._handle_slash_file(intent)
+                return
+
             if intent.kind == INTENT_SLASH_SKILL:
                 self._handle_slash_skill(intent, text)
                 return
@@ -133,7 +147,9 @@ class RouterMixin:
             if intent.kind == INTENT_SEARCH:
                 search_query = (intent.search_query or "").strip()
                 if not search_query:
-                    self.chat.append_error("请在 /search 后输入搜索关键词，例如：/search 今日头条")
+                    self.chat.append_error(
+                        "请在 /search 后输入搜索关键词，例如：/search 今日头条",
+                    )
                     return
                 self._start_search_turn(search_query)
                 return
@@ -161,7 +177,9 @@ class RouterMixin:
 
             if not composed.get("ok"):
                 if ocr_progress:
-                    self.chat.append_assistant_complete(f"识别失败：{composed.get('error', '消息处理失败')}")
+                    self.chat.append_assistant_complete(
+                        f"识别失败：{composed.get('error', '消息处理失败')}",
+                    )
                 else:
                     self.chat.append_error(composed.get("error", "消息处理失败"))
                 return
@@ -175,7 +193,9 @@ class RouterMixin:
             message = composed["message"]
             if not self.runner.graph:
                 if ocr_progress:
-                    self.chat.append_assistant_complete("Agent 未就绪，请检查 LLM 配置与 API Key。")
+                    self.chat.append_assistant_complete(
+                        "Agent 未就绪，请检查 LLM 配置与 API Key。",
+                    )
                 else:
                     self.chat.append_error("Agent 未就绪，请检查 LLM 配置与 API Key。")
                 return

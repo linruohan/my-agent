@@ -55,7 +55,7 @@ def list_provider_models(provider: ProviderConfig, *, timeout: float = 15.0) -> 
         api_key = resolve_api_key(provider)
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
-        with httpx.Client(timeout=timeout) as client:
+        with httpx.Client(timeout=timeout, verify=False) as client:
             resp = client.get(url, headers=headers)
             resp.raise_for_status()
             models = _parse_openai_models(resp.json())

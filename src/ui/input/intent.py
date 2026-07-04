@@ -11,7 +11,11 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from loguru import logger
 
-from src.tools.weather import WeatherRange, detect_weather_range, parse_weather_slash_args
+from src.tools.weather import (
+    WeatherRange,
+    detect_weather_range,
+    parse_weather_slash_args,
+)
 from src.ui.input.compose import extract_inline_urls
 from src.ui.message_utils import normalize_user_message
 from src.ui.skill.catalog import build_slash_catalog
@@ -28,8 +32,9 @@ INTENT_SLASH_CACHE = "slash_cache"
 INTENT_SLASH_METRICS = "slash_metrics"
 INTENT_SLASH_TASK = "slash_task"
 INTENT_SLASH_SKILL = "slash_skill"
+INTENT_SLASH_FILE = "slash_file"
 
-_SYSTEM_SLASH = {"note", "ocr", "search", "weather", "cache", "metrics", "tsk"}
+_SYSTEM_SLASH = {"note", "ocr", "search", "weather", "cache", "metrics", "tsk", "file"}
 _SLASH_GENERIC_RE = re.compile(r"^/([\w-]+)\b\s*(.*)$", re.IGNORECASE | re.DOTALL)
 _OCR_HINT_RE = re.compile(
     r"识别|提取文字|查看文本|识图|文字识别|图片识别|ocr",
@@ -58,7 +63,9 @@ class InputIntent:
 
 
 def _skill_names() -> set[str]:
-    return {s["name"].lower() for s in build_slash_catalog() if s.get("kind") == "skill"}
+    return {
+        s["name"].lower() for s in build_slash_catalog() if s.get("kind") == "skill"
+    }
 
 
 def extract_link_instruction(text: str, urls: list[str]) -> str:
@@ -142,6 +149,14 @@ def parse_slash_command(text: str) -> InputIntent | None:
             reason="slash:/tsk",
         )
 
+    if cmd == "file":
+        return InputIntent(
+            kind=INTENT_SLASH_FILE,
+            slash_cmd="file",
+            slash_args=args,
+            reason="slash:/file",
+        )
+
     if cmd in _skill_names():
         return InputIntent(
             kind=INTENT_SLASH_SKILL,
@@ -154,7 +169,10 @@ def parse_slash_command(text: str) -> InputIntent | None:
     return None
 
 
-def classify_intent_rules(text: str, attachments: list[dict[str, Any]] | None) -> InputIntent | None:
+def classify_intent_rules(
+    text: str,
+    attachments: list[dict[str, Any]] | None,
+) -> InputIntent | None:
     slash = parse_slash_command(text)
     if slash:
         return slash
@@ -263,7 +281,7 @@ def classify_intent_llm(
             [
                 SystemMessage(content="你是输入意图分类器，只输出 JSON。"),
                 HumanMessage(content=_llm_intent_prompt(body, attachments)),
-            ]
+            ],
         )
         content = msg.content if isinstance(msg.content, str) else str(msg.content)
         data = _parse_llm_json(content)

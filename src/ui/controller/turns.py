@@ -10,6 +10,7 @@ from loguru import logger
 from src.infra.metrics_admin import handle_metrics_command
 from src.infra.timing import log_timing
 from src.memory.search_cache import handle_cache_command
+from src.tools.file.search import find_files_impl, grep_files_impl
 from src.tools.note import handle_note_command
 from src.tools.task import handle_task_command
 from src.tools.tool_worker import invoke_tool_in_process
@@ -30,7 +31,9 @@ class TurnsMixin:
     def _handle_slash_note(self, intent: InputIntent) -> None:
         args = (intent.slash_args or intent.note_content or "").strip()
         if not args:
-            self.chat.append_error("用法：/note add <标题> <内容> | list | <关键字> | rm <id>")
+            self.chat.append_error(
+                "用法：/note add <标题> <内容> | list | <关键字> | rm <id>",
+            )
             self.chat.set_status(self._status_text("就绪"))
             return
         try:
@@ -75,23 +78,92 @@ class TurnsMixin:
             logger.exception("任务命令失败")
             self.chat.append_error(f"任务命令失败: {exc}")
 
+    def _handle_slash_file(self, intent: InputIntent) -> None:
+        """处理 /file 命令：按关键字搜索文件名和文件内容。"""
+        args = (intent.slash_args or "").strip()
+        if not args:
+            self.chat.append_assistant_complete(
+                "📁 **/file 文件搜索命令**\n\n"
+                "用法：\n"
+                "- `/file <关键字>` - 同时搜索文件名和文件内容\n"
+                "- `/file name <文件名>` - 只搜索文件名\n"
+                "- `/file grep <内容>` - 只搜索文件内容\n\n"
+                "示例：\n"
+                "- `/file main.py` - 搜索名为 main.py 的文件\n"
+                "- `/file grep my_function` - 搜索包含 my_function 的文件",
+                content_format="markdown",
+            )
+            self.chat.set_status(self._status_text("就绪"))
+            return
+
+        self.chat.begin_assistant_progress("正在搜索文件…")
+        self.chat.set_tool_status("🔍 正在全局搜索文件…", accent="info")
+
+        def worker() -> None:
+            try:
+                parts = args.split(maxsplit=1)
+                mode = parts[0].lower() if len(parts) > 1 else "both"
+                pattern = parts[1] if len(parts) > 1 else args
+
+                results = []
+
+                if mode in ("both", "name"):
+                    self.chat.set_tool_status(
+                        f"🔍 搜索文件名包含「{pattern}」…",
+                        accent="info",
+                    )
+                    name_result = find_files_impl(pattern, max_results=20)
+                    results.append(name_result)
+
+                if mode in ("both", "grep"):
+                    self.chat.set_tool_status(
+                        f"🔍 搜索文件内容包含「{pattern}」…",
+                        accent="info",
+                    )
+                    grep_result = grep_files_impl(pattern, max_results=20)
+                    results.append(grep_result)
+
+                combined = "\n\n---\n\n".join(results)
+                self.chat.append_assistant_complete(combined, content_format="markdown")
+                self.chat.set_status(self._status_text("就绪"))
+            except Exception as exc:
+                logger.exception("文件搜索失败")
+                self.chat.append_error(f"文件搜索失败: {exc}")
+                self.chat.set_status(self._status_text("就绪"))
+            finally:
+                self.chat.clear_tool_status()
+
+        threading.Thread(target=worker, daemon=True, name="file-search").start()
+
     def _handle_slash_skill(self, intent: InputIntent, text: str) -> None:
         skill_name = intent.skill_name or intent.slash_cmd
         user_part = (intent.slash_args or "").strip()
 
         self.chat.begin_assistant_progress(f"正在执行 Skill: {skill_name}…")
-        self.chat.set_tool_status(f"⚙ 正在按 SKILL.md 执行 {skill_name}…", accent="info")
+        self.chat.set_tool_status(
+            f"⚙ 正在按 SKILL.md 执行 {skill_name}…",
+            accent="info",
+        )
 
         def worker() -> None:
             try:
-                self.chat.set_tool_status(f"🧠 正在识别 Skill 意图: {skill_name}…", accent="info")
+                self.chat.set_tool_status(
+                    f"🧠 正在识别 Skill 意图: {skill_name}…",
+                    accent="info",
+                )
                 result = run_skill(skill_name, user_part, llm=self._llm)
-                if result.intent_reason and result.intent_reason not in {"raw_cli", "heuristic"}:
+                if result.intent_reason and result.intent_reason not in {
+                    "raw_cli",
+                    "heuristic",
+                }:
                     self.chat.append_tool_call(
                         "parse_skill_intent",
                         {"skill": skill_name, "reason": result.intent_reason},
                     )
-                self.chat.set_tool_status(f"⚙ 正在执行 Skill: {skill_name}…", accent="info")
+                self.chat.set_tool_status(
+                    f"⚙ 正在执行 Skill: {skill_name}…",
+                    accent="info",
+                )
                 if result.command:
                     self.chat.append_tool_call(
                         "run_skill",
@@ -105,7 +177,9 @@ class TurnsMixin:
                 if result.fallback_agent:
                     prompt = load_skill_prompt(skill_name)
                     if not prompt:
-                        self.chat.append_error(result.error or f"未找到 Skill：{skill_name}")
+                        self.chat.append_error(
+                            result.error or f"未找到 Skill：{skill_name}",
+                        )
                         self.chat.set_status(self._status_text("就绪"))
                         return
                     self.chat.reset_assistant_for_tool()
@@ -117,7 +191,9 @@ class TurnsMixin:
                     return
 
                 detail = result.output or result.error or "Skill 执行失败"
-                self.chat.append_assistant_complete(f"Skill 执行失败：{result.error}\n\n{detail}")
+                self.chat.append_assistant_complete(
+                    f"Skill 执行失败：{result.error}\n\n{detail}",
+                )
                 self.chat.set_status(self._status_text("就绪"))
             except Exception as exc:
                 logger.exception("Skill 执行异常")
@@ -131,7 +207,10 @@ class TurnsMixin:
     def _handle_weather_intent(self, intent: InputIntent, text: str = "") -> None:
         range_label = "当天" if intent.weather_range == "1d" else "7天"
         self.chat.begin_assistant_progress("正在获取天气预报…")
-        self.chat.set_tool_status(f"🌤 正在从中国天气网获取{range_label}预报…", accent="info")
+        self.chat.set_tool_status(
+            f"🌤 正在从中国天气网获取{range_label}预报…",
+            accent="info",
+        )
         try:
             args: dict[str, str] = {
                 "range_type": intent.weather_range,

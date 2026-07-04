@@ -230,12 +230,15 @@ def schedule_index_chat_message(
     """后台线程增量索引，避免阻塞 UI。"""
 
     def worker() -> None:
-        with _index_lock:
-            index_chat_message(
-                message_id=message_id,
-                session_id=session_id,
-                session_title=session_title,
-                event=event,
-            )
+        try:
+            with _index_lock:
+                index_chat_message(
+                    message_id=message_id,
+                    session_id=session_id,
+                    session_title=session_title,
+                    event=event,
+                )
+        except Exception:
+            logger.exception("对话索引后台线程异常 message_id={}", message_id)
 
     threading.Thread(target=worker, daemon=True, name="conv-index").start()

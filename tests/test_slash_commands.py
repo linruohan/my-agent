@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 
 from src.memory.cache_admin import cache_display_id, handle_cache_command
@@ -10,7 +9,13 @@ from src.memory.search_cache import SearchCache
 from src.memory.search_cache_db import SearchCacheStore
 from src.tools.note_store import NoteStore, handle_note_command
 from src.tools.task_store import TaskStore, handle_task_command
-from src.ui.input_intent import INTENT_SLASH_CACHE, INTENT_SLASH_METRICS, INTENT_SLASH_TASK, parse_slash_command
+from src.ui.input_intent import (
+    INTENT_SLASH_CACHE,
+    INTENT_SLASH_FILE,
+    INTENT_SLASH_METRICS,
+    INTENT_SLASH_TASK,
+    parse_slash_command,
+)
 
 
 def test_parse_slash_cache():
@@ -31,6 +36,27 @@ def test_parse_slash_tsk():
     intent = parse_slash_command("/tsk list")
     assert intent is not None
     assert intent.kind == INTENT_SLASH_TASK
+
+
+def test_parse_slash_file():
+    intent = parse_slash_command("/file search_keyword")
+    assert intent is not None
+    assert intent.kind == INTENT_SLASH_FILE
+    assert intent.slash_args == "search_keyword"
+
+
+def test_parse_slash_file_name():
+    intent = parse_slash_command("/file name intent")
+    assert intent is not None
+    assert intent.kind == INTENT_SLASH_FILE
+    assert intent.slash_args == "name intent"
+
+
+def test_parse_slash_file_grep():
+    intent = parse_slash_command("/file grep my_function")
+    assert intent is not None
+    assert intent.kind == INTENT_SLASH_FILE
+    assert intent.slash_args == "grep my_function"
 
 
 def test_note_store_crud(tmp_path: Path):
@@ -88,4 +114,7 @@ def test_cache_admin_list_and_rm(tmp_path: Path):
     assert "测试标题" in listed
     rm = handle_cache_command(f"rm {cid}", cache)
     assert "已删除" in rm
-    assert "暂无" in handle_cache_command("list", cache) or "暂无缓存" in handle_cache_command("list", cache)
+    assert "暂无" in handle_cache_command(
+        "list",
+        cache,
+    ) or "暂无缓存" in handle_cache_command("list", cache)
