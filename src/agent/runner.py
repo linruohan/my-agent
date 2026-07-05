@@ -21,6 +21,9 @@ from src.agent.hitl import (
 )
 
 
+_EVENT_QUEUE_MAX_SIZE = 1000
+
+
 @dataclass
 class StreamEvent:
     kind: str
@@ -30,7 +33,7 @@ class StreamEvent:
 @dataclass
 class AgentRunner:
     graph: Any
-    event_queue: queue.Queue = field(default_factory=queue.Queue)
+    event_queue: queue.Queue = field(default_factory=lambda: queue.Queue(maxsize=_EVENT_QUEUE_MAX_SIZE))
     event_notify: threading.Event = field(default_factory=threading.Event, init=False)
     _thread: threading.Thread | None = field(default=None, init=False)
     _stop_flag: threading.Event = field(default_factory=threading.Event, init=False)
@@ -38,9 +41,13 @@ class AgentRunner:
     _approval_result: bool = field(default=False, init=False)
     _thread_id: str | None = field(default=None, init=False)
     _config: dict | None = field(default=None, init=False)
+    _lock: threading.Lock = field(default_factory=threading.Lock, init=False)
 
     def _put_event(self, event: StreamEvent) -> None:
-        self.event_queue.put(event)
+        try:
+            self.event_queue.put(event, block=False)
+        except queue.Full:
+            logger.warning("[runner] 事件队列已满，丢弃事件: {}", event.kind)
         self.event_notify.set()
 
     def run_async(self, user_input: str, thread_id: str | None = None) -> str:

@@ -1,44 +1,48 @@
 from __future__ import annotations
 
+import importlib
+import os
+from pathlib import Path
 from typing import Any
 
 from src.infra.config import load_tools_config
-from src.tools.automation.tools import AUTOMATION_TOOLS
-from src.tools.browser.tools import BROWSER_TOOLS
-from src.tools.code.tools import CODE_TOOLS
 from src.tools.file.tools import FILE_TOOLS
-from src.tools.memory.tools import MEMORY_TOOLS
-from src.tools.note.tools import NOTE_TOOLS, add_note
-from src.tools.rag.tools import RAG_TOOLS, search_notes
-from src.tools.skill.tools import SKILL_TOOLS
-from src.tools.task.tools import TASK_TOOLS, add_task, complete_task, delete_task, list_tasks, search_tasks
-from src.tools.web.tools import WEB_TOOLS, web_search
-from src.tools.weather.tools import WEATHER_TOOLS, get_weather_forecast
-from src.tools.workspace.tools import (
-    WORKSPACE_TOOLS,
-    _CALENDAR_FILE,
-    create_calendar_event,
-    read_calendar,
-)
 
-# 工具注册约定：按类别分包，各包导出 *_TOOLS 列表，在此汇总。
-OTHER_TOOLS = (
-    WEB_TOOLS
-    + BROWSER_TOOLS
-    + WEATHER_TOOLS
-    + NOTE_TOOLS
-    + TASK_TOOLS
-    + RAG_TOOLS
-    + WORKSPACE_TOOLS
-    + MEMORY_TOOLS
-    + SKILL_TOOLS
-    + CODE_TOOLS
-    + AUTOMATION_TOOLS
-)
+_TOOLS_DIR = Path(__file__).parent
 
-ALL_TOOLS = FILE_TOOLS + OTHER_TOOLS
 
+def _discover_tools() -> list:
+    """自动发现所有工具模块中的 *_TOOLS 列表。"""
+    all_discovered = []
+    for entry in _TOOLS_DIR.iterdir():
+        if not entry.is_dir() or entry.name.startswith("_"):
+            continue
+        tools_module = entry / "tools.py"
+        if not tools_module.exists():
+            continue
+        module_name = f"src.tools.{entry.name}.tools"
+        try:
+            module = importlib.import_module(module_name)
+            for attr_name in dir(module):
+                if attr_name.endswith("_TOOLS"):
+                    tools_list = getattr(module, attr_name)
+                    if isinstance(tools_list, list):
+                        all_discovered.extend(tools_list)
+        except Exception:
+            pass
+    return all_discovered
+
+
+_DISCOVERED_TOOLS = _discover_tools()
+ALL_TOOLS = FILE_TOOLS + [t for t in _DISCOVERED_TOOLS if t not in FILE_TOOLS]
 TOOL_BY_NAME = {t.name: t for t in ALL_TOOLS}
+
+from src.tools.note.tools import add_note
+from src.tools.rag.tools import search_notes
+from src.tools.task.tools import add_task, complete_task, delete_task, list_tasks, search_tasks
+from src.tools.web.tools import web_search
+from src.tools.weather.tools import get_weather_forecast
+from src.tools.workspace.tools import _CALENDAR_FILE, create_calendar_event, read_calendar
 
 
 def get_enabled_tools() -> list:

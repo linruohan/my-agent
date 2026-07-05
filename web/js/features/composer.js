@@ -11,13 +11,7 @@ window.Composer = (() => {
   let slashIndex = -1;
   let slashOpen = false;
 
-  function api() {
-    return window.pywebview && window.pywebview.api;
-  }
-
-  function el(id) {
-    return document.getElementById(id);
-  }
+  const { api, el, asyncSafeCall } = window.Utils;
 
   function autoResizeInput() {
     const box = el("input-box");
@@ -220,9 +214,9 @@ window.Composer = (() => {
       window.ChatApp.setComposerHint("输入不能为空");
       return false;
     }
-    try {
-      const ok = await api().send_message(payload);
-      if (ok === false) {
+    const ok = await asyncSafeCall(async () => {
+      const result = await api().send_message(payload);
+      if (result === false) {
         window.ChatApp.setComposerHint("请等待当前任务完成");
         return false;
       }
@@ -231,10 +225,8 @@ window.Composer = (() => {
       }
       clearInput();
       return true;
-    } catch (e) {
-      console.error(e);
-      return false;
-    }
+    });
+    return ok !== false;
   }
 
   async function toggleAction() {

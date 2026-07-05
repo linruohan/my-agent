@@ -6,13 +6,7 @@ window.SessionUI = (() => {
   let renameResolve = null;
   let renameSessionId = null;
 
-  function api() {
-    return window.pywebview && window.pywebview.api;
-  }
-
-  function el(id) {
-    return document.getElementById(id);
-  }
+  const { api, el, debounce } = window.Utils;
 
   function updateChatTitle(sessions) {
     const titleEl = el("chat-title");
@@ -180,9 +174,10 @@ window.SessionUI = (() => {
   }
 
   function bindSearch() {
+    const debouncedRender = debounce(() => renderSessions(allSessions), 150);
     el("session-search")?.addEventListener("input", (e) => {
       searchQuery = e.target.value || "";
-      renderSessions(allSessions);
+      debouncedRender();
     });
   }
 

@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="css/core/app.css" />
     <link rel="stylesheet" href="css/features/calendar.css" />
     <script src="js/vendor/marked.min.js"></script>
+    <script src="js/core/utils.js"></script>
   </head>
   <body>
     <div id="app" class="app">
@@ -297,6 +298,13 @@
                       加载中…
                     </button>
                     <div class="model-dropdown hidden" id="model-dropdown">
+                      <input
+                        type="search"
+                        id="model-search"
+                        class="model-search"
+                        placeholder="搜索模型…"
+                        autocomplete="off"
+                      />
                       <div class="model-list" id="model-list"></div>
                       <div class="model-dropdown-divider"></div>
                       <button

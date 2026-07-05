@@ -13,13 +13,7 @@ window.LayoutUI = (() => {
     settings: "btn-settings",
   };
 
-  function api() {
-    return window.pywebview && window.pywebview.api;
-  }
-
-  function el(id) {
-    return document.getElementById(id);
-  }
+  const { api, el, debounce } = window.Utils;
 
   function normalizeBaseUrl(baseUrl) {
     return (baseUrl || "").replace(/\/+$/, "");
@@ -157,28 +151,30 @@ window.LayoutUI = (() => {
     );
   }
 
-  function fillModelSelect(models, currentModel) {
-    const btn = el("model-select-btn");
+  let allModels = [];
+
+  function renderModelList(filter = "") {
     const listEl = el("model-list");
-    if (!btn || !listEl) return;
+    if (!listEl) return;
 
-    const list = Array.isArray(models) && models.length ? models : currentModel ? [currentModel] : [];
-
-    btn.textContent = currentModel || "选择模型";
-    btn.disabled = !list.length;
+    const searchLower = filter.toLowerCase();
+    const filtered = allModels.filter((name) =>
+      name.toLowerCase().includes(searchLower)
+    );
 
     listEl.innerHTML = "";
 
-    if (!list.length) {
+    if (!filtered.length) {
       const emptyItem = document.createElement("button");
       emptyItem.className = "model-list-item";
-      emptyItem.textContent = "无可用模型";
+      emptyItem.textContent = filter ? "未找到匹配的模型" : "无可用模型";
       emptyItem.disabled = true;
       listEl.appendChild(emptyItem);
       return;
     }
 
-    list.forEach((name) => {
+    const currentModel = el("model-select-btn")?.textContent || "";
+    filtered.forEach((name) => {
       const item = document.createElement("button");
       item.className = `model-list-item${name === currentModel ? " active" : ""}`;
       item.textContent = name;
@@ -188,6 +184,19 @@ window.LayoutUI = (() => {
       });
       listEl.appendChild(item);
     });
+  }
+
+  function fillModelSelect(models, currentModel) {
+    const btn = el("model-select-btn");
+    if (!btn) return;
+
+    const list = Array.isArray(models) && models.length ? models : currentModel ? [currentModel] : [];
+    allModels = [...new Set(list)].sort((a, b) => a.localeCompare(b));
+
+    btn.textContent = currentModel || "选择模型";
+    btn.disabled = !allModels.length;
+
+    renderModelList();
   }
 
   async function refreshModels(silent = false) {
@@ -269,10 +278,16 @@ window.LayoutUI = (() => {
     const btn = el("model-select-btn");
     const dropdown = el("model-dropdown");
     const refreshBtn = el("model-refresh-btn");
+    const searchInput = el("model-search");
 
     function toggleModelDropdown() {
       if (!dropdown) return;
       dropdown.classList.toggle("hidden");
+      if (!dropdown.classList.contains("hidden") && searchInput) {
+        searchInput.value = "";
+        searchInput.focus();
+        renderModelList();
+      }
     }
 
     function closeModelDropdown() {
@@ -288,6 +303,10 @@ window.LayoutUI = (() => {
     refreshBtn?.addEventListener("click", (e) => {
       e.stopPropagation();
       refreshModels();
+    });
+
+    searchInput?.addEventListener("input", (e) => {
+      renderModelList(e.target.value);
     });
 
     document.addEventListener("click", (e) => {

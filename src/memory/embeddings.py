@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import threading
 
 from langchain_core.embeddings import Embeddings
 from loguru import logger
@@ -28,16 +29,28 @@ class FastEmbedEmbeddings(Embeddings):
 class DummyEmbeddings(Embeddings):
     """当 Embedding 模型加载失败时使用的降级实现。"""
 
+    _warned = False
+    _warn_lock = threading.Lock()
+
     def embed_documents(self, texts: list[str]) -> list[float]:
+        self._warn_once()
         return [[0.0] * 384 for _ in texts]
 
     def embed_query(self, text: str) -> list[float]:
+        self._warn_once()
         return [0.0] * 384
 
+    def _warn_once(self) -> None:
+        with self._warn_lock:
+            if not self._warned:
+                self._warned = True
+                logger.warning("⚠️ 使用降级 Embedding 实现，知识库搜索功能将不可用")
 
-def create_local_embeddings(model_name: str) -> Embeddings:
+
+def create_local_embeddings(model_name: str) -> tuple[Embeddings, bool]:
+    """创建本地 Embedding，返回 (embeddings, is_fallback)。"""
     try:
-        return FastEmbedEmbeddings(model_name)
+        return FastEmbedEmbeddings(model_name), False
     except Exception:
         logger.exception("Embedding 模型加载失败，将使用降级实现")
-        return DummyEmbeddings()
+        return DummyEmbeddings(), True

@@ -30,7 +30,8 @@ def conversation_search_config() -> dict[str, Any]:
 @lru_cache(maxsize=1)
 def _embeddings():
     model = _rag_config().get("local_embedding_model", "BAAI/bge-small-zh-v1.5")
-    return create_local_embeddings(str(model))
+    embeddings, _ = create_local_embeddings(str(model))
+    return embeddings
 
 
 def _cosine(a: list[float], b: list[float]) -> float:

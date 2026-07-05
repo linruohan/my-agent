@@ -236,9 +236,24 @@ html[data-theme-mode="dark"] body::before {
   font-weight: 500;
   cursor: pointer;
   text-align: left;
-  transition: background 0.2s var(--spring-ease), color 0.2s var(--spring-ease), transform 0.15s var(--spring-ease);
+  transition: background 0.2s var(--spring-ease), color 0.2s var(--spring-ease), transform 0.15s var(--spring-fast), box-shadow 0.2s var(--spring-ease);
   user-select: none;
   -webkit-user-select: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.nav-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%) scaleX(0);
+  width: 3px;
+  height: 20px;
+  background: var(--primary-bg);
+  border-radius: 0 3px 3px 0;
+  transition: transform 0.25s var(--spring-ease);
 }
 
 .nav-item:hover {
@@ -251,6 +266,10 @@ html[data-theme-mode="dark"] body::before {
   background: var(--primary-bg);
   color: var(--primary-fg);
   box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-bg) 25%, transparent);
+}
+
+.nav-item.active::before {
+  transform: translateY(-50%) scaleX(1);
 }
 
 .nav-item.active .nav-icon {
@@ -372,14 +391,16 @@ html[data-theme-mode="dark"] body::before {
   font-weight: 500;
   color: var(--fg-muted);
   cursor: pointer;
-  transition: background 0.2s var(--spring-ease), color 0.2s var(--spring-ease), transform 0.15s var(--spring-ease);
+  transition: background 0.2s var(--spring-ease), color 0.2s var(--spring-ease), transform 0.15s var(--spring-ease), box-shadow 0.2s var(--spring-ease);
   position: relative;
+  animation: fade-in-up 0.3s var(--spring-ease);
 }
 
 .session-item:hover {
   background: color-mix(in srgb, var(--bg-list-hover) 65%, transparent);
   color: var(--fg);
   transform: translateX(2px);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--fg) 4%, transparent);
 }
 
 .session-item.active {
@@ -387,6 +408,7 @@ html[data-theme-mode="dark"] body::before {
   color: var(--fg);
   font-weight: 600;
   border: 1px solid color-mix(in srgb, var(--primary-bg) 30%, transparent);
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--primary-bg) 15%, transparent);
 }
 
 .session-item.active::before {
@@ -1321,6 +1343,29 @@ html[data-theme-mode="dark"] body::before {
   z-index: 100;
 }
 
+.model-search {
+  width: 100%;
+  padding: 6px 10px;
+  margin-bottom: 4px;
+  border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-muted) 30%, transparent);
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--font-sm);
+  outline: none;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.model-search:focus {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--bg-muted) 50%, transparent);
+}
+
+.model-search::placeholder {
+  color: var(--fg-muted);
+}
+
 .model-list {
   max-height: 200px;
   overflow-y: auto;
@@ -1423,6 +1468,7 @@ html[data-theme-mode="dark"] body::before {
 
 .pill-action.running {
   background: var(--danger);
+  animation: glow-pulse 1.5s ease-in-out infinite;
 }
 
 .pill-action .icon-stop.hidden,
@@ -1573,6 +1619,21 @@ html[data-theme-mode="dark"] body::before {
   user-select: none;
   -webkit-user-select: none;
   letter-spacing: -0.01em;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--ripple-x, 50%) var(--ripple-y, 50%), color-mix(in srgb, var(--fg) 10%, transparent) 0%, transparent 50%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.btn:active::after {
+  opacity: 1;
 }
 
 .btn:active {
@@ -2296,7 +2357,14 @@ html[data-theme-mode="dark"] body::before {
   background: transparent;
   max-width: none;
   max-height: none;
+}
+
+.modal[open] {
   animation: modal-in 0.25s var(--spring-ease);
+}
+
+.modal.closing {
+  animation: modal-out 0.2s var(--spring-ease);
 }
 
 @keyframes modal-in {
@@ -2307,6 +2375,17 @@ html[data-theme-mode="dark"] body::before {
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+@keyframes modal-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.98) translateY(5px);
   }
 }
 
@@ -2593,6 +2672,90 @@ html[data-theme-mode="dark"] body::before {
 @keyframes stream-blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade-in-scale {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes subtle-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.01);
+  }
+}
+
+@keyframes float-gentle {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary-bg) 30%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--primary-bg) 10%, transparent);
+  }
+}
+
+@keyframes ripple {
+  0% {
+    transform: scale(0);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(4);
+    opacity: 0;
+  }
 }
 
 .meta-capsule {

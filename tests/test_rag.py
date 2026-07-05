@@ -28,7 +28,7 @@ def test_ingest_and_search_txt(tmp_path, monkeypatch):
             return [float(len(text)), 1.0]
 
     monkeypatch.setattr(rag_mod, "create_embeddings", lambda provider=None: FakeEmbeddings())
-    monkeypatch.setattr(rag_mod, "create_local_embeddings", lambda model_name: FakeEmbeddings())
+    monkeypatch.setattr(rag_mod, "create_local_embeddings", lambda model_name: (FakeEmbeddings(), False))
 
     file_count, chunk_count = ingest_files([sample])
     assert file_count == 1

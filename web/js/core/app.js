@@ -3,9 +3,7 @@ window.ChatApp = (() => {
   let running = false;
   let providerList = [];
   let appliedThemeKeys = [];
-  function api() {
-    return window.pywebview && window.pywebview.api;
-  }
+  const { api, el } = window.Utils;
 
   function applyTheme(variables) {
     if (!variables) return;

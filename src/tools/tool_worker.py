@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import os
+import traceback
 from typing import Any
 
 from loguru import logger
@@ -33,13 +35,30 @@ def _tool_invoke_worker(tool_name: str, args: dict[str, Any]) -> str:
 
     tool = TOOL_BY_NAME.get(tool_name)
     if tool is None:
-        return f"未知工具: {tool_name}"
+        error_info = {
+            "success": False,
+            "error_type": "ToolNotFound",
+            "error_message": f"未知工具: {tool_name}",
+            "traceback": "",
+        }
+        return json.dumps(error_info, ensure_ascii=False)
+
     try:
         result = tool.invoke(args)
-        return str(result) if result is not None else ""
+        success_info = {
+            "success": True,
+            "result": str(result) if result is not None else "",
+        }
+        return json.dumps(success_info, ensure_ascii=False)
     except Exception as exc:
         logger.exception("[tool-worker] {} 执行失败", tool_name)
-        return f"工具执行失败: {exc}"
+        error_info = {
+            "success": False,
+            "error_type": type(exc).__name__,
+            "error_message": str(exc),
+            "traceback": traceback.format_exc()[:2000],
+        }
+        return json.dumps(error_info, ensure_ascii=False)
 
 
 def invoke_tool_in_process(
@@ -53,14 +72,28 @@ def invoke_tool_in_process(
 
         tool = TOOL_BY_NAME[tool_name]
         with log_timing("tool", name=tool_name, process="inline"):
-            result = tool.invoke(args or {})
-        return str(result) if result is not None else ""
+            try:
+                result = tool.invoke(args or {})
+                return str(result) if result is not None else ""
+            except Exception as exc:
+                logger.exception("[tool-worker] {} 执行失败", tool_name)
+                return f"工具执行失败: {exc}"
 
     with log_timing("tool", name=tool_name, process="subprocess"):
-        return run_in_process(
+        raw_result = run_in_process(
             _tool_invoke_worker,
             tool_name,
             args or {},
             pool="tools",
             timeout=timeout if timeout is not None else _default_tool_timeout(),
         )
+        try:
+            parsed = json.loads(raw_result)
+            if parsed.get("success"):
+                return parsed.get("result", "")
+            error_type = parsed.get("error_type", "Unknown")
+            error_msg = parsed.get("error_message", "")
+            logger.warning("[tool-worker] {} 执行失败: {} - {}", tool_name, error_type, error_msg)
+            return f"工具执行失败 [{error_type}]: {error_msg}"
+        except json.JSONDecodeError:
+            return raw_result

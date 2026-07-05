@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import threading
-from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from loguru import logger
@@ -125,21 +126,33 @@ class TurnsMixin:
                             f"🔍 从系统所有目录搜索文件名「{pattern}」…",
                             accent="info",
                         )
-                        import os
-                        drives = [f"{d}:\\" for d in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" if os.path.exists(f"{d}:\\")]
+                        drives = [
+                            f"{d}:\\"
+                            for d in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                            if os.path.exists(f"{d}:\\")
+                        ]
                         all_results = []
-                        for drive in drives[:5]:
-                            try:
-                                result = find_files_impl(
+                        with ThreadPoolExecutor(
+                            max_workers=min(len(drives[:5]), 4),
+                            thread_name_prefix="file-search",
+                        ) as executor:
+                            future_to_drive = {
+                                executor.submit(
+                                    find_files_impl,
                                     pattern,
                                     root=drive,
                                     file_type="file",
                                     max_results=10,
-                                )
-                                if result and "共" in result:
-                                    all_results.append(result)
-                            except Exception:
-                                pass
+                                ): drive
+                                for drive in drives[:5]
+                            }
+                            for future in as_completed(future_to_drive):
+                                try:
+                                    drive_result = future.result(timeout=30)
+                                    if drive_result and "共" in drive_result:
+                                        all_results.append(drive_result)
+                                except Exception:
+                                    pass
                         if all_results:
                             result = "\n\n---\n\n".join(all_results)
                         else:

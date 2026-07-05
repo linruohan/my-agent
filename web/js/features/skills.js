@@ -2,9 +2,7 @@
 window.SkillsUI = (() => {
   let catalog = [];
 
-  function api() {
-    return window.pywebview && window.pywebview.api;
-  }
+  const { api, el } = window.Utils;
 
   function groupCatalog(items, filter) {
     const q = (filter || "").trim().toLowerCase();

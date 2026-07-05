@@ -5,7 +5,8 @@ from __future__ import annotations
 import atexit
 import multiprocessing
 import threading
-from concurrent.futures import ProcessPoolExecutor
+import time
+from concurrent.futures import ProcessPoolExecutor, Future
 from typing import Any, Callable, TypeVar
 
 from loguru import logger
@@ -14,6 +15,7 @@ T = TypeVar("T")
 
 _pools: dict[str, ProcessPoolExecutor] = {}
 _lock = threading.Lock()
+_shutdown_event = threading.Event()
 
 _POOL_DEFAULTS: dict[str, int] = {
     "ocr": 1,
@@ -24,7 +26,11 @@ _POOL_DEFAULTS: dict[str, int] = {
 
 
 def get_process_pool(name: str, *, max_workers: int | None = None) -> ProcessPoolExecutor:
+    """获取指定名称的进程池，若不存在则创建。"""
     with _lock:
+        if _shutdown_event.is_set():
+            logger.warning("[process] 已进入关闭阶段，拒绝创建新进程池: {}", name)
+            raise RuntimeError("进程池服务已关闭")
         pool = _pools.get(name)
         if pool is None:
             workers = max_workers if max_workers is not None else _POOL_DEFAULTS.get(name, 2)
@@ -50,19 +56,47 @@ def run_in_process(
     return future.result(timeout=timeout)
 
 
-def shutdown_process_pools(*, wait: bool = False) -> None:
-    global _pools
+def _cancel_pending(futures: list[Future]) -> int:
+    """取消所有未完成的任务。"""
+    cancelled = 0
+    for future in futures:
+        if not future.done():
+            if future.cancel():
+                cancelled += 1
+    return cancelled
+
+
+def shutdown_process_pools(*, wait: bool = False, timeout: float = 10.0) -> None:
+    """安全关闭所有进程池，避免竞态条件。"""
+    _shutdown_event.set()
     with _lock:
-        names = list(_pools.keys())
-    for name in names:
-        with _lock:
-            pool = _pools.pop(name, None)
-        if pool is None:
-            continue
+        pools_to_shutdown = list(_pools.items())
+        _pools.clear()
+    if not pools_to_shutdown:
+        return
+
+    logger.info("[process] 开始关闭 {} 个进程池", len(pools_to_shutdown))
+    start_time = time.time()
+
+    for name, pool in pools_to_shutdown:
         try:
-            pool.shutdown(wait=wait, cancel_futures=not wait)
+            if not wait:
+                pool.shutdown(wait=False, cancel_futures=True)
+                logger.debug("[process] 进程池 {} 已异步关闭", name)
+            else:
+                elapsed = time.time() - start_time
+                remaining = max(0.0, timeout - elapsed)
+                if remaining <= 0:
+                    logger.warning("[process] 进程池 {} 关闭超时，强制取消", name)
+                    pool.shutdown(wait=False, cancel_futures=True)
+                    continue
+                pool.shutdown(wait=True, cancel_futures=False)
+                logger.debug("[process] 进程池 {} 已同步关闭", name)
         except Exception as exc:
-            logger.debug("[process] 关闭进程池 {}: {}", name, exc)
+            logger.warning("[process] 关闭进程池 {} 失败: {}", name, exc)
+
+    elapsed = time.time() - start_time
+    logger.info("[process] 所有进程池关闭完成，耗时 {:.2f}s", elapsed)
 
 
 atexit.register(shutdown_process_pools)

@@ -73,6 +73,7 @@ class CoreMixin:
         self._compose_busy = False
         self._compose_cancel = threading.Event()
         self._skip_persist_events = False
+        self._state_lock = threading.Lock()
 
         self._init_gateway()
         self._init_agent()
@@ -198,7 +199,8 @@ class CoreMixin:
         return chain
 
     def _is_busy(self) -> bool:
-        return self._running or self._compose_busy
+        with self._state_lock:
+            return self._running or self._compose_busy
 
     def _maybe_save_search_cache(self, response: str) -> None:
         if self._turn_used_web_search and response.strip():
@@ -246,16 +248,16 @@ class CoreMixin:
         threading.Thread(target=worker, daemon=True, name="learning-loop").start()
 
     def stop_agent(self) -> None:
-        if not self._is_busy():
-            return
+        with self._state_lock:
+            if not self._running and not self._compose_busy:
+                return
+            self._compose_cancel.set()
+            self._compose_busy = False
+            running_was_true = self._running
+            self._running = False
 
-        self._compose_cancel.set()
-        self._compose_busy = False
-
-        if self._running and self.runner:
+        if running_was_true and self.runner:
             self.runner.stop()
-
-        self._running = False
         self.chat.append_user("用户强制中断", track_turn=False)
         self.chat.clear_turn_timer()
         self.chat.reset_assistant_for_tool()

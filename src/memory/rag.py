@@ -75,7 +75,8 @@ def create_embeddings(provider: ProviderConfig | None = None) -> Embeddings:
 
     if mode == "local":
         spec = _embedding_spec(cfg)
-        return create_local_embeddings(spec["model"])
+        embeddings, _ = create_local_embeddings(spec["model"])
+        return embeddings
 
     if mode == "api":
         return _create_api_embeddings(provider, cfg)
@@ -89,7 +90,8 @@ def create_embeddings(provider: ProviderConfig | None = None) -> Embeddings:
     except Exception as exc:
         logger.warning("API Embedding 不可用，回退本地模型: {}", exc)
         spec = _embedding_spec({**cfg, "embedding_mode": "local"})
-        return create_local_embeddings(spec["model"])
+        embeddings, _ = create_local_embeddings(spec["model"])
+        return embeddings
 
 
 def _load_meta() -> dict:
@@ -115,7 +117,8 @@ def _embeddings_for_index(provider: ProviderConfig | None = None) -> Embeddings:
         model = meta.get("embedding_model") or _rag_config().get(
             "local_embedding_model", "BAAI/bge-small-zh-v1.5"
         )
-        return create_local_embeddings(model)
+        embeddings, _ = create_local_embeddings(model)
+        return embeddings
     return create_embeddings(provider)
 
 
