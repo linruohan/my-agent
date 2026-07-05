@@ -38,9 +38,12 @@ class FindRelevantMemoriesInput:
 @dataclass
 class ConversationState:
     already_surfaced_memories: set[str] = field(default_factory=set)
+    _MAX_SURFACED = 100
 
     def add_surfaced(self, file_names: list[str]) -> None:
         self.already_surfaced_memories.update(file_names)
+        if len(self.already_surfaced_memories) > self._MAX_SURFACED:
+            self.already_surfaced_memories = set(list(self.already_surfaced_memories)[-self._MAX_SURFACED:])
 
     def clear(self) -> None:
         self.already_surfaced_memories.clear()
@@ -84,6 +87,29 @@ def _build_memory_list(entries: list[MemoryEntry]) -> str:
     return "\n".join(lines)
 
 
+def _should_filter_by_tool(entry: MemoryEntry, recent_tools: list[str]) -> bool:
+    """判断记忆是否应根据最近使用的工具进行过滤。
+    
+    排除最近用过的工具的「用法参考文档」，但保留「警告、坑点、已知问题」。
+    """
+    if not recent_tools:
+        return False
+
+    description_lower = entry.description.lower()
+    name_lower = entry.name.lower()
+
+    warning_keywords = ["警告", "坑", "注意", "问题", "错误", "失败", "bug", "warning", "caution", "issue", "error", "fail"]
+
+    for tool_name in recent_tools:
+        tool_lower = tool_name.lower()
+        if tool_lower in description_lower or tool_lower in name_lower:
+            for keyword in warning_keywords:
+                if keyword.lower() in description_lower or keyword.lower() in name_lower:
+                    return False
+            return True
+    return False
+
+
 def find_relevant_memories(
     llm: BaseChatModel,
     input_data: FindRelevantMemoriesInput,
@@ -92,6 +118,8 @@ def find_relevant_memories(
     entries = input_data.memory_files
 
     entries = [e for e in entries if e.file_name not in input_data.already_surfaced]
+
+    entries = [e for e in entries if not _should_filter_by_tool(e, input_data.recent_tools)]
 
     if not entries:
         return []

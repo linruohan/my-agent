@@ -25,3 +25,15 @@ dist/
 build/
 *.spec
 !packaging/*.spec
+
+# Project-level local configuration (gitignored)
+.my-agent/settings.local.json
+.my-agent/CLAUDE.local.md
+.my-agent/rules.local/
+.my-agent/memory/*.md
+!.my-agent/memory/.gitkeep
+.my-agent/memory/team/*.md
+!.my-agent/memory/team/.gitkeep
+
+# Global config (user-specific)
+~/.my-agent/

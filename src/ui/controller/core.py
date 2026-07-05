@@ -159,7 +159,7 @@ class CoreMixin:
             set_rag_provider(self._current_provider)
             ckpt = Path(self.app_cfg["paths"]["checkpoints"]) / "agent.db"
             self._graph_bundle = build_agent_graph(self._llm, ckpt)
-            self.runner = AgentRunner(graph=self._graph_bundle.graph)
+            self.runner = AgentRunner(graph=self._graph_bundle.graph, llm=self._llm)
             self.chat.set_status(self._status_text("就绪"))
         except Exception as exc:
             logger.exception("Agent 初始化失败")

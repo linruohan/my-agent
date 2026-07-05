@@ -162,6 +162,36 @@ def _extract_memories_from_messages(
         return []
 
 
+def _validate_memory_content(
+    memory_type: str,
+    name: str,
+    description: str,
+    content: str,
+) -> tuple[bool, list[str]]:
+    """校验记忆内容格式是否符合规范。"""
+    errors = []
+
+    if memory_type not in MEMORY_TYPES:
+        errors.append(f"无效记忆类型: {memory_type}")
+        return False, errors
+
+    if name is None or not str(name).strip():
+        errors.append("name 不能为空")
+    if description is None or not str(description).strip():
+        errors.append("description 不能为空")
+    if content is None or not str(content).strip():
+        errors.append("content 不能为空")
+
+    if memory_type in ["feedback", "project"]:
+        content_str = str(content).lower()
+        if "**why:**" not in content_str and "why:" not in content_str:
+            errors.append(f"{memory_type} 类型记忆必须包含 Why 部分")
+        if "**how to apply:**" not in content_str and "how to apply:" not in content_str:
+            errors.append(f"{memory_type} 类型记忆必须包含 How to apply 部分")
+
+    return len(errors) == 0, errors
+
+
 def _write_memory_file(
     memory_type: str,
     name: str,
@@ -172,6 +202,11 @@ def _write_memory_file(
 ) -> MemoryWriteResult | None:
     if memory_type not in MEMORY_TYPES:
         logger.warning(f"无效记忆类型: {memory_type}")
+        return None
+
+    valid, errors = _validate_memory_content(memory_type, name, description, content)
+    if not valid:
+        logger.warning(f"记忆格式校验失败: {', '.join(errors)}")
         return None
 
     if memory_type == "project":
@@ -210,6 +245,7 @@ def extract_memories(
         return ExtractMemoriesOutput(memories_written=[], index_updated=False)
 
     written = []
+    promoted = []
     for mem in memories:
         result = _write_memory_file(
             memory_type=str(mem.get("type", "user")),
@@ -221,8 +257,21 @@ def extract_memories(
         if result:
             written.append(result)
 
+            from src.memory.memory_promotion import promote_memory
+
+            promotion_result = promote_memory(
+                memory_content=str(mem.get("content", "")),
+                memory_name=str(mem.get("name", "")),
+                memory_description=str(mem.get("description", "")),
+            )
+            if promotion_result and "提权" in promotion_result:
+                promoted.append(promotion_result)
+
     if written:
         write_memory_index()
+
+    if promoted:
+        logger.info(f"[memory] {len(promoted)} 条记忆已提权")
 
     return ExtractMemoriesOutput(
         memories_written=written,

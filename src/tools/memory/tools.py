@@ -113,6 +113,8 @@ def search_past_conversations(keyword: str, limit: int = 10, mode: str = "auto")
     return search_past_conversations_merged(keyword, limit=max(1, min(limit, 30)), mode=mode)
 
 
+from src.tools.memory.topic_tools import TOPIC_TOOLS
+
 MEMORY_TOOLS = [
     read_user_profile,
     update_user_profile,
@@ -123,4 +125,5 @@ MEMORY_TOOLS = [
     read_memory_file,
     rebuild_memory_index,
     search_past_conversations,
+    *TOPIC_TOOLS,
 ]

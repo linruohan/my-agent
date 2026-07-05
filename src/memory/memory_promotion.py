@@ -13,12 +13,15 @@ from loguru import logger
 from src.infra.paths import project_config_dir
 from src.memory.memory_index import write_memory_index
 
-INSTRUCTION_WORDS = ["必须", "不要", "禁止", "不能", "应该", "应当"]
-CRITICAL_WORDS = ["绝对不要", "永远禁止", "绝对禁止"]
+INSTRUCTION_WORDS = ["必须", "不要", "禁止", "不能", "应该", "应当", "切勿"]
+CRITICAL_WORDS = ["绝对不要", "永远禁止", "绝对禁止", "切勿"]
 
 
 def _detect_rule_type(content: str) -> str:
     """检测内容类型：background / rule / critical。"""
+    if content is None:
+        return "background"
+
     content_lower = content.lower()
 
     for word in CRITICAL_WORDS:
@@ -87,8 +90,11 @@ def promote_memory(
     memory_name: str,
     memory_description: str,
     project_root: Path | None = None,
-) -> str:
+) -> str | None:
     """根据记忆内容判断是否需要提权，并执行提权操作。"""
+    if memory_content is None or memory_name is None:
+        return None
+
     rule_type = _detect_rule_type(memory_content)
 
     if rule_type == "background":

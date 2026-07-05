@@ -56,14 +56,18 @@ def validate_memory_format(file_path: Path) -> tuple[bool, list[str]]:
         if "description" not in frontmatter or not str(frontmatter.get("description", "")).strip():
             errors.append("frontmatter 缺少 description 字段")
 
-        if "created" in frontmatter:
+        if "created" not in frontmatter:
+            errors.append("frontmatter 缺少 created 字段")
+        else:
             created = frontmatter["created"]
             try:
                 datetime.strptime(created, "%Y-%m-%d")
             except ValueError:
                 errors.append(f"created 格式无效：{created}，应为 YYYY-MM-DD")
 
-        if "updated" in frontmatter:
+        if "updated" not in frontmatter:
+            errors.append("frontmatter 缺少 updated 字段")
+        else:
             updated = frontmatter["updated"]
             try:
                 datetime.strptime(updated, "%Y-%m-%d")

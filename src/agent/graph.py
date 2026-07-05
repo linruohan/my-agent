@@ -10,7 +10,15 @@ from langgraph.prebuilt import create_react_agent
 from src.agent.history import make_pre_model_hook
 from src.infra.config import load_app_config
 from src.infra.time_context import current_date_context, current_year
-from src.memory.context_files import build_memory_prompt_block
+from src.memory.context_files import build_memory_prompt_block, build_claude_prompt_block
+from src.memory.memory_index import load_all_memory_entries
+from src.memory.memory_reader import (
+    ConversationState,
+    FindRelevantMemoriesInput,
+    build_memory_injection_block,
+    find_relevant_memories,
+)
+from src.memory.rules_loader import build_rules_prompt_block
 from src.tools import get_enabled_tools
 from src.tools.process_wrap import wrap_tools_for_process
 
@@ -27,8 +35,12 @@ class AgentGraphBundle:
         self._conn.close()
 
 
-def build_system_prompt(base_prompt: str) -> str:
-    """在基础 Prompt 上注入当前日期、搜索规则与记忆块。"""
+def build_system_prompt(
+    base_prompt: str,
+    llm: BaseChatModel | None = None,
+    state: dict | None = None,
+) -> str:
+    """在基础 Prompt 上注入当前日期、搜索规则、记忆块与相关记忆。"""
     date_ctx = current_date_context()
     year = current_year()
     time_block = f"""
@@ -44,17 +56,105 @@ def build_system_prompt(base_prompt: str) -> str:
 """
     base = base_prompt.strip() or "你是一个 helpful 的个人助理。"
     memory_block = build_memory_prompt_block()
+
+    current_file = state.get("_current_file") if state else None
+    claude_block = build_claude_prompt_block(current_file=current_file)
+    rules_block = build_rules_prompt_block(current_file=current_file)
+
     parts = [base, time_block.strip()]
+    if claude_block:
+        parts.append(f"【项目指导 CLAUDE.md】\n{claude_block}")
+    if rules_block:
+        parts.append(f"【行为规则 RULES】\n{rules_block}")
     if memory_block:
         parts.append(memory_block)
+
+    relevant_memories_block = _build_relevant_memories_block(llm, state)
+    if relevant_memories_block:
+        parts.append(relevant_memories_block)
+
     return "\n\n".join(parts)
 
 
-def make_dynamic_system_prompt(base_prompt: str):
-    """每次模型调用前刷新 USER/MEMORY 注入。"""
+def _extract_recent_tools(messages: list) -> list[str]:
+    """从消息历史中提取最近使用的工具名称。"""
+    tools: list[str] = []
+    for msg in reversed(messages):
+        if len(tools) >= 5:
+            break
+        if isinstance(msg, dict):
+            tool_calls = msg.get("tool_calls", [])
+            for call in tool_calls:
+                if isinstance(call, dict):
+                    tools.append(str(call.get("name", "")))
+                elif hasattr(call, "name"):
+                    tools.append(str(call.name))
+        elif hasattr(msg, "tool_calls") and msg.tool_calls:
+            for call in msg.tool_calls:
+                if hasattr(call, "name"):
+                    tools.append(str(call.name))
+    return tools
 
-    def prompt_fn(_state: dict) -> str:
-        return build_system_prompt(base_prompt)
+
+def _build_relevant_memories_block(
+    llm: BaseChatModel | None = None,
+    state: dict | None = None,
+) -> str:
+    """使用小模型选择器构建相关记忆注入块。"""
+    if not llm or not state:
+        return ""
+
+    messages = state.get("messages", [])
+    if not messages:
+        return ""
+
+    user_query = ""
+    for msg in reversed(messages):
+        if isinstance(msg, dict) and msg.get("role") == "user":
+            user_query = str(msg.get("content", ""))
+            break
+        elif hasattr(msg, "role") and msg.role == "user":
+            user_query = str(msg.content)
+            break
+
+    if not user_query:
+        return ""
+
+    memory_entries = load_all_memory_entries()
+    if not memory_entries:
+        return ""
+
+    conversation_state = state.get("_memory_state") or ConversationState()
+    already_surfaced = list(conversation_state.already_surfaced_memories)
+    recent_tools = _extract_recent_tools(messages)
+
+    input_data = FindRelevantMemoriesInput(
+        query=user_query,
+        memory_files=memory_entries,
+        already_surfaced=already_surfaced,
+        recent_tools=recent_tools,
+        max_results=5,
+    )
+
+    found_memories = find_relevant_memories(llm, input_data)
+    if not found_memories:
+        return ""
+
+    conversation_state.add_surfaced([m.file_name for m in found_memories])
+    if "_memory_state" not in state:
+        state["_memory_state"] = conversation_state
+
+    injection = build_memory_injection_block(found_memories)
+    if injection:
+        return f"【相关记忆】\n{injection}"
+    return ""
+
+
+def make_dynamic_system_prompt(base_prompt: str, llm: BaseChatModel):
+    """每次模型调用前刷新 USER/MEMORY 注入，包含动态记忆检索。"""
+
+    def prompt_fn(state: dict) -> str:
+        return build_system_prompt(base_prompt, llm, state)
 
     return prompt_fn
 
@@ -73,7 +173,7 @@ def build_agent_graph(llm: BaseChatModel, checkpoint_path: str | Path) -> AgentG
     base_prompt = agent_cfg.get("system_prompt", "").strip()
     max_history = int(agent_cfg.get("max_history_messages", 0) or 0)
     tools = wrap_tools_for_process(get_enabled_tools())
-    prompt = make_dynamic_system_prompt(base_prompt)
+    prompt = make_dynamic_system_prompt(base_prompt, llm)
     pre_model_hook = make_pre_model_hook(max_history)
 
     graph = create_react_agent(

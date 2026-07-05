@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import queue
 import threading
+import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from langgraph.types import Command
 from loguru import logger
@@ -19,6 +21,7 @@ from src.agent.hitl import (
     needs_user_approval,
     reject_pending_tools,
 )
+from src.memory.memory_writer import ExtractMemoriesInput, extract_memories
 
 
 _EVENT_QUEUE_MAX_SIZE = 1000
@@ -33,6 +36,7 @@ class StreamEvent:
 @dataclass
 class AgentRunner:
     graph: Any
+    llm: BaseChatModel | None = None
     event_queue: queue.Queue = field(default_factory=lambda: queue.Queue(maxsize=_EVENT_QUEUE_MAX_SIZE))
     event_notify: threading.Event = field(default_factory=threading.Event, init=False)
     _thread: threading.Thread | None = field(default=None, init=False)
@@ -63,6 +67,7 @@ class AgentRunner:
                 with log_timing("agent_turn", thread_id=self._thread_id[:8]):
                     self._stream_loop({"messages": [{"role": "user", "content": user_input}]})
                 self._put_event(StreamEvent("done", {"thread_id": self._thread_id}))
+                self._trigger_memory_extraction()
             except Exception as exc:
                 logger.exception("Agent 执行失败")
                 self._put_event(StreamEvent("error", str(exc)))
@@ -70,6 +75,47 @@ class AgentRunner:
         self._thread = threading.Thread(target=_worker, daemon=True)
         self._thread.start()
         return self._thread_id
+
+    def _trigger_memory_extraction(self) -> None:
+        """在对话正常结束后，启动后台线程提取记忆（fire-and-forget）。"""
+        if not self.llm or not self._thread_id:
+            return
+
+        def _extract_worker() -> None:
+            try:
+                snapshot = self.graph.get_state(self._config)
+                messages = snapshot.values.get("messages", [])
+                if not messages:
+                    return
+
+                message_dicts = []
+                for msg in messages:
+                    if isinstance(msg, dict):
+                        message_dicts.append(msg)
+                    elif hasattr(msg, "role") and hasattr(msg, "content"):
+                        message_dicts.append({
+                            "role": msg.role,
+                            "content": str(msg.content),
+                        })
+
+                input_data = ExtractMemoriesInput(
+                    conversation_id=self._thread_id,
+                    messages=message_dicts,
+                    has_memory_writes_since=time.time() - 300,
+                    current_work_dir="",
+                )
+
+                result = extract_memories(self.llm, input_data)
+                if result.memories_written:
+                    logger.info(
+                        "[memory] 对话结束后提取到 {} 条记忆",
+                        len(result.memories_written),
+                    )
+            except Exception:
+                logger.exception("[memory] 后台记忆提取失败")
+
+        extraction_thread = threading.Thread(target=_extract_worker, daemon=True)
+        extraction_thread.start()
 
     def resume_after_approval(self, approved: bool) -> None:
         """UI 线程在用户确认/拒绝后调用，唤醒 Agent 继续执行。"""

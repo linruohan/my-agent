@@ -1,0 +1,14 @@
+{
+  "model": "",
+  "theme": "auto",
+  "permissions": {
+    "allow": [],
+    "deny": []
+  },
+  "memory": {
+    "enabled": true,
+    "max_memories": 100,
+    "stale_days": 2
+  },
+  "critical_rules": []
+}
