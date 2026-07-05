@@ -11,6 +11,8 @@ from src.memory.context_files import (
     write_context_file,
 )
 from src.memory.conversation_search import search_past_conversations_merged
+from src.memory.memory_index import build_memory_index, load_all_memory_entries, read_memory_index as read_memory_index_file
+from src.memory.memory_reader import read_memory_content
 
 
 @tool
@@ -58,6 +60,48 @@ def update_agent_memory(content: str, mode: str = "append") -> str:
 
 
 @tool
+def read_memory_index() -> str:
+    """读取 MEMORY.md 记忆索引（全局+项目合并）。"""
+    text = read_memory_index_file()
+    return text or "记忆索引为空，尚未积累记忆。"
+
+
+@tool
+def list_memory_files() -> str:
+    """列出所有可用的记忆文件及其描述。"""
+    entries = load_all_memory_entries()
+    if not entries:
+        return "暂无记忆文件。"
+    lines = ["可用记忆文件："]
+    for entry in entries:
+        lines.append(f"- {entry.file_name}（{entry.memory_type}）：{entry.description}")
+    return "\n".join(lines)
+
+
+@tool
+def read_memory_file(file_name: str) -> str:
+    """读取指定记忆文件的完整内容。
+
+    Args:
+        file_name: 记忆文件名（如 feedback-no-mock.md）
+    """
+    content = read_memory_content(file_name)
+    if content:
+        return content
+    return f"记忆文件「{file_name}」不存在。"
+
+
+@tool
+def rebuild_memory_index() -> str:
+    """重建 MEMORY.md 索引文件（扫描所有记忆文件）。"""
+    index = build_memory_index()
+    from src.memory.memory_index import write_memory_index
+
+    write_memory_index()
+    return f"记忆索引已重建（{len(index)} 字符）。"
+
+
+@tool
 def search_past_conversations(keyword: str, limit: int = 10, mode: str = "auto") -> str:
     """搜索历史会话中的用户与助手消息（跨会话）。
 
@@ -74,5 +118,9 @@ MEMORY_TOOLS = [
     update_user_profile,
     read_agent_memory,
     update_agent_memory,
+    read_memory_index,
+    list_memory_files,
+    read_memory_file,
+    rebuild_memory_index,
     search_past_conversations,
 ]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -47,6 +48,23 @@ def app_icon_path() -> Path | None:
         if icon.is_file():
             return icon
     return None
+
+
+def global_config_dir() -> Path:
+    """全局配置目录：~/.my-agent/，跨项目共享。"""
+    home = Path.home()
+    return home / ".my-agent"
+
+
+def managed_config_dir() -> Path:
+    """系统级配置目录：C:\ProgramData\my-agent\，仅管理员可改。"""
+    return Path("C:/ProgramData/my-agent")
+
+
+def project_config_dir(project_root: Path | None = None) -> Path:
+    """项目级配置目录：.my-agent/，项目专属。"""
+    root = project_root or PROJECT_ROOT
+    return root / ".my-agent"
 
 
 def _refresh_module_paths() -> None:

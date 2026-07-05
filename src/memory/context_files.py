@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from src.infra.config import load_app_config
+from src.infra.paths import global_config_dir, managed_config_dir, project_config_dir
 
 _DEFAULT_USER = """# 用户画像
 
@@ -25,11 +26,20 @@ _DEFAULT_MEMORY = """# Agent 记忆
 - （用户明确要求长期记住的信息）
 """
 
+_DEFAULT_CLAUDE = """# 项目指导
+
+## 项目概述
+- （项目目标、技术栈、架构说明）
+
+## 团队约定
+- （代码风格、协作流程、注意事项）
+"""
+
 _MAX_USER_CHARS = 3500
-_MAX_MEMORY_CHARS = 4500
+_MAX_MEMORY_CHARS = 2500
+_MAX_CLAUDE_CHARS = 3000
 _MAX_INJECT_CHARS = _MAX_USER_CHARS
 
-# path -> (mtime_ns, size, raw_text)
 _file_cache: dict[Path, tuple[int, int, str]] = {}
 
 
@@ -121,19 +131,57 @@ def write_context_file(path: Path, content: str, *, mode: str = "replace") -> No
     invalidate_context_file_cache(path)
 
 
+def load_all_claude_files(project_root: Path | None = None) -> list[str]:
+    """加载所有层级的 CLAUDE.md 文件。"""
+    contents = []
+    paths = [
+        managed_config_dir() / "CLAUDE.md",
+        global_config_dir() / "CLAUDE.md",
+        project_config_dir(project_root) / "CLAUDE.md",
+        project_config_dir(project_root) / "CLAUDE.local.md",
+    ]
+    for path in paths:
+        if path.is_file():
+            text = _read_file_raw(path)
+            if text:
+                contents.append(text)
+    return contents
+
+
+def build_claude_prompt_block(project_root: Path | None = None) -> str:
+    """组装注入 system prompt 的 CLAUDE.md 块。"""
+    files = load_all_claude_files(project_root)
+    if not files:
+        return ""
+    total_chars = 0
+    parts = []
+    for content in files:
+        if total_chars + len(content) > _MAX_CLAUDE_CHARS:
+            remaining = _MAX_CLAUDE_CHARS - total_chars - 30
+            parts.append(content[:remaining].rstrip() + "\n\n…（已截断）")
+            break
+        parts.append(content)
+        total_chars += len(content)
+    return "\n\n---\n\n".join(parts)
+
+
 def build_memory_prompt_block() -> str:
     """组装注入 system prompt 的用户画像与 Agent 记忆块。"""
+    from src.memory.memory_index import read_memory_index
+
     user_text = read_context_file(user_file_path(), max_chars=_MAX_USER_CHARS, prefer_tail=False)
-    memory_text = read_context_file(memory_file_path(), max_chars=_MAX_MEMORY_CHARS, prefer_tail=True)
+    memory_index = read_memory_index()
+
     parts: list[str] = []
     if user_text:
         parts.append(f"【用户画像 USER.md】\n{user_text}")
-    if memory_text:
-        parts.append(f"【Agent 记忆 MEMORY.md】\n{memory_text}")
+    if memory_index:
+        parts.append(f"【Agent 记忆索引 MEMORY.md】\n{memory_index}")
     if not parts:
         return ""
     guidance = (
         "以上为用户长期偏好与 Agent 跨会话记忆。回答时优先遵循用户画像；"
+        "记忆索引中列出了可用的记忆文件，需要时可调用工具读取详细内容；"
         "学到可复用经验或用户明确要求记住的信息时，调用 update_agent_memory / update_user_profile 写回。"
     )
     return "\n\n".join(parts) + "\n\n" + guidance
