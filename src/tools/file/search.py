@@ -35,6 +35,8 @@ class GrepHit:
     line: str
     context_before: list[str]
     context_after: list[str]
+    size: int = 0
+    modified: str = ""
 
 
 def _exclude_dirs() -> set[str]:
@@ -201,12 +203,13 @@ def find_files_impl(
     lines = [
         f"【文件搜索】引擎: {engine} | 根目录: {search_root} | 模式: {pattern} | 共 {len(hits)} 条",
         "",
+        "| 文件路径 | 类型 | 文件大小 | 修改时间 |",
+        "| --- | --- | --- | --- |",
     ]
-    for i, h in enumerate(hits, 1):
+    for h in hits:
         kind = "📁" if h.is_dir else "📄"
-        size = f" | {h.size:,} B" if not h.is_dir else ""
-        lines.append(f"{i}. {kind} {h.path}")
-        lines.append(f"   修改时间: {h.modified}{size}")
+        size = f"{h.size:,} B" if not h.is_dir else "-"
+        lines.append(f"| {h.path} | {kind} | {size} | {h.modified} |")
     if len(hits) >= max_results:
         lines.append(f"\n（已达上限 {max_results} 条，请缩小范围或更精确的模式）")
     return append_fallback_hint("\n".join(lines), engine, "fd")
@@ -281,6 +284,14 @@ def _parse_rg_output(text: str, context: int) -> list[GrepHit]:
         if match:
             path_str, line_no, content = match
             current_file = Path(path_str)
+            size = 0
+            modified = ""
+            try:
+                stat = current_file.stat()
+                size = stat.st_size
+                modified = fmt_time(stat.st_mtime)
+            except OSError:
+                pass
             hits.append(
                 GrepHit(
                     path=current_file,
@@ -288,6 +299,8 @@ def _parse_rg_output(text: str, context: int) -> list[GrepHit]:
                     line=content,
                     context_before=list(pending_before),
                     context_after=[],
+                    size=size,
+                    modified=modified,
                 )
             )
             pending_before = []
@@ -342,8 +355,11 @@ def _grep_python(
                 if glob and glob != "*" and not fnmatch.fnmatch(entry.name, glob):
                     continue
                 try:
-                    if entry.stat().st_size > max_size:
+                    stat = entry.stat()
+                    if stat.st_size > max_size:
                         continue
+                    size = stat.st_size
+                    modified = fmt_time(stat.st_mtime)
                     lines = entry.read_text(encoding="utf-8", errors="ignore").splitlines()
                 except (OSError, UnicodeDecodeError):
                     continue
@@ -358,6 +374,8 @@ def _grep_python(
                                 line=line,
                                 context_before=before,
                                 context_after=after,
+                                size=size,
+                                modified=modified,
                             )
                         )
                         if len(hits) >= max_results:
@@ -394,15 +412,23 @@ def grep_files_impl(
     lines = [
         f"【内容搜索】引擎: {engine} | 根目录: {search_root} | 模式: {pattern} | 共 {len(hits)} 处",
         "",
+        "| 文件路径 | 行号 | 代码段 | 文件信息 |",
+        "| --- | --- | --- | --- |",
     ]
-    for i, h in enumerate(hits, 1):
-        lines.append(f"{i}. {h.path}:{h.line_no}")
+    for h in hits:
+        code_parts = []
         for ctx in h.context_before:
-            lines.append(f"   | {ctx}")
-        lines.append(f"   > {h.line}")
+            code_parts.append(ctx)
+        code_parts.append(h.line)
         for ctx in h.context_after:
-            lines.append(f"   | {ctx}")
-        lines.append("")
+            code_parts.append(ctx)
+        code = "\n".join(code_parts)
+        code = code.replace("|", "\\|").replace("\n", "<br>")
+        size = f"{h.size:,} B" if h.size else "-"
+        file_info = f"{size} · {h.modified}" if h.modified else size
+        lines.append(f"| {h.path} | {h.line_no} | `{code}` | {file_info} |")
+    if len(hits) >= max_results:
+        lines.append(f"\n（已达上限 {max_results} 条，请缩小范围或更精确的模式）")
     return append_fallback_hint("\n".join(lines), engine, "rg")
 
 

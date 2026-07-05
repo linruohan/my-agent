@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import threading
+from pathlib import Path
 from typing import Any
 
 from loguru import logger
 
 from src.infra.metrics_admin import handle_metrics_command
+from src.infra.paths import INSTALL_ROOT
 from src.infra.timing import log_timing
 from src.memory.search_cache import handle_cache_command
 from src.tools.file.search import find_files_impl, grep_files_impl
@@ -79,15 +81,14 @@ class TurnsMixin:
             self.chat.append_error(f"任务命令失败: {exc}")
 
     def _handle_slash_file(self, intent: InputIntent) -> None:
-        """处理 /file 命令：按关键字搜索文件名和文件内容。"""
+        """处理 /file 命令：按关键字搜索文件名或文件内容。"""
         args = (intent.slash_args or "").strip()
         if not args:
             self.chat.append_assistant_complete(
                 "📁 **/file 文件搜索命令**\n\n"
                 "用法：\n"
-                "- `/file <关键字>` - 同时搜索文件名和文件内容\n"
-                "- `/file name <文件名>` - 只搜索文件名\n"
-                "- `/file grep <内容>` - 只搜索文件内容\n\n"
+                "- `/file <关键字>` - 从系统所有目录搜索文件名\n"
+                "- `/file grep <内容>` - 从当前项目目录搜索文件内容\n\n"
                 "示例：\n"
                 "- `/file main.py` - 搜索名为 main.py 的文件\n"
                 "- `/file grep my_function` - 搜索包含 my_function 的文件",
@@ -97,34 +98,54 @@ class TurnsMixin:
             return
 
         self.chat.begin_assistant_progress("正在搜索文件…")
-        self.chat.set_tool_status("🔍 正在全局搜索文件…", accent="info")
+        self.chat.set_tool_status("🔍 正在搜索文件…", accent="info")
 
         def worker() -> None:
             try:
                 parts = args.split(maxsplit=1)
-                mode = parts[0].lower() if len(parts) > 1 else "both"
-                pattern = parts[1] if len(parts) > 1 else args
+                mode = "name"
+                pattern = args
 
-                results = []
+                if len(parts) > 1 and parts[0].lower() == "grep":
+                    mode = "grep"
+                    pattern = parts[1]
 
-                if mode in ("both", "name"):
+                if mode == "name":
                     self.chat.set_tool_status(
-                        f"🔍 搜索文件名包含「{pattern}」…",
+                        f"🔍 从系统所有目录搜索文件名「{pattern}」…",
                         accent="info",
                     )
-                    name_result = find_files_impl(pattern, max_results=20)
-                    results.append(name_result)
-
-                if mode in ("both", "grep"):
+                    import os
+                    drives = [f"{d}:\\" for d in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" if os.path.exists(f"{d}:\\")]
+                    all_results = []
+                    for drive in drives[:5]:
+                        try:
+                            result = find_files_impl(
+                                pattern,
+                                root=drive,
+                                file_type="file",
+                                max_results=10,
+                            )
+                            if result and "共" in result:
+                                all_results.append(result)
+                        except Exception:
+                            pass
+                    if all_results:
+                        result = "\n\n---\n\n".join(all_results)
+                    else:
+                        result = f"未找到文件名包含「{pattern}」的文件"
+                else:
                     self.chat.set_tool_status(
-                        f"🔍 搜索文件内容包含「{pattern}」…",
+                        f"🔍 从项目目录搜索内容「{pattern}」…",
                         accent="info",
                     )
-                    grep_result = grep_files_impl(pattern, max_results=20)
-                    results.append(grep_result)
+                    result = grep_files_impl(
+                        pattern,
+                        root=str(INSTALL_ROOT),
+                        max_results=30,
+                    )
 
-                combined = "\n\n---\n\n".join(results)
-                self.chat.append_assistant_complete(combined, content_format="markdown")
+                self.chat.append_assistant_complete(result, content_format="markdown")
                 self.chat.set_status(self._status_text("就绪"))
             except Exception as exc:
                 logger.exception("文件搜索失败")

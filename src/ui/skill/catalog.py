@@ -23,7 +23,7 @@ SYSTEM_SLASH_TOOLS: list[dict[str, Any]] = [
     {"kind": "tool", "name": "search", "label": "/search", "desc": "网络搜索", "slash": "/search"},
     {"kind": "tool", "name": "weather", "label": "/weather", "desc": "天气预报", "slash": "/weather"},
     {"kind": "tool", "name": "ocr", "label": "/ocr", "desc": "图片 OCR", "slash": "/ocr"},
-    {"kind": "tool", "name": "file", "label": "/file", "desc": "文件搜索：/file <关键字> | name <文件名> | grep <内容>", "slash": "/file"},
+    {"kind": "tool", "name": "file", "label": "/file", "desc": "文件搜索：/file <关键字> 搜索文件名 | /file grep <内容> 搜索内容", "slash": "/file"},
 ]
 
 

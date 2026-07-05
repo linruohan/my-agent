@@ -39,12 +39,11 @@ window.ChatApp = (() => {
     const { model, session, raw } = parseStatusText(text);
     const modelEl = document.getElementById("status-model");
     const sessionEl = document.getElementById("status-session");
-    const modelSelect = document.getElementById("model-select");
+    const modelBtn = document.getElementById("model-select-btn");
     if (modelEl) modelEl.textContent = model;
     if (sessionEl) sessionEl.textContent = session;
-    if (modelSelect && model && model !== "—") {
-      const hasOption = Array.from(modelSelect.options).some((o) => o.value === model);
-      if (hasOption) modelSelect.value = model;
+    if (modelBtn && model && model !== "—") {
+      modelBtn.textContent = model;
     }
     const bar = document.getElementById("status-bar");
     if (bar) bar.classList.toggle("hidden", !raw);
@@ -249,7 +248,10 @@ window.ChatApp = (() => {
     if (result?.ok) {
       renderProviderTable(result.provider_list);
       if (result.status_text) setStatus(result.status_text);
-      if (result.composer_meta) window.Composer?.updateProviderMeta?.(result.composer_meta);
+      if (result.composer_meta) {
+        window.Composer?.updateProviderMeta?.(result.composer_meta);
+        window.LayoutUI?.updateProviderConfig?.(result.composer_meta);
+      }
       await window.LayoutUI?.refreshModels?.();
       document.getElementById("provider-modal")?.close();
     } else if (result?.error) {
@@ -274,7 +276,10 @@ window.ChatApp = (() => {
       if (result?.ok) {
         renderProviderTable(result.provider_list);
         if (result.status_text) setStatus(result.status_text);
-        if (result.composer_meta) window.Composer?.updateProviderMeta?.(result.composer_meta);
+        if (result.composer_meta) {
+          window.Composer?.updateProviderMeta?.(result.composer_meta);
+          window.LayoutUI?.updateProviderConfig?.(result.composer_meta);
+        }
         await window.LayoutUI?.refreshModels?.();
       } else if (result?.error) {
         setProviderSettingsHint(result.error);
@@ -294,7 +299,10 @@ window.ChatApp = (() => {
       if (result?.ok) {
         renderProviderTable(result.provider_list);
         if (result.status_text) setStatus(result.status_text);
-        if (result.composer_meta) window.Composer?.updateProviderMeta?.(result.composer_meta);
+        if (result.composer_meta) {
+          window.Composer?.updateProviderMeta?.(result.composer_meta);
+          window.LayoutUI?.updateProviderConfig?.(result.composer_meta);
+        }
         await window.LayoutUI?.refreshModels?.();
       } else if (result?.error) {
         setProviderSettingsHint(result.error);

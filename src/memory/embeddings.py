@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+
 from langchain_core.embeddings import Embeddings
 from loguru import logger
 
@@ -13,14 +14,15 @@ class FastEmbedEmbeddings(Embeddings):
 
         logger.info("加载本地 Embedding 模型: {}", model_name)
         os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
+        os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
         self.model_name = model_name
         self._model = TextEmbedding(model_name=model_name)
 
     def embed_documents(self, texts: list[str]) -> list[float]:
-        return [list(vec) for vec in self._model.embed(texts)]
+        return [[float(v) for v in vec] for vec in self._model.embed(texts)]
 
     def embed_query(self, text: str) -> list[float]:
-        return list(next(self._model.embed([text])))
+        return [float(v) for v in next(self._model.embed([text]))]
 
 
 class DummyEmbeddings(Embeddings):

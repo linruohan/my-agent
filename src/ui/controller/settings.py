@@ -63,6 +63,8 @@ class SettingsMixin:
                 "session_short": self._thread_id[:8],
                 "current_provider": self._current_provider_name,
                 "current_model": self._current_provider.model,
+                "provider_type": self._current_provider.type,
+                "provider_base_url": self._current_provider.base_url or "",
             },
             "chat_width_pct": layout_prefs.get_chat_width_pct(),
             "workspace": {
@@ -158,6 +160,8 @@ class SettingsMixin:
             "composer_meta": {
                 "current_provider": self._current_provider_name,
                 "current_model": self._current_provider.model,
+                "provider_type": self._current_provider.type,
+                "provider_base_url": self._current_provider.base_url or "",
             },
         }
 
@@ -207,6 +211,8 @@ class SettingsMixin:
             "composer_meta": {
                 "current_provider": self._current_provider_name,
                 "current_model": self._current_provider.model,
+                "provider_type": self._current_provider.type,
+                "provider_base_url": self._current_provider.base_url or "",
             },
             "status_text": self._status_text("提供商已保存"),
         }
@@ -234,6 +240,8 @@ class SettingsMixin:
             "composer_meta": {
                 "current_provider": self._current_provider_name,
                 "current_model": self._current_provider.model,
+                "provider_type": self._current_provider.type,
+                "provider_base_url": self._current_provider.base_url or "",
             },
             "status_text": self._status_text("提供商已删除"),
         }
@@ -260,6 +268,8 @@ class SettingsMixin:
             "composer_meta": {
                 "current_provider": self._current_provider_name,
                 "current_model": self._current_provider.model,
+                "provider_type": self._current_provider.type,
+                "provider_base_url": self._current_provider.base_url or "",
             },
             "status_text": status,
         }
@@ -353,6 +363,12 @@ class SettingsMixin:
             "ok": True,
             "model": name,
             "status_text": status,
+            "composer_meta": {
+                "current_provider": self._current_provider_name,
+                "current_model": self._current_provider.model,
+                "provider_type": self._current_provider.type,
+                "provider_base_url": self._current_provider.base_url or "",
+            },
         }
 
     def save_chat_width(self, pct: int | float) -> dict[str, Any]:

@@ -454,6 +454,7 @@ window.Composer = (() => {
   function updateProviderMeta(meta) {
     if (!meta) return;
     if (meta.status_text) window.ChatApp?.setStatus?.(meta.status_text);
+    window.LayoutUI?.updateProviderConfig?.(meta);
   }
 
   function init(meta) {
