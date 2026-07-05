@@ -122,6 +122,9 @@ window.ChatUI = (() => {
 
   function trimPathTail(raw) {
     let s = raw;
+    while (s.length > 3 && /:\d+$/.test(s)) {
+      s = s.replace(/:\d+$/, "");
+    }
     while (s.length > 3 && /[.,;，。:!?\u3001\u3002)\]}>]$/.test(s)) {
       const ext = s.match(/(\.[A-Za-z0-9]{1,8})$/);
       if (ext && s.endsWith(ext[1])) break;
@@ -248,7 +251,10 @@ window.ChatUI = (() => {
       const parts = splitTextByPaths(node.textContent || "");
       if (parts.length === 1 && parts[0].type === "text") return;
       parts.forEach((part) => {
-        if (part.type === "path") pathSet.add(part.value);
+        if (part.type === "path") {
+          const checkPath = part.value.replace(/:\d+$/, "");
+          pathSet.add(checkPath);
+        }
       });
       pending.push({ node, parts });
     });
@@ -259,7 +265,8 @@ window.ChatUI = (() => {
       const frag = document.createDocumentFragment();
       parts.forEach((part) => {
         if (part.type === "path") {
-          if (existsMap[part.value]) {
+          const checkPath = part.value.replace(/:\d+$/, "");
+          if (existsMap[checkPath]) {
             frag.appendChild(buildLocalPathSpan(part.value));
           } else {
             frag.appendChild(document.createTextNode(part.value));

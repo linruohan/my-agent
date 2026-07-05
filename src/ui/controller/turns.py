@@ -87,10 +87,12 @@ class TurnsMixin:
             self.chat.append_assistant_complete(
                 "📁 **/file 文件搜索命令**\n\n"
                 "用法：\n"
-                "- `/file <关键字>` - 从系统所有目录搜索文件名\n"
+                "- `/file <关键字>` - 从当前项目目录搜索文件名\n"
+                "- `/file global <关键字>` - 从系统所有目录搜索文件名\n"
                 "- `/file grep <内容>` - 从当前项目目录搜索文件内容\n\n"
                 "示例：\n"
-                "- `/file main.py` - 搜索名为 main.py 的文件\n"
+                "- `/file main.py` - 在项目中搜索 main.py\n"
+                "- `/file global config.json` - 在系统中搜索 config.json\n"
                 "- `/file grep my_function` - 搜索包含 my_function 的文件",
                 content_format="markdown",
             )
@@ -105,35 +107,54 @@ class TurnsMixin:
                 parts = args.split(maxsplit=1)
                 mode = "name"
                 pattern = args
+                global_search = False
 
-                if len(parts) > 1 and parts[0].lower() == "grep":
-                    mode = "grep"
-                    pattern = parts[1]
+                if len(parts) > 1:
+                    first = parts[0].lower()
+                    if first == "grep":
+                        mode = "grep"
+                        pattern = parts[1]
+                    elif first == "global":
+                        mode = "name"
+                        pattern = parts[1]
+                        global_search = True
 
                 if mode == "name":
-                    self.chat.set_tool_status(
-                        f"🔍 从系统所有目录搜索文件名「{pattern}」…",
-                        accent="info",
-                    )
-                    import os
-                    drives = [f"{d}:\\" for d in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" if os.path.exists(f"{d}:\\")]
-                    all_results = []
-                    for drive in drives[:5]:
-                        try:
-                            result = find_files_impl(
-                                pattern,
-                                root=drive,
-                                file_type="file",
-                                max_results=10,
-                            )
-                            if result and "共" in result:
-                                all_results.append(result)
-                        except Exception:
-                            pass
-                    if all_results:
-                        result = "\n\n---\n\n".join(all_results)
+                    if global_search:
+                        self.chat.set_tool_status(
+                            f"🔍 从系统所有目录搜索文件名「{pattern}」…",
+                            accent="info",
+                        )
+                        import os
+                        drives = [f"{d}:\\" for d in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" if os.path.exists(f"{d}:\\")]
+                        all_results = []
+                        for drive in drives[:5]:
+                            try:
+                                result = find_files_impl(
+                                    pattern,
+                                    root=drive,
+                                    file_type="file",
+                                    max_results=10,
+                                )
+                                if result and "共" in result:
+                                    all_results.append(result)
+                            except Exception:
+                                pass
+                        if all_results:
+                            result = "\n\n---\n\n".join(all_results)
+                        else:
+                            result = f"未找到文件名包含「{pattern}」的文件"
                     else:
-                        result = f"未找到文件名包含「{pattern}」的文件"
+                        self.chat.set_tool_status(
+                            f"🔍 从项目目录搜索文件名「{pattern}」…",
+                            accent="info",
+                        )
+                        result = find_files_impl(
+                            pattern,
+                            root=str(INSTALL_ROOT),
+                            file_type="file",
+                            max_results=30,
+                        )
                 else:
                     self.chat.set_tool_status(
                         f"🔍 从项目目录搜索内容「{pattern}」…",

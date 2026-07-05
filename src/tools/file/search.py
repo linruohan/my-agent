@@ -426,7 +426,7 @@ def grep_files_impl(
         code = code.replace("|", "\\|").replace("\n", "<br>")
         size = f"{h.size:,} B" if h.size else "-"
         file_info = f"{size} · {h.modified}" if h.modified else size
-        lines.append(f"| {h.path} | {h.line_no} | `{code}` | {file_info} |")
+        lines.append(f"| {h.path}:{h.line_no} | {h.line_no} | `{code}` | {file_info} |")
     if len(hits) >= max_results:
         lines.append(f"\n（已达上限 {max_results} 条，请缩小范围或更精确的模式）")
     return append_fallback_hint("\n".join(lines), engine, "rg")
