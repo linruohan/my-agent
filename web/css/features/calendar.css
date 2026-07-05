@@ -5,6 +5,7 @@
 
 :root {
   --cal-accent: var(--primary-bg);
+  --cal-bg-glass: color-mix(in srgb, var(--bg-popover) 92%, transparent);
 }
 
 .sidebar-calendar {
@@ -91,27 +92,27 @@
 
 .calendar-feature-body .calendar-layout {
   display: grid;
-  grid-template-columns: 1fr 300px;
-  min-height: min(560px, calc(100vh - 160px));
-  border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
-  border-radius: 14px;
+  grid-template-columns: 1fr 320px;
+  min-height: min(580px, calc(100vh - 180px));
+  border: 1px solid color-mix(in srgb, var(--border) 30%, transparent);
+  border-radius: var(--radius-card);
   overflow: hidden;
-  background: var(--bg-popover, var(--bg-app));
-  box-shadow: var(--mac-shadow-sm);
+  background: var(--cal-bg-glass);
+  box-shadow: var(--mac-shadow-lg);
 }
 
 .calendar-feature-body .calendar-grid-section {
-  padding: 20px 20px 16px;
-  border-right: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
-  background: color-mix(in srgb, var(--bg-popover) 95%, var(--bg-muted) 5%);
+  padding: 24px 24px 20px;
+  border-right: 1px solid color-mix(in srgb, var(--border) 25%, transparent);
+  background: color-mix(in srgb, var(--bg-popover) 90%, transparent);
 }
 
 .calendar-feature-body .calendar-detail-section {
-  padding: 20px 18px;
+  padding: 24px 20px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  background: color-mix(in srgb, var(--bg-popover) 92%, transparent);
+  gap: 16px;
+  background: color-mix(in srgb, var(--bg-popover) 85%, transparent);
   overflow-y: auto;
 }
 
@@ -167,42 +168,46 @@
 }
 
 .cal-nav-btn {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   border: none;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--bg-muted) 80%, transparent);
+  border-radius: var(--radius-button);
+  background: color-mix(in srgb, var(--bg-muted) 60%, transparent);
   color: var(--fg);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.12s ease, transform 0.1s ease;
+  transition: background 0.2s var(--spring-ease), transform 0.15s var(--spring-ease);
 }
 
 .cal-nav-btn:hover {
-  background: var(--bg-muted);
+  background: color-mix(in srgb, var(--bg-muted) 80%, transparent);
+  transform: scale(1.05);
 }
 
 .cal-nav-btn:active {
-  transform: scale(0.94);
+  transform: scale(0.92);
 }
 
 .cal-today-btn {
-  padding: 5px 12px;
+  padding: 7px 14px;
   border: none;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--primary-bg) 12%, transparent);
-  color: var(--primary-bg);
-  font-size: var(--font-caption);
+  border-radius: var(--radius-button);
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+  font-size: var(--font-body);
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.12s ease;
+  transition: background 0.2s var(--spring-ease), transform 0.15s var(--spring-ease), box-shadow 0.2s var(--spring-ease);
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--primary-bg) 25%, transparent);
 }
 
 .cal-today-btn:hover {
-  background: color-mix(in srgb, var(--primary-bg) 20%, transparent);
+  background: var(--primary-hover);
+  transform: scale(1.02);
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--primary-bg) 35%, transparent);
 }
 
 .cal-week-head {
@@ -230,19 +235,20 @@
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  min-height: 58px;
-  padding: 6px 2px 4px;
+  min-height: 62px;
+  padding: 8px 4px 6px;
   border: none;
-  border-radius: 10px;
+  border-radius: var(--radius-input);
   background: transparent;
   cursor: pointer;
   font: inherit;
   color: var(--fg);
-  transition: background 0.12s ease, transform 0.1s ease;
+  transition: background 0.2s var(--spring-ease), transform 0.15s var(--spring-ease);
 }
 
 .cal-cell:hover {
-  background: color-mix(in srgb, var(--bg-muted) 70%, transparent);
+  background: color-mix(in srgb, var(--bg-muted) 60%, transparent);
+  transform: scale(1.04);
 }
 
 .cal-cell.outside {
@@ -268,6 +274,7 @@
 
 .cal-cell.selected {
   background: var(--cal-accent, var(--primary-bg));
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--cal-accent) 35%, transparent);
 }
 
 .cal-cell.selected .cal-num,
