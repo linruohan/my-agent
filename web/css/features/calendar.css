@@ -86,8 +86,9 @@
 
 /* 万年历主视图 */
 .calendar-feature-body {
-  max-width: min(920px, 100%);
+  max-width: min(1280px, 100%);
   padding-bottom: 32px;
+  margin: 0 auto;
 }
 
 .calendar-feature-body .calendar-layout {
@@ -234,9 +235,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  min-height: 62px;
-  padding: 8px 4px 6px;
+  justify-content: center;
+  min-height: 72px;
+  padding: 10px 6px;
   border: none;
   border-radius: var(--radius-input);
   background: transparent;
@@ -400,11 +401,13 @@
 .cal-ganzhi {
   text-align: center;
   font-size: var(--font-meta);
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+  border-radius: var(--radius-input);
   color: var(--fg-muted);
-  background: var(--bg-muted);
+  background: color-mix(in srgb, var(--bg-muted) 70%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .cal-yiji {
@@ -415,31 +418,36 @@
 
 .cal-yiji-row {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: flex-start;
   font-size: var(--font-meta);
   line-height: 1.5;
+  padding: 8px 12px;
+  border-radius: var(--radius-input);
+  background: color-mix(in srgb, var(--bg-muted) 50%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 30%, transparent);
 }
 
 .cal-yiji-label {
   flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
   font-weight: 700;
   color: var(--primary-fg);
+  box-shadow: 0 2px 8px color-mix(in srgb, currentColor 20%, transparent);
 }
 
 .cal-yiji-label.yi {
-  background: var(--success);
+  background: linear-gradient(135deg, var(--success) 0%, color-mix(in srgb, var(--success) 80%, var(--fg) 10%) 100%);
 }
 
 .cal-yiji-label.ji {
-  background: var(--cal-accent, var(--primary-bg));
+  background: linear-gradient(135deg, var(--cal-accent, var(--primary-bg)) 0%, color-mix(in srgb, var(--cal-accent, var(--primary-bg)) 80%, var(--fg) 10%) 100%);
 }
 
 .cal-yiji-text {
@@ -451,8 +459,14 @@
   font-size: var(--font-caption);
   color: var(--fg-muted);
   line-height: 1.6;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+}
+
+.cal-jieqi > div {
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg-muted) 35%, transparent);
 }
 
 .cal-holiday-tag {

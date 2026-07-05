@@ -397,6 +397,21 @@ window.ChatApp = (() => {
     document.getElementById("knowledge-pick-folder").addEventListener("click", () => doImport("folder"));
   }
 
+  function bindWelcomeChips() {
+    document.querySelectorAll(".welcome-chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        const query = chip.dataset.query;
+        if (!query) return;
+        const box = document.getElementById("input-box");
+        if (box) {
+          box.value = query;
+          box.focus();
+          window.Composer?.send?.();
+        }
+      });
+    });
+  }
+
   function bindConfirm() {
     const modal = document.getElementById("confirm-modal");
     let pending = false;
@@ -448,6 +463,7 @@ window.ChatApp = (() => {
     bindWorkDir();
     bindSettings();
     bindKnowledge();
+    bindWelcomeChips();
     bindConfirm();
     window.CalendarUI?.init();
 
