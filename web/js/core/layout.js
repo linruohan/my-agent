@@ -13,7 +13,7 @@ window.LayoutUI = (() => {
     settings: "btn-settings",
   };
 
-  const { api, el, debounce } = window.Utils;
+  const { api, el, debounce, asyncSafeCall } = window.Utils;
 
   function normalizeBaseUrl(baseUrl) {
     return (baseUrl || "").replace(/\/+$/, "");
@@ -305,8 +305,9 @@ window.LayoutUI = (() => {
       refreshModels();
     });
 
+    const debouncedRenderModelList = debounce((query) => renderModelList(query), 150);
     searchInput?.addEventListener("input", (e) => {
-      renderModelList(e.target.value);
+      debouncedRenderModelList(e.target.value);
     });
 
     document.addEventListener("click", (e) => {
@@ -322,7 +323,7 @@ window.LayoutUI = (() => {
 
     btn.disabled = true;
     try {
-      const res = await api().set_model(model);
+      const res = await asyncSafeCall(async () => await api().set_model(model), null);
       if (res?.ok) {
         window.ChatApp?.setStatus?.(res.status_text);
         window.ChatApp?.setComposerHint?.("");

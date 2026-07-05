@@ -158,6 +158,14 @@ class SearchCacheStore(ReusableSqliteStore):
                 (cache_key,),
             )
 
+    def update_ttl(self, cache_key: str, ttl_days: int) -> None:
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=ttl_days)).isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE search_cache SET expires_at = ? WHERE cache_key = ?",
+                (expires_at, cache_key),
+            )
+
     def delete_by_key(self, cache_key: str) -> bool:
         with self._connect() as conn:
             cur = conn.execute("DELETE FROM search_cache WHERE cache_key = ?", (cache_key,))

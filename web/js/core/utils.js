@@ -97,6 +97,59 @@ window.Utils = (() => {
     return `${y}-${mo}-${da}`;
   }
 
+  let _lazyObserver = null;
+  const _lazyLoaded = new Set();
+
+  function initLazyLoad() {
+    if (_lazyObserver) return;
+    if (!window.IntersectionObserver) return;
+
+    _lazyObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && !_lazyLoaded.has(entry.target)) {
+            const img = entry.target;
+            const src = img.getAttribute("data-src");
+            if (src) {
+              img.src = src;
+              _lazyLoaded.add(img);
+              _lazyObserver.unobserve(img);
+            }
+          }
+        });
+      },
+      {
+        rootMargin: "100px",
+        threshold: 0.01,
+      }
+    );
+  }
+
+  function observeImages(container = document) {
+    initLazyLoad();
+    if (!_lazyObserver) return;
+
+    container.querySelectorAll("img[data-src]").forEach((img) => {
+      if (!_lazyLoaded.has(img)) {
+        _lazyObserver.observe(img);
+      }
+    });
+  }
+
+  function observeImage(img) {
+    initLazyLoad();
+    if (!_lazyObserver || _lazyLoaded.has(img)) return;
+    _lazyObserver.observe(img);
+  }
+
+  function disposeLazyLoad() {
+    if (_lazyObserver) {
+      _lazyObserver.disconnect();
+      _lazyObserver = null;
+    }
+    _lazyLoaded.clear();
+  }
+
   return {
     api,
     el,
@@ -111,5 +164,9 @@ window.Utils = (() => {
     unescapeHtml,
     formatTime,
     formatDate,
+    initLazyLoad,
+    observeImages,
+    observeImage,
+    disposeLazyLoad,
   };
 })();

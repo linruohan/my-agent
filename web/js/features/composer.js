@@ -11,14 +11,14 @@ window.Composer = (() => {
   let slashIndex = -1;
   let slashOpen = false;
 
-  const { api, el, asyncSafeCall } = window.Utils;
+  const { api, el, asyncSafeCall, debounce } = window.Utils;
 
-  function autoResizeInput() {
+  const autoResizeInput = debounce(() => {
     const box = el("input-box");
     if (!box) return;
     box.style.height = "auto";
     box.style.height = `${Math.min(box.scrollHeight, 160)}px`;
-  }
+  }, 50);
 
   function renderAttachments() {
     const strip = el("attachment-strip");
@@ -436,11 +436,7 @@ window.Composer = (() => {
 
   async function refreshSlashCatalog() {
     if (!api()) return;
-    try {
-      slashCatalog = (await api().get_slash_catalog()) || [];
-    } catch {
-      slashCatalog = [];
-    }
+    slashCatalog = (await asyncSafeCall(async () => await api().get_slash_catalog(), [])) || [];
   }
 
   function updateProviderMeta(meta) {

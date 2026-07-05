@@ -1,11 +1,13 @@
 /** 聊天消息 DOM 渲染 */
 window.ChatUI = (() => {
+  const { el, raf, asyncSafeCall, observeImages } = window.Utils;
+
   function scrollEl() {
-    return document.getElementById("chat-scroll");
+    return el("chat-scroll");
   }
 
   function welcomeEl() {
-    return document.getElementById("chat-welcome");
+    return el("chat-welcome");
   }
 
   function showWelcome() {
@@ -56,7 +58,7 @@ window.ChatUI = (() => {
   function scrollBottom() {
     if (scrollScheduled) return;
     scrollScheduled = true;
-    requestAnimationFrame(() => {
+    raf(() => {
       scrollScheduled = false;
       const el = scrollEl();
       if (!el) return;
@@ -72,23 +74,24 @@ window.ChatUI = (() => {
     const value = text || "";
     if (!value) return false;
     let ok = false;
-    try {
+
+    ok = await asyncSafeCall(async () => {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(value);
-        ok = true;
+        return true;
       }
-    } catch {
-      ok = false;
-    }
-    if (!ok && window.pywebview && window.pywebview.api && window.pywebview.api.copy_to_clipboard) {
-      try {
-        ok = await window.pywebview.api.copy_to_clipboard(value);
-      } catch {
-        ok = false;
-      }
-    }
+      return false;
+    }, false);
+
     if (!ok) {
-      try {
+      const bridge = window.Utils.api();
+      if (bridge && bridge.copy_to_clipboard) {
+        ok = await asyncSafeCall(async () => await bridge.copy_to_clipboard(value), false);
+      }
+    }
+
+    if (!ok) {
+      ok = await asyncSafeCall(() => {
         const ta = document.createElement("textarea");
         ta.value = value;
         ta.setAttribute("readonly", "");
@@ -96,12 +99,12 @@ window.ChatUI = (() => {
         ta.style.left = "-9999px";
         document.body.appendChild(ta);
         ta.select();
-        ok = document.execCommand("copy");
+        const result = document.execCommand("copy");
         document.body.removeChild(ta);
-      } catch {
-        ok = false;
-      }
+        return result;
+      }, false);
     }
+
     if (ok && btn) {
       flashCopied(btn);
     }
@@ -155,43 +158,34 @@ window.ChatUI = (() => {
 
   async function openLocalPath(path, btn) {
     if (!path) return false;
-    const api = window.pywebview && window.pywebview.api;
-    if (!api || !api.open_local_path) {
+    const bridge = window.Utils.api();
+    if (!bridge || !bridge.open_local_path) {
       window.alert("当前环境不支持打开本地文件");
       return false;
     }
-    try {
-      const res = await api.open_local_path(path);
-      if (!res || !res.ok) {
-        window.alert((res && res.error) || "打开失败");
-        return false;
-      }
-      if (btn) {
-        const orig = btn.textContent;
-        btn.classList.add("opened");
-        btn.textContent = "已打开";
-        setTimeout(() => {
-          btn.classList.remove("opened");
-          btn.textContent = orig;
-        }, 1500);
-      }
-      return true;
-    } catch {
-      window.alert("打开失败");
+    const res = await asyncSafeCall(async () => await bridge.open_local_path(path), null);
+    if (!res || !res.ok) {
+      window.alert((res && res.error) || "打开失败");
       return false;
     }
+    if (btn) {
+      const orig = btn.textContent;
+      btn.classList.add("opened");
+      btn.textContent = "已打开";
+      setTimeout(() => {
+        btn.classList.remove("opened");
+        btn.textContent = orig;
+      }, 1500);
+    }
+    return true;
   }
 
   async function fetchLocalPathExists(paths) {
     const unique = [...new Set((paths || []).filter(Boolean))];
     if (!unique.length) return {};
-    const api = window.pywebview && window.pywebview.api;
-    if (!api || !api.check_local_paths) return {};
-    try {
-      return (await api.check_local_paths(unique)) || {};
-    } catch {
-      return {};
-    }
+    const bridge = window.Utils.api();
+    if (!bridge || !bridge.check_local_paths) return {};
+    return (await asyncSafeCall(async () => await bridge.check_local_paths(unique), {})) || {};
   }
 
   function buildLocalPathSpan(path) {
@@ -569,7 +563,7 @@ window.ChatUI = (() => {
         btn.className = "msg-image-btn";
         btn.title = imgMeta.name || "点击查看大图";
         const img = document.createElement("img");
-        img.src = imgMeta.data_url;
+        img.setAttribute("data-src", imgMeta.data_url);
         img.alt = imgMeta.name || "图片";
         img.className = "msg-image";
         btn.appendChild(img);
@@ -582,6 +576,7 @@ window.ChatUI = (() => {
         gallery.appendChild(btn);
       });
       bubble.appendChild(gallery);
+      observeImages(bubble);
     }
 
     if (ev.content) {

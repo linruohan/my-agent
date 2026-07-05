@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import threading
 from dataclasses import dataclass
+from datetime import datetime
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
@@ -71,6 +72,9 @@ class SearchCache:
         self.ttl_days = int(cfg.get("ttl_days", 7))
         self.max_entries = int(cfg.get("max_entries", 100))
         self.max_user_queries = int(cfg.get("max_user_queries_per_entry", 5))
+        self._min_ttl_days = int(cfg.get("min_ttl_days", 1))
+        self._max_ttl_days = int(cfg.get("max_ttl_days", 30))
+        self._prune_interval_minutes = int(cfg.get("prune_interval_minutes", 15))
         if db_path is not None:
             self.db_path = db_path
         else:
@@ -81,6 +85,7 @@ class SearchCache:
         self._store = SearchCacheStore(self.db_path)
         self._lock = threading.Lock()
         self._session_stats = CacheSessionStats()
+        self._last_prune_time = 0
         self._migrate_legacy()
 
     @property
@@ -148,6 +153,23 @@ class SearchCache:
         candidates = [row.cache_key, row.search_query, *row.user_queries]
         return max(text_similarity(query, c) for c in candidates if c)
 
+    def _should_prune(self) -> bool:
+        now = datetime.now().timestamp()
+        return now - self._last_prune_time >= self._prune_interval_minutes * 60
+
+    def _update_prune_time(self) -> None:
+        self._last_prune_time = datetime.now().timestamp()
+
+    def _calculate_adaptive_ttl(self, hit_count: int) -> int:
+        base = self.ttl_days
+        if hit_count >= 5:
+            return min(base * 2, self._max_ttl_days)
+        if hit_count >= 10:
+            return min(base * 3, self._max_ttl_days)
+        if hit_count == 0:
+            return max(base // 2, self._min_ttl_days)
+        return base
+
     def lookup(self, user_query: str) -> str | None:
         if not self.enabled or not user_query.strip():
             return None
@@ -155,7 +177,10 @@ class SearchCache:
         query = user_query.strip()
         with self._lock:
             self._session_stats.lookups += 1
-        self._store.prune_expired()
+
+        if self._should_prune():
+            self._store.prune_expired()
+            self._update_prune_time()
 
         best_score = 0.0
         best_row: CacheRow | None = None
@@ -178,6 +203,9 @@ class SearchCache:
                 self._session_stats.hit_rate * 100,
             )
             self._store.record_hit(best_row.cache_key)
+            new_ttl = self._calculate_adaptive_ttl(best_row.hit_count + 1)
+            if new_ttl != self.ttl_days:
+                self._store.update_ttl(best_row.cache_key, new_ttl)
             return best_row.response
         with self._lock:
             self._session_stats.misses += 1
@@ -222,9 +250,13 @@ class SearchCache:
                 ttl_days=self.ttl_days,
                 max_user_queries=self.max_user_queries,
             )
-            self._store.prune_expired()
             self._store.prune_overflow(self.max_entries)
             self._session_stats.saves += 1
+
+        if self._should_prune():
+            self._store.prune_expired()
+            self._update_prune_time()
+
         logger.info("已写入搜索缓存 [{}]: {}", cache_key[:40], user_query[:60])
 
     def save_async(

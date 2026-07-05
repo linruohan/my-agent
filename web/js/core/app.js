@@ -3,7 +3,7 @@ window.ChatApp = (() => {
   let running = false;
   let providerList = [];
   let appliedThemeKeys = [];
-  const { api, el } = window.Utils;
+  const { api, el, initLazyLoad } = window.Utils;
 
   function applyTheme(variables) {
     if (!variables) return;
@@ -464,6 +464,7 @@ window.ChatApp = (() => {
     bindWelcomeChips();
     bindConfirm();
     window.CalendarUI?.init();
+    initLazyLoad();
 
     if (!api()) return;
     const state = await api().get_initial_state();
