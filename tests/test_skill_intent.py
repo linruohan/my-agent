@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from src.ui.skill_intent import parse_skill_command_with_llm
+from src.ui.skill.intent import parse_skill_command_with_llm
 
 
 class _FakeLLM:

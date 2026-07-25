@@ -68,6 +68,9 @@ gateway:
   http_host: "127.0.0.1"
   http_port: 8765
   http_token: ""
+  # 出站推送（可选）。配置后回复优先 POST 到此 URL，失败再入 /api/outbound 轮询队列
+  # 请求体：{"source","chat_id","text"}，Header 可带 Authorization: Bearer <http_token>
+  http_webhook_url: ""
   # 远程 HITL：auto_reject | approve_low | approve_medium | ask
   # ask：向远程用户发送确认提示，等待 /approve 或 /reject
   remote_hitl: auto_reject

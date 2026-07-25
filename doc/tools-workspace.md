@@ -31,10 +31,11 @@ Web 前端提供万年历组件：
 
 | 文件 | 说明 |
 |------|------|
-| `web/js/calendar.js` | 日历渲染与交互 |
-| `web/js/holidays.js` | 节假日数据 |
+| `web/js/features/calendar.js` | 日历渲染与交互 |
+| `web/js/features/holidays.js` | 节假日加载器 |
+| `web/data/holidays.json` | 法定节假日数据（休/班），按年维护 |
 | `web/js/vendor/lunar.js` | 农历计算 |
-| `web/css/calendar.css` | 日历样式 |
+| `web/css/features/calendar.css` | 日历样式 |
 
 万年历支持：
 

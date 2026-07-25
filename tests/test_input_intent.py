@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.ui.input_intent import (
+from src.ui.input.intent import (
     INTENT_AGENT,
     INTENT_LINK,
     INTENT_OCR,

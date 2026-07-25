@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 from typing import Callable
 
+import httpx
 from loguru import logger
 
 from src.gateway.config import load_gateway_config
@@ -15,6 +16,37 @@ from src.gateway.slack_bot import SlackGateway
 from src.gateway.telegram_bot import TelegramGateway
 
 _MAX_REPLY_CHARS = 4000
+
+
+def post_http_webhook(
+    url: str,
+    *,
+    source: str,
+    chat_id: str,
+    text: str,
+    token: str = "",
+    timeout: float = 15.0,
+) -> bool:
+    """向配置的 webhook URL 推送一条出站消息。"""
+    if not (url or "").strip():
+        return False
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.post(
+                url.strip(),
+                json={"source": source, "chat_id": chat_id, "text": text},
+                headers=headers,
+            )
+            if 200 <= resp.status_code < 300:
+                return True
+            logger.warning("HTTP webhook 失败 status={} body={}", resp.status_code, resp.text[:200])
+            return False
+    except Exception as exc:
+        logger.warning("HTTP webhook 异常: {}", exc)
+        return False
 
 
 def split_reply_text(text: str, *, max_len: int = _MAX_REPLY_CHARS) -> list[str]:
@@ -53,6 +85,8 @@ class GatewayService:
         self._telegram: TelegramGateway | None = None
         self._discord: DiscordGateway | None = None
         self._slack: SlackGateway | None = None
+        self._http_webhook_url: str = ""
+        self._http_token: str = ""
         self._stop = threading.Event()
         self._dispatch_thread: threading.Thread | None = None
 
@@ -61,6 +95,9 @@ class GatewayService:
         if not cfg.get("enabled"):
             logger.debug("Gateway 未启用")
             return
+
+        self._http_webhook_url = str(cfg.get("http_webhook_url") or "").strip()
+        self._http_token = str(cfg.get("http_token") or "").strip()
 
         if cfg.get("http_enabled"):
             self._http = GatewayHttpServer(
@@ -138,6 +175,16 @@ class GatewayService:
         if source == "slack" and self._slack:
             if self._slack.send_message(chat_id, body):
                 return True
+        # 非即时通道（含 http）：优先 webhook 推送，失败由调用方入 outbound 队列
+        if self._http_webhook_url and source not in ("telegram", "discord", "slack"):
+            if post_http_webhook(
+                self._http_webhook_url,
+                source=source or "http",
+                chat_id=chat_id,
+                text=body,
+                token=self._http_token,
+            ):
+                return True
         return False
 
     def _dispatch_loop(self) -> None:
@@ -169,5 +216,6 @@ class GatewayService:
             "discord": bool((cfg.get("discord") or {}).get("enabled")),
             "slack": bool((cfg.get("slack") or {}).get("enabled")),
             "remote_hitl": cfg.get("remote_hitl"),
+            "http_webhook": bool(cfg.get("http_webhook_url")),
             "pending_inbound": self.inbox.count_pending_inbound(),
         }

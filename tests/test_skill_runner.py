@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.ui.skill_runner import (
+from src.ui.skill.runner import (
     CliSpec,
     _build_argv,
     _collect_free_values,

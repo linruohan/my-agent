@@ -124,16 +124,18 @@ API Key 存储优先级：
 
 `load_merged_settings()` 供记忆系统读取 `critical_rules`、`memory.team_memory_enabled`、`memory.stale_days` 等；critical 提权写入 `.my-agent/settings.local.json`，**不会**修改 `config/app.yaml`。
 
-### Gateway `remote_hitl`（`config/app.yaml` → `gateway.remote_hitl`）
+### Gateway
 
-| 值 | 行为 |
-|----|------|
-| `auto_reject` | 远程敏感操作一律拒绝（默认） |
-| `approve_low` | 仅自动批准 low 风险工具 |
-| `approve_medium` | 自动批准 low/medium |
-| `ask` | 向远程聊天发送确认提示，等待 `/approve` 或 `/reject` |
+详见 [gateway.md](gateway.md)。要点：
 
-忙时入站会回复「请稍候」并重新排队。HTTP 建议配置 `http_token`，生产环境前加反向代理/TLS。
+- `remote_hitl`：`auto_reject` / `approve_low` / `approve_medium` / `ask`
+- `http_webhook_url`：出站推送（失败回退 `/api/outbound`）
+- 忙时入站回复「请稍候」并重排队
+- 生产务必配置 `http_token` + 反向代理/TLS
+
+### API 目录说明
+
+Python js_api / 设置接口位于 **`src/ui/api/`**（无顶层 `src/api/`）。Gateway HTTP 位于 `src/gateway/http_server.py`。
 
 配置在首次调用时加载并缓存，修改 YAML 后需重启应用生效。
 

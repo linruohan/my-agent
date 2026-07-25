@@ -9,7 +9,7 @@ from src.memory.search_cache import SearchCache
 from src.memory.search_cache_db import SearchCacheStore
 from src.tools.note_store import NoteStore, handle_note_command
 from src.tools.task_store import TaskStore, handle_task_command
-from src.ui.input_intent import (
+from src.ui.input.intent import (
     INTENT_SLASH_CACHE,
     INTENT_SLASH_FILE,
     INTENT_SLASH_METRICS,

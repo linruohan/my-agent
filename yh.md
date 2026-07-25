@@ -3,8 +3,8 @@
 > 审查日期：2026-07-25  
 > 范围：`src/`、`web/`、`doc/`、设计文档、测试与工程配置  
 > 说明：按优先级排列，便于排期；路径以仓库根目录为准。  
-> **2026-07-25 已落地（三轮）**：记忆 / critical / Gateway HITL / 日历冲突 / 增量迁移；  
-> A13 Telegram→PollingGateway、Discord/Slack ingest 测试、记忆选择缓存、多盘搜索失败反馈、task 模块拆分、ruff。
+> **2026-07-25 已落地（四轮）**：前三轮 + 节假日 JSON、HTTP webhook、记忆规则预筛、  
+> 模型列表后端优先、MemoryService 门面、shim 测试改规范路径、gateway 文档、CI 跳过 browser_integration。
 
 ---
 
@@ -54,8 +54,8 @@
 | ID | 位置 | 现状 | 建议 |
 |----|------|------|------|
 | A20 | ~~根目录 test_search~~ ✅ | 已移至 `scripts/test_search.py` | 已完成 |
-| A21 | shim 重导出 | 保留兼容层（`input_intent` 等） | 低优先级收敛 |
-| A22 | `web/js/features/holidays.js` | 节假日硬编码至约 2027 | 外部数据源或配置化 |
+| A21 | ~~shim~~ ✅ | 测试改规范路径；兼容层文件保留 | 已完成 |
+| A22 | ~~节假日硬编码~~ ✅ | `web/data/holidays.json` + 异步加载 | 已完成 |
 | A23 | ~~USER.md.local~~ ✅ | 同时支持 `USER.local.md` | 已完成 |
 | A24 | `src/gateway/base.py` | 抽象基类 `PollingGateway`（非 stub） | 无需改动 |
 
@@ -67,7 +67,7 @@
 
 | 位置 | 现状 | 建议 |
 |------|------|------|
-| `src/agent/graph.py` 记忆选择 | ~~无缓存~~ ✅ | 120s TTL 选择缓存 | 可再接小模型预筛 |
+| `src/agent/graph.py` 记忆选择 | ~~无缓存/预筛~~ ✅ | TTL 缓存 + 规则预筛跳过 LLM | 已完成 |
 | `runner.py` + `memory_writer.py` | ~~无间隔~~ ✅ | `min_interval_sec` 限流 | 已完成 |
 | `src/tools/task/store.py` | ~~过大~~ ✅ | 拆为 `store` / `commands` / `migrate` | 已完成 |
 | 多盘符全局搜索 | ~~静默失败~~ ✅ | 汇总失败盘符提示用户 | 已完成 |
@@ -76,15 +76,15 @@
 
 | 位置 | 现状 | 建议 |
 |------|------|------|
-| Memory 全链路 | 索引、扁平 MEMORY、结构化文件、learning 多入口 | 定义单一 `MemoryService` API |
-| API 目录 | 实现在 `src/ui/api/`，无顶层 `src/api/` | 文档澄清；或按域拆包 |
-| Gateway | Inbox 与 `app.db` 同库；HTTP 无 TLS | 部署文档补充 token、反向代理要求 |
+| Memory 全链路 | ~~多入口~~ ✅ | `src/memory/service.py` MemoryService 门面 | 已完成 |
+| API 目录 | ~~文档澄清~~ ✅ | `doc/config-data.md` 已说明 `src/ui/api/` | 已完成 |
+| Gateway | ~~缺部署说明~~ ✅ | `doc/gateway.md` + webhook | 已完成 |
 
 ### 体验
 
 | 位置 | 现状 | 建议 |
 |------|------|------|
-| `web/js/core/layout.js` | 模型列表可能前端直连 Provider（CORS/密钥风险） | 默认走后端代理 |
+| `web/js/core/layout.js` | ~~前端直连优先~~ ✅ | 默认后端 `list_provider_models`，失败再直连 | 已完成 |
 | `src/ui/controller/turns.py` 等 | ~~宽 except 静默~~ ✅（turns/clipboard/link/file_dialog/browser 已打 debug） | 其余路径可继续收紧 |
 | Gateway 忙时 | ~~无排队提示~~ ✅ | 已回复「请稍候」并重排队 |
 
@@ -93,8 +93,8 @@
 | 位置 | 现状 | 建议 |
 |------|------|------|
 | `pyproject.toml` | ~~无 ruff~~ ✅ | `dev` extras 含 ruff + 基础规则 | 可继续收紧 / 加 mypy |
-| CI | Linux 忽略 OCR；无 playwright install 专用 job | browser 测试加 setup 或默认 skip |
-| `packaging/stage_release.py` | 仍列举旧分散库名 | 更新为 `app.db` 中心描述 |
+| CI | ~~browser 误跑~~ ✅ | `-m "not browser_integration"` | 已完成 |
+| `packaging/stage_release.py` | ~~注释过时~~ ✅ | 标明 app.db 中心 + 旧库跳过 | 已完成 |
 | 配置热更新 | `app.yaml` 改完需重启 | 对标 Gateway `reload()` 做配置热加载 |
 
 ---
@@ -103,9 +103,9 @@
 
 | 文档 | 实现现状 | 严重度 |
 |------|----------|--------|
-| `个人助理Agent设计文档.md` — CustomTkinter | 实际为 **pywebview + web/**（`doc/architecture.md` 正确） | 高 |
-| 同上 — SystemTray、ConfirmDialog | 合入 web HITL + controller | 中 |
-| 同上 — chromadb、langgraph.store | 仅用 **FAISS + fastembed**，无 chromadb | 中 |
+| `个人助理Agent设计文档.md` — CustomTkinter | ~~已注明 pywebview~~ ✅ | — |
+| 同上 — SystemTray、ConfirmDialog | 合入 web HITL；托盘标 Phase 2 | 低 |
+| 同上 — chromadb、langgraph.store | ~~已注明 FAISS~~ ✅ | — |
 | 同上 — RAG MMR | `src/memory/rag.py` 无 MMR | 低 |
 | `design_memory.md` L1/L2「待实现」 | 大量 CLAUDE 分层与合并逻辑已存在，状态表过时 | 中 |
 | `design_memory.md` — critical→settings.json | ~~已改为 settings.local.json~~ ✅ | — |

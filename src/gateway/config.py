@@ -44,6 +44,8 @@ def load_gateway_config() -> dict[str, Any]:
         "http_host": str(gw.get("http_host") or "127.0.0.1"),
         "http_port": int(gw.get("http_port") or 8765),
         "http_token": str(gw.get("http_token") or "").strip(),
+        # 出站 webhook：有值时优先 POST 推送，失败再落入 outbound 轮询队列
+        "http_webhook_url": str(gw.get("http_webhook_url") or "").strip(),
         "remote_hitl": str(gw.get("remote_hitl") or "auto_reject").strip().lower(),
         "cron_default": {
             "source": str(cron_default.get("source") or "").strip(),

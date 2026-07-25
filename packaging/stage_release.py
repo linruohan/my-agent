@@ -24,17 +24,19 @@ DATA_SUBDIRS = (
     "temp/input",
 )
 
-# 默认不从开发 data/ 拷贝的敏感或运行时文件
+# 默认不从开发 data/ 拷贝的敏感或运行时文件。
+# 运行时主库为 app.db；下列分散库名为旧版残留，发布时一律跳过。
 SKIP_DATA_NAMES = frozenset({
     "secrets.json",
     "user_settings.yaml",
+    # 统一应用库
     "app.db",
     "app.db-shm",
     "app.db-wal",
     "metrics.db",
     "metrics.db-shm",
     "metrics.db-wal",
-    # 旧版分散库（迁移后可能残留）
+    # 旧版分散库（迁移后可能残留，勿打进发布包）
     "sessions.db",
     "sessions.db-shm",
     "sessions.db-wal",

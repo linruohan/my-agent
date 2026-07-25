@@ -239,30 +239,32 @@ window.LayoutUI = (() => {
     }
 
     try {
-      if (providerConfig.type && providerConfig.base_url) {
+      // 默认走后端代理，避免前端直连暴露密钥 / CORS
+      if (api()) {
         try {
-          const models = await fetchModelsDirectly();
-          const uniqueModels = [...new Set(models)].sort((a, b) => a.localeCompare(b));
-          if (!uniqueModels.includes(currentModel) && currentModel) {
-            uniqueModels.unshift(currentModel);
+          const res = await api().list_provider_models();
+          updateProviderConfig(res);
+          fillModelSelect(res?.models || [], res?.current_model || currentModel);
+          if (res?.error && !silent) {
+            window.ChatApp?.setComposerHint?.(`模型列表: ${res.error}`);
           }
-          fillModelSelect(uniqueModels, currentModel);
           return;
-        } catch (directErr) {
-          console.warn("直接获取模型列表失败，回退到后端代理:", directErr);
+        } catch (proxyErr) {
+          console.warn("后端模型列表失败，尝试前端直连:", proxyErr);
         }
       }
 
-      if (!api()) {
-        throw new Error("API 不可用");
+      if (providerConfig.type && providerConfig.base_url) {
+        const models = await fetchModelsDirectly();
+        const uniqueModels = [...new Set(models)].sort((a, b) => a.localeCompare(b));
+        if (!uniqueModels.includes(currentModel) && currentModel) {
+          uniqueModels.unshift(currentModel);
+        }
+        fillModelSelect(uniqueModels, currentModel);
+        return;
       }
 
-      const res = await api().list_provider_models();
-      updateProviderConfig(res);
-      fillModelSelect(res?.models || [], res?.current_model || currentModel);
-      if (res?.error && !silent) {
-        window.ChatApp?.setComposerHint?.(`模型列表: ${res.error}`);
-      }
+      throw new Error("API 不可用");
     } catch (err) {
       fillModelSelect(currentModel ? [currentModel] : [], currentModel);
       if (!silent) {

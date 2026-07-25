@@ -28,7 +28,8 @@ jobs:
 
       - name: Run tests
         run: |
+          # 跳过 Windows-only OCR；browser_integration 需本机 playwright chromium，默认不跑
           python -m pytest tests/ -q \
-            -m "not windows" \
+            -m "not windows and not browser_integration" \
             --ignore=tests/test_ocr.py \
             --ignore=tests/test_ocr_worker.py

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.ui.input_compose import (
+from src.ui.input.compose import (
     build_image_previews,
     compose_user_message,
     extract_inline_urls,

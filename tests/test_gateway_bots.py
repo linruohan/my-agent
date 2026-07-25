@@ -170,3 +170,56 @@ def test_telegram_inherits_polling_gateway():
     from src.gateway.telegram_bot import TelegramGateway
 
     assert issubclass(TelegramGateway, PollingGateway)
+
+
+def test_post_http_webhook_success(monkeypatch):
+    from src.gateway import service as svc_mod
+
+    class FakeResp:
+        status_code = 200
+        text = "ok"
+
+    class FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def post(self, url, json=None, headers=None):
+            assert url == "https://example.com/hook"
+            assert json["text"] == "hi"
+            assert headers["Authorization"] == "Bearer tok"
+            return FakeResp()
+
+    monkeypatch.setattr(svc_mod.httpx, "Client", FakeClient)
+    assert svc_mod.post_http_webhook(
+        "https://example.com/hook",
+        source="http",
+        chat_id="c1",
+        text="hi",
+        token="tok",
+    )
+
+
+def test_deliver_reply_uses_webhook_for_http(tmp_path, monkeypatch):
+    inbox = GatewayInbox(db_path=tmp_path / "wh.db")
+    svc = GatewayService(inbox)
+    svc._http_webhook_url = "https://example.com/hook"
+    svc._http_token = ""
+
+    called = {}
+
+    def fake_post(url, *, source, chat_id, text, token="", timeout=15.0):
+        called["url"] = url
+        called["text"] = text
+        return True
+
+    monkeypatch.setattr("src.gateway.service.post_http_webhook", fake_post)
+    svc.deliver_reply("http", "chat-1", "pong")
+    assert called["url"] == "https://example.com/hook"
+    assert called["text"] == "pong"
+    assert inbox.pop_outbound_batch() == []

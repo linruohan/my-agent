@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.ui.link_fetch import _extract_readable_text, _summarize_text, _validate_url
+from src.ui.link.fetch import _extract_readable_text, _summarize_text, _validate_url
 
 
 def test_validate_url():

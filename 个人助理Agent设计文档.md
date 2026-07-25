@@ -1,7 +1,7 @@
 # 个人助理 Agent —— 设计方案（v2）
 
 > 技术栈：**LangChain + LangGraph** | **pywebview + Web UI** | **可插拔外部 LLM API**  
-> 注：早期草案曾规划 CustomTkinter；以 `doc/` 与当前实现为准。
+> 注：早期草案曾规划 CustomTkinter / chromadb；以 `doc/` 与当前实现为准（向量库为 FAISS + fastembed）。
 
 ---
 

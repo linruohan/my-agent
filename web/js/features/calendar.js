@@ -297,6 +297,10 @@ window.CalendarUI = (() => {
     viewMonth = today.m;
     renderSidebar();
     bind();
+    window.addEventListener("holidays-loaded", () => {
+      renderSidebar();
+      render();
+    });
 
     const weekHead = document.getElementById("cal-week-head");
     if (weekHead) {

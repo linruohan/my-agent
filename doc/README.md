@@ -32,7 +32,8 @@ python main.py
 | 输入路由 | 斜杠命令、搜索管道、链接摘要、OCR 等 | [input-routing.md](input-routing.md) |
 | Skill 扩展 | 扫描 SKILL.md，以斜杠命令执行脚本 | [skills.md](skills.md) |
 | 配置与数据 | YAML 配置、SQLite 存储、用户设置 | [config-data.md](config-data.md) |
-| 平台能力 | Windows 语音识别、OCR、Toast 通知 | [platform.md](platform.md) |
+| Gateway | HTTP/Telegram/Discord/Slack、HITL、webhook | [gateway.md](gateway.md) |
+| 平台能力 | Windows OCR、Toast 通知（语音规划中） | [platform.md](platform.md) |
 
 ## 系统架构
 

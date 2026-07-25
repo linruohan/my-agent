@@ -136,11 +136,73 @@ def _should_filter_by_tool(entry: MemoryEntry, recent_tools: list[str]) -> bool:
     return False
 
 
+def _tokenize_query(text: str) -> set[str]:
+    raw = (text or "").strip().lower()
+    if not raw:
+        return set()
+    tokens: set[str] = set()
+    for part in re.split(r"[\s,，。；;、/\\|_+]+", raw):
+        part = part.strip()
+        if len(part) >= 2:
+            tokens.add(part)
+        # 中文双字窗口
+        if re.search(r"[\u4e00-\u9fff]", part):
+            for i in range(len(part) - 1):
+                gram = part[i : i + 2]
+                if re.search(r"[\u4e00-\u9fff]", gram):
+                    tokens.add(gram)
+    return tokens
+
+
+def _rule_prescreen_memories(
+    query: str,
+    entries: list[MemoryEntry],
+    max_results: int,
+) -> list[FoundMemory] | None:
+    """规则预筛：关键词重叠足够高时跳过 LLM。"""
+    tokens = _tokenize_query(query)
+    if len(tokens) < 2 or not entries:
+        return None
+
+    scored: list[tuple[float, MemoryEntry, str]] = []
+    for entry in entries:
+        hay = f"{entry.file_name} {entry.name} {entry.description} {' '.join(entry.tags)}".lower()
+        hits = [t for t in tokens if t in hay]
+        if not hits:
+            continue
+        score = len(hits) / max(len(tokens), 1)
+        # 名称/文件名命中加权
+        name_boost = 0.15 if any(t in entry.name.lower() or t in entry.file_name.lower() for t in hits) else 0.0
+        score = min(1.0, score + name_boost)
+        scored.append((score, entry, "、".join(hits[:4])))
+
+    if not scored:
+        return None
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    top_score = scored[0][0]
+    # 高置信且与次名有差距时，直接采用规则结果
+    second = scored[1][0] if len(scored) > 1 else 0.0
+    if top_score < 0.55 or (second > 0 and top_score - second < 0.12 and top_score < 0.75):
+        return None
+
+    found = [
+        FoundMemory(
+            file_name=entry.file_name,
+            confidence=round(score, 3),
+            reason=f"规则预筛命中：{reason}",
+        )
+        for score, entry, reason in scored[:max_results]
+        if score >= 0.4
+    ]
+    return found or None
+
+
 def find_relevant_memories(
     llm: BaseChatModel,
     input_data: FindRelevantMemoriesInput,
 ) -> list[FoundMemory]:
-    """使用小模型选择最相关的记忆（短时缓存，降低重复查询成本）。"""
+    """使用规则预筛 + 小模型选择最相关的记忆（短时缓存）。"""
     entries = input_data.memory_files
 
     entries = [e for e in entries if e.file_name not in input_data.already_surfaced]
@@ -155,8 +217,13 @@ def find_relevant_memories(
     if cached and (time.time() - cached[0]) < _CACHE_TTL_SEC:
         return list(cached[1])
 
-    memory_list = _build_memory_list(entries)
     max_results = min(input_data.max_results, _MAX_RESULTS)
+    prescreened = _rule_prescreen_memories(input_data.query, entries, max_results)
+    if prescreened:
+        _cache[cache_key] = (time.time(), list(prescreened))
+        return list(prescreened)
+
+    memory_list = _build_memory_list(entries)
 
     prompt = f"""Query: {input_data.query}
 
