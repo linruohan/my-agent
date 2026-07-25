@@ -72,3 +72,33 @@ def test_migrate_legacy_databases(tmp_path):
     close_database()
     assert len(rows) == 1
     assert rows[0].title == "旧笔记"
+
+
+def test_migrate_legacy_databases_incremental(tmp_path):
+    """app.db 已存在时仍可增量合并遗留库。"""
+    data = tmp_path / "data"
+    data.mkdir()
+    target = app_db_path(data)
+    ensure_database(data)
+
+    existing = NoteStore(target)
+    existing.add("已有笔记", "keep")
+    existing.close()
+    close_database()
+
+    legacy = data / "note.db"
+    note = NoteStore(legacy)
+    note.add("增量笔记", "new")
+    note.close()
+    close_database()
+
+    assert migrate_legacy_databases(target, data) is True
+    assert not legacy.is_file()
+    assert legacy.with_suffix(".db.migrated").is_file()
+
+    store = NoteStore(target)
+    titles = {r.title for r in store.list_all()}
+    store.close()
+    close_database()
+    assert "已有笔记" in titles
+    assert "增量笔记" in titles

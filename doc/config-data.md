@@ -124,6 +124,17 @@ API Key 存储优先级：
 
 `load_merged_settings()` 供记忆系统读取 `critical_rules`、`memory.team_memory_enabled`、`memory.stale_days` 等；critical 提权写入 `.my-agent/settings.local.json`，**不会**修改 `config/app.yaml`。
 
+### Gateway `remote_hitl`（`config/app.yaml` → `gateway.remote_hitl`）
+
+| 值 | 行为 |
+|----|------|
+| `auto_reject` | 远程敏感操作一律拒绝（默认） |
+| `approve_low` | 仅自动批准 low 风险工具 |
+| `approve_medium` | 自动批准 low/medium |
+| `ask` | 向远程聊天发送确认提示，等待 `/approve` 或 `/reject` |
+
+忙时入站会回复「请稍候」并重新排队。HTTP 建议配置 `http_token`，生产环境前加反向代理/TLS。
+
 配置在首次调用时加载并缓存，修改 YAML 后需重启应用生效。
 
 ## 日志

@@ -14,12 +14,16 @@ src/tools/workspace/
 | 工具 | 说明 | 需确认 |
 |------|------|--------|
 | `read_calendar` | 读取日历事件 | 否 |
-| `create_calendar_event` | 创建日历事件 | 是 |
+| `create_calendar_event` | 创建日历事件（含冲突检测） | 是 |
+
+## 冲突检测
+
+创建事件时按「开始时间 + duration_minutes」计算区间，与同日已有事件做区间重叠检测。若冲突，仍会创建，并在返回结果中列出冲突日程（`⚠️` 提示）。
 
 ## 数据存储
 
 - 文件：`data/workspace/calendar.json`
-- 格式：JSON 数组，每项包含 title、start、end、description 等字段
+- 格式：JSON 数组，每项包含 `id`、`title`、`date`、`time`、`duration_minutes`
 
 ## Web UI 万年历
 

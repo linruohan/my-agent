@@ -3,17 +3,18 @@
 > 审查日期：2026-07-25  
 > 范围：`src/`、`web/`、`doc/`、设计文档、测试与工程配置  
 > 说明：按优先级排列，便于排期；路径以仓库根目录为准。  
-> **2026-07-25 已落地**：A1/A2/A3/A4/A5/A6/A16/A19 部分、文档同步、gitignore、`test_search.py` 迁移、关键回归测试。
+> **2026-07-25 已落地（两轮）**：记忆统一 / critical / settings / 文档 / gitignore；  
+> 以及 A11 日历冲突、A14 remote HITL `ask`、A18 增量迁移、A7 语音依赖可选化、Gateway mock 测试、宽 except 日志。
 
 ---
 
 ## 一、优先行动（Top 5）
 
-1. ~~**统一记忆写入模型**~~ ✅：learning / `update_agent_memory` 写结构化文件；与 extract 互斥配置。
-2. ~~**修复 critical 提权写 `config/app.yaml`**~~ ✅：改为 `.my-agent/settings.local.json`。
-3. ~~**接入 `load_merged_settings`**~~ ✅：critical / team flag / stale_days。
-4. ~~**同步文档**~~ ✅：`app.db`、语音未实现、UI 技术栈备注。
-5. **补测试（剩余）**：Gateway bot mock 仍待补；critical / 注入验证 / 限流已加回归。
+1. ~~**统一记忆写入模型**~~ ✅
+2. ~~**修复 critical 提权写 `config/app.yaml`**~~ ✅
+3. ~~**接入 `load_merged_settings`**~~ ✅
+4. ~~**同步文档**~~ ✅
+5. ~~**补 Gateway / 记忆回归测试**~~ ✅（HTTP/Telegram ingest / deliver_reply / HITL 解析）
 
 ---
 
@@ -29,23 +30,23 @@
 | A4 | ~~硬编码时间戳~~ ✅ | `.last_write` + 限流 | 已完成 |
 | A5 | ~~already_surfaced 失效~~ ✅ | `memory_session` 按 thread_id 持久 | 已完成 |
 | A6 | ~~验证未接线~~ ✅ | 注入块附带 `build_verification_prompt` | 已完成 |
-| A7 | `doc/platform.md`、winrt Speech | 文档已标明未实现；依赖仍保留供后续 | 实现语音桥接，或移除依赖 |
+| A7 | ~~Speech 默认依赖~~ ✅ | 移至 optional `.[speech]`；文档已同步 | 后续实现桥接时可安装 extras |
 | A8 | Auto/Team 注入 | Team 已受 `team_memory_enabled` 控制；Auto 走检索注入 | 可选：启动时摘要 Auto 进 prompt |
 
 ### P1 — 可用但有明显缺口
 
 | ID | 位置 | 现状 | 建议 |
 |----|------|------|------|
-| A9 | 设计文档 vs `src/agent/graph.py`、`state.py` | 设计有 ROUTER→PLAN→RAG 多节点；实现为单一 `create_react_agent`；`task_plan` / `retrieved_docs` **未使用** | 实现规划节点，或更新设计为「纯 ReAct + 意图路由」 |
-| A10 | `个人助理Agent设计文档.md` | `send_email`、跨应用、**系统托盘**未实现 | Phase 2 排期或标注 out-of-scope |
-| A11 | `src/tools/workspace/tools.py` | 日历仅 JSON 读写，**无冲突检测**（设计要求） | 创建事件时检测时间重叠并提示 |
-| A12 | `src/gateway/` | Telegram/Discord/Slack/HTTP 有实现，**缺 bot 级集成测试**；HTTP 出站靠轮询无 push | 补 mock 测试；文档说明频道限制；考虑 webhook |
+| A9 | ~~设计文档多节点图~~ ✅ | 设计文档已注明「纯 ReAct + UI 意图路由」 | 已完成 |
+| A10 | `个人助理Agent设计文档.md` | `send_email`、跨应用、**系统托盘**未实现 | Phase 2 / out-of-scope |
+| A11 | ~~日历无冲突检测~~ ✅ | `find_calendar_conflicts` + 创建时提示 | 已完成 |
+| A12 | Gateway 测试 | HTTP/Telegram ingest / deliver_reply 已补 mock | Discord/Slack 仍可加深；webhook 可选 |
 | A13 | `src/gateway/telegram_bot.py` | 未继承 `PollingGateway`，与 Discord/Slack 不一致 | 统一基类或抽取公共鉴权/推送 |
-| A14 | `src/ui/controller/agent.py` | Gateway `remote_hitl` 仅本地策略自动批/拒，**远程用户无法交互审批** | 远程确认协议（按钮/关键字/超时） |
+| A14 | ~~远程 HITL 无交互~~ ✅ | `remote_hitl: ask` + `/approve`/`/reject`；忙时提示排队 | 已完成 |
 | A15 | `design_memory.md` §6.1 | `runForkedAgent` / prompt cache 复用未实现；extract 与主对话同步抢同一 LLM | 后台轻量模型或队列化抽取 |
 | A16 | ~~Team 无 flag~~ ✅ | `memory.team_memory_enabled` | 已完成 |
 | A17 | 设计文档 §4.1 | `langgraph.store` 长期记忆未实现 | 实现 Store，或从设计文档删除 |
-| A18 | `src/database/migrate.py` | 仅当 `app.db` **不存在**时合并旧库；已有 `app.db` 时遗留库不增量迁移 | 检测遗留库并提示/增量合并 |
+| A18 | ~~无增量迁移~~ ✅ | `app.db` 已存在时仍 `INSERT OR IGNORE` 合并并归档 | 已完成 |
 | A19 | ~~learning 与 extract 并行~~ ✅ | `auto_update_memory: false` + 配置互斥默认 | 已完成 |
 
 ### P2 — 边缘 / 体验
@@ -84,8 +85,8 @@
 | 位置 | 现状 | 建议 |
 |------|------|------|
 | `web/js/core/layout.js` | 模型列表可能前端直连 Provider（CORS/密钥风险） | 默认走后端代理 |
-| `src/ui/controller/turns.py` 等 | 多处宽 `except` + `pass` | 至少打 debug 日志 |
-| Gateway 忙时 | 入站重排队，用户侧无「排队中」提示 | 回复处理中状态 |
+| `src/ui/controller/turns.py` 等 | ~~宽 except 静默~~ ✅（turns/clipboard/link/file_dialog/browser 已打 debug） | 其余路径可继续收紧 |
+| Gateway 忙时 | ~~无排队提示~~ ✅ | 已回复「请稍候」并重排队 |
 
 ### 工程
 
@@ -107,9 +108,9 @@
 | 同上 — chromadb、langgraph.store | 仅用 **FAISS + fastembed**，无 chromadb | 中 |
 | 同上 — RAG MMR | `src/memory/rag.py` 无 MMR | 低 |
 | `design_memory.md` L1/L2「待实现」 | 大量 CLAUDE 分层与合并逻辑已存在，状态表过时 | 中 |
-| `design_memory.md` — critical→settings.json | 实际写 **`config/app.yaml`** | 高 |
-| `doc/config-data.md`、`doc/README.md`、各 tools 文档 | 仍写 `sessions.db` / `task.db` / `note.db` 等 | 已统一为 **`data/app.db`** | 高 |
-| `doc/platform.md` — 语音模块路径 | **文件不存在** | 高 |
+| `design_memory.md` — critical→settings.json | ~~已改为 settings.local.json~~ ✅ | — |
+| `doc/config-data.md`、`doc/README.md`、各 tools 文档 | ~~已统一为 app.db~~ ✅ | — |
+| `doc/platform.md` — 语音模块路径 | ~~已标明未实现 + optional speech~~ ✅ | — |
 | `doc/ui.md` — JS 路径、`voice.py` | 实际在 `web/js/core|features/`；语音未实现 | 中 |
 | 设计文档项目结构 | 缺 `gateway/`、`automation/` 等；有未实现的 `email.py` | 低 |
 

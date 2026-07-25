@@ -46,7 +46,9 @@ def create_file_dialog_safe(
                 browser.Invoke(Func[Type](run_dialog))
                 return result[0]
         except Exception:
-            pass
+            from loguru import logger
+
+            logger.debug("文件对话框失败", exc_info=True)
 
     run_dialog()
     return result[0]

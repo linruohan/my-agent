@@ -20,7 +20,9 @@ def copy_to_clipboard(text: str) -> bool:
                 win32clipboard.CloseClipboard()
             return True
         except Exception:
-            pass
+            from loguru import logger
+
+            logger.debug("剪贴板操作失败", exc_info=True)
         try:
             import subprocess
 
@@ -35,7 +37,9 @@ def copy_to_clipboard(text: str) -> bool:
             if proc.returncode == 0:
                 return True
         except Exception:
-            pass
+            from loguru import logger
+
+            logger.debug("剪贴板操作失败", exc_info=True)
     try:
         import tkinter as tk
 

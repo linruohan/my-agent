@@ -27,14 +27,42 @@ def _copy_table(target: sqlite3.Connection, source: sqlite3.Connection, table: s
     cols = [row[1] for row in source.execute(f"PRAGMA table_info({table})")]
     if not cols:
         return 0
-    col_list = ", ".join(cols)
-    placeholders = ", ".join("?" for _ in cols)
-    rows = source.execute(f"SELECT {col_list} FROM {table}").fetchall()
+
+    # 目标已有数据时，跳过自增 id，避免主键冲突导致增量合并为 0
+    insert_cols = cols
+    if before > 0 and "id" in cols:
+        insert_cols = [c for c in cols if c != "id"]
+    if not insert_cols:
+        return 0
+
+    col_list = ", ".join(insert_cols)
+    placeholders = ", ".join("?" for _ in insert_cols)
+    select_list = ", ".join(cols)
+    rows = source.execute(f"SELECT {select_list} FROM {table}").fetchall()
     if not rows:
         return 0
+
+    payload: list[tuple] = []
+    for row in rows:
+        if insert_cols == cols:
+            payload.append(tuple(row))
+        else:
+            payload.append(tuple(row[cols.index(c)] for c in insert_cols))
+
+    # 目标非空时按非 id 列去重，避免重复导入
+    if before > 0 and insert_cols != cols:
+        existing = {
+            tuple(r)
+            for r in target.execute(f"SELECT {col_list} FROM {table}").fetchall()
+        }
+        payload = [row for row in payload if row not in existing]
+
+    if not payload:
+        return 0
+
     target.executemany(
         f"INSERT OR IGNORE INTO {table} ({col_list}) VALUES ({placeholders})",
-        rows,
+        payload,
     )
     after = target.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
     return int(after) - int(before)
@@ -59,18 +87,26 @@ def _rename_legacy(path: Path) -> None:
             sidecar.rename(Path(str(backup) + suffix))
 
 
-def migrate_legacy_databases(target: Path, data_dir: Path) -> bool:
-    """若存在旧库且 target 尚未创建，则合并数据并归档旧文件。返回是否执行了迁移。"""
-    if target.is_file():
-        return False
+def list_legacy_database_files(data_dir: Path) -> list[str]:
+    """返回 data_dir 下仍存在的旧版分散库文件名。"""
+    return [name for name in LEGACY_DB_TABLES if (data_dir / name).is_file()]
 
-    legacy_files = [name for name in LEGACY_DB_TABLES if (data_dir / name).is_file()]
+
+def migrate_legacy_databases(target: Path, data_dir: Path) -> bool:
+    """合并遗留分散库到 app.db（支持 app.db 已存在时的增量合并），成功后归档旧文件。"""
+    legacy_files = list_legacy_database_files(data_dir)
     if not legacy_files:
         return False
 
     close_all_connections()
 
-    logger.info("检测到 {} 个旧版数据库，正在合并至 {}", len(legacy_files), target.name)
+    mode = "增量合并" if target.is_file() else "首次合并"
+    logger.info(
+        "检测到 {} 个旧版数据库，正在{}至 {}",
+        len(legacy_files),
+        mode,
+        target.name,
+    )
     target_conn = _open_sqlite(target)
     try:
         from src.database.schema import init_all_schemas_on_connection
@@ -97,7 +133,7 @@ def migrate_legacy_databases(target: Path, data_dir: Path) -> bool:
             ("migrated_from_legacy", datetime.now(timezone.utc).isoformat()),
         )
         target_conn.commit()
-        logger.info("旧库合并完成，写入 {} 条新记录", copied_total)
+        logger.info("旧库{}完成，写入 {} 条新记录", mode, copied_total)
     finally:
         target_conn.close()
 

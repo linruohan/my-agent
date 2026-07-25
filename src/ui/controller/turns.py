@@ -152,7 +152,9 @@ class TurnsMixin:
                                     if drive_result and "共" in drive_result:
                                         all_results.append(drive_result)
                                 except Exception:
-                                    pass
+                                    from loguru import logger as _logger
+
+                                    _logger.debug("轮次收尾忽略异常", exc_info=True)
                         if all_results:
                             result = "\n\n---\n\n".join(all_results)
                         else:

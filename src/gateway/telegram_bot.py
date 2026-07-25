@@ -76,13 +76,23 @@ class TelegramGateway:
             return
         for item in data.get("result") or []:
             self._offset = max(self._offset, int(item.get("update_id", 0)) + 1)
-            message = item.get("message") or {}
-            chat = message.get("chat") or {}
-            chat_id = str(chat.get("id", ""))
-            text = str(message.get("text") or "").strip()
-            if not chat_id or not text:
-                continue
-            if self.allowed_chat_ids and chat_id not in self.allowed_chat_ids:
-                logger.debug("忽略未授权 Telegram chat_id={}", chat_id)
-                continue
-            self.inbox.push_inbound("telegram", chat_id, text, meta={"update_id": item.get("update_id")})
+            self.ingest_update(item)
+
+    def ingest_update(self, item: dict) -> bool:
+        """处理单条 Telegram update（便于单测，无网络）。成功入站返回 True。"""
+        message = item.get("message") or {}
+        chat = message.get("chat") or {}
+        chat_id = str(chat.get("id", ""))
+        text = str(message.get("text") or "").strip()
+        if not chat_id or not text:
+            return False
+        if self.allowed_chat_ids and chat_id not in self.allowed_chat_ids:
+            logger.debug("忽略未授权 Telegram chat_id={}", chat_id)
+            return False
+        self.inbox.push_inbound(
+            "telegram",
+            chat_id,
+            text,
+            meta={"update_id": item.get("update_id")},
+        )
+        return True

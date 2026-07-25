@@ -30,9 +30,8 @@ dependencies = [
     "python-docx>=1.1",
     "croniter>=2.0",
     "websockets>=12.0",
-    # Windows 平台能力（语音 / OCR / 通知 / COM）
+    # Windows 平台能力（OCR / 通知 / COM；语音见 optional speech）
     "winrt-runtime>=3.2.1; sys_platform == 'win32'",
-    "winrt-Windows.Media.SpeechRecognition>=3.2.1; sys_platform == 'win32'",
     "winrt-Windows.Globalization>=3.2.1; sys_platform == 'win32'",
     "winrt-Windows.Foundation>=3.2.1; sys_platform == 'win32'",
     "winrt-Windows.Media.Ocr>=3.2.1; sys_platform == 'win32'",
@@ -47,6 +46,9 @@ dependencies = [
 input = [
     "paddleocr>=2.7",
     "paddlepaddle>=2.6",
+]
+speech = [
+    "winrt-Windows.Media.SpeechRecognition>=3.2.1; sys_platform == 'win32'",
 ]
 dev = [
     "pytest>=8.0",

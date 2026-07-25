@@ -6,7 +6,7 @@ my-agent 深度集成 Windows 平台特性，包括 OCR、系统通知等。部�
 
 **现状：未实现（规划中）。**
 
-- `pyproject.toml` 仍声明 winrt SpeechRecognition 依赖，供后续接入
+- 语音依赖已移至可选 extras：`pip install -e ".[speech]"`
 - Web 前端 Composer 区保留麦克风相关样式，但无可用桥接
 - 文档旧路径 `src/ui/speech/` **不存在**；实现前请勿按此路径引用
 
@@ -97,7 +97,7 @@ pywin32
 | 包 | 用途 |
 |----|------|
 | winrt-runtime | Windows Runtime 基础 |
-| winrt-Windows.Media.SpeechRecognition | 语音识别（规划中） |
+| winrt-Windows.Media.SpeechRecognition | 语音识别（可选 extras `speech`） |
 | winrt-Windows.Media.Ocr | OCR |
 | winrt-Windows.Graphics.Imaging | 图像处理 |
 | winrt-Windows.Storage | 文件存储 |

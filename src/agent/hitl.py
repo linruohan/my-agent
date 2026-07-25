@@ -37,9 +37,70 @@ def format_approval_description(tool_calls: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+_APPROVE_REPLIES = frozenset({
+    "/approve",
+    "approve",
+    "yes",
+    "y",
+    "ok",
+    "批准",
+    "同意",
+    "确认",
+    "是",
+})
+_REJECT_REPLIES = frozenset({
+    "/reject",
+    "reject",
+    "no",
+    "n",
+    "拒绝",
+    "否",
+    "取消",
+})
+
+
+def gateway_hitl_is_ask(policy: str) -> bool:
+    """是否要求远程用户交互确认。"""
+    return (policy or "").strip().lower() in ("ask", "interactive")
+
+
+def parse_remote_approval_reply(text: str) -> bool | None:
+    """解析远程批准/拒绝回复。True=批准，False=拒绝，None=非确认指令。"""
+    raw = (text or "").strip()
+    if not raw:
+        return None
+    key = raw.lower()
+    # 允许 "/approve 原因" 形式
+    first = key.split(None, 1)[0]
+    if first in _APPROVE_REPLIES or key in _APPROVE_REPLIES:
+        return True
+    if first in _REJECT_REPLIES or key in _REJECT_REPLIES:
+        return False
+    if raw in _APPROVE_REPLIES:
+        return True
+    if raw in _REJECT_REPLIES:
+        return False
+    return None
+
+
+def format_remote_approval_prompt(description: str) -> str:
+    body = (description or "确认执行敏感操作？").strip()
+    return (
+        f"{body}\n\n"
+        "请回复以下之一：\n"
+        "- `/approve` 或「批准」→ 执行\n"
+        "- `/reject` 或「拒绝」→ 取消"
+    )
+
+
 def gateway_should_auto_approve(tool_calls: list[dict[str, Any]], policy: str) -> bool:
-    """远程 Gateway HITL 策略：True=自动批准，False=自动拒绝。"""
+    """远程 Gateway HITL 策略：True=自动批准，False=自动拒绝。
+
+    ask / interactive 不走自动决策（由调用方交互确认）。
+    """
     policy = (policy or "auto_reject").strip().lower()
+    if gateway_hitl_is_ask(policy):
+        return False
     if policy == "auto_reject":
         return False
     if not tool_calls:

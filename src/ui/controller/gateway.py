@@ -6,6 +6,7 @@ from typing import Any
 
 from loguru import logger
 
+from src.agent.hitl import parse_remote_approval_reply
 from src.gateway.inbox import GatewayMessage
 from src.gateway.sessions import resolve_gateway_session
 
@@ -24,7 +25,8 @@ class GatewayMixin:
         self._gateway = GatewayService(
             self._gateway_inbox,
             on_inbound=self._handle_gateway_inbound,
-            can_dispatch=lambda: not self._is_busy(),
+            # 等待远程 HITL 时仍需分发 /approve|/reject
+            can_dispatch=lambda: (not self._is_busy()) or bool(self._awaiting_approval),
         )
         self._gateway.start()
 
@@ -36,8 +38,36 @@ class GatewayMixin:
             chat_id=chat_id,
         )
 
+    def _try_handle_remote_hitl_reply(self, msg: GatewayMessage) -> bool:
+        """若当前等待远程确认，则消费批准/拒绝回复。返回是否已处理。"""
+        if not self._awaiting_approval or not self._gateway_context:
+            return False
+        ctx = self._gateway_context
+        if msg.source != ctx.get("source") or msg.chat_id != ctx.get("chat_id"):
+            return False
+
+        decision = parse_remote_approval_reply(msg.text)
+        self._gateway_inbox.mark_inbound_done(msg.id)
+        if decision is None:
+            self._gateway.deliver_reply(
+                msg.source,
+                msg.chat_id,
+                "仍在等待确认：请回复 /approve（批准）或 /reject（拒绝）。",
+            )
+            return True
+        self.approval_response(decision)
+        return True
+
     def _handle_gateway_inbound(self, msg: GatewayMessage) -> None:
+        if self._try_handle_remote_hitl_reply(msg):
+            return
+
         if self._is_busy():
+            self._gateway.deliver_reply(
+                msg.source,
+                msg.chat_id,
+                "当前正在处理其他任务，已排队，请稍候…",
+            )
             self._gateway_inbox.mark_inbound_pending(msg.id)
             logger.debug("[gateway] Agent 忙，消息 {} 重新排队", msg.id[:8])
             return

@@ -68,7 +68,8 @@ gateway:
   http_host: "127.0.0.1"
   http_port: 8765
   http_token: ""
-  # 远程 HITL：auto_reject | approve_low | approve_medium
+  # 远程 HITL：auto_reject | approve_low | approve_medium | ask
+  # ask：向远程用户发送确认提示，等待 /approve 或 /reject
   remote_hitl: auto_reject
   # Cron 默认 Gateway 投递目标（delivery=gateway 或 default 时使用）
   cron_default:

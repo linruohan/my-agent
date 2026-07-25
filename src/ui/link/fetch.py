@@ -125,12 +125,16 @@ def _fetch_with_playwright(url: str) -> dict[str, Any]:
             try:
                 page.wait_for_load_state("networkidle", timeout=12000)
             except Exception:
-                pass
+                from loguru import logger
+
+                logger.debug("等待 networkidle 超时，继续抓取", exc_info=True)
             try:
                 page.evaluate("window.scrollTo(0, Math.min(document.body.scrollHeight, 2400))")
                 page.wait_for_timeout(1200)
             except Exception:
-                pass
+                from loguru import logger
+
+                logger.debug("页面滚动失败，继续抓取", exc_info=True)
             title = page.title()
             body = page.inner_text("body")
             text = _normalize_whitespace(f"标题: {title}\n\n{body}" if title else body)

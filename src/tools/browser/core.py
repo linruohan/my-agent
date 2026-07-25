@@ -31,7 +31,9 @@ def browser_navigate_impl(url: str, session_id: str = "default", wait_until: str
         try:
             page.wait_for_load_state("networkidle", timeout=8000)
         except Exception:
-            pass
+            from loguru import logger
+
+            logger.debug("浏览器资源清理失败", exc_info=True)
         title = page.title()
         current = page.url
         return f"已打开：{current}\n标题：{title or '（无）'}"

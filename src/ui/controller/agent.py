@@ -5,7 +5,11 @@ from __future__ import annotations
 import queue
 from typing import Any
 
-from src.agent.hitl import gateway_should_auto_approve
+from src.agent.hitl import (
+    format_remote_approval_prompt,
+    gateway_hitl_is_ask,
+    gateway_should_auto_approve,
+)
 from src.agent.runner import StreamEvent
 from src.gateway.config import load_gateway_config
 
@@ -19,6 +23,10 @@ class AgentMixin:
         self._awaiting_approval = False
         self.runner.resume_after_approval(approved)
         self.chat.append_system("已批准操作，正在执行..." if approved else "已拒绝操作。")
+        ctx = getattr(self, "_gateway_context", None)
+        if ctx and getattr(self, "_gateway", None):
+            tip = "已批准，正在执行…" if approved else "已拒绝该操作。"
+            self._gateway.deliver_reply(ctx["source"], ctx["chat_id"], tip)
 
     def _handle_approval(self, payload: dict) -> None:
         if self._awaiting_approval:
@@ -27,6 +35,14 @@ class AgentMixin:
         ctx = self._gateway_context
         if ctx:
             policy = load_gateway_config().get("remote_hitl", "auto_reject")
+            if gateway_hitl_is_ask(policy):
+                self._awaiting_approval = True
+                description = payload.get("description", "确认执行敏感操作？")
+                prompt = format_remote_approval_prompt(description)
+                self.chat.append_system("远程 HITL：已向用户请求确认。")
+                self.chat.show_approval(description)
+                self._gateway.deliver_reply(ctx["source"], ctx["chat_id"], prompt)
+                return
             approved = gateway_should_auto_approve(tool_calls, policy)
             if approved:
                 names = ", ".join(str(tc.get("name", "")) for tc in tool_calls)
