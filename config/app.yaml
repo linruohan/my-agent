@@ -53,6 +53,10 @@ agent:
   memory_extraction:
     enabled: true
     min_interval_sec: 60
+    # 可选：专用轻量 provider（llm_providers.yaml 中的名称）；空则用主对话 LLM
+    provider: ""
+    # 抽取忙碌时只保留最新一轮，避免与主对话争抢堆积
+    coalesce: true
   learning_loop:
     enabled: true
     min_tool_calls: 3
@@ -67,6 +71,7 @@ gateway:
   http_enabled: true
   http_host: "127.0.0.1"
   http_port: 8765
+  # 启用 gateway 且 http_enabled 时必须非空，否则拒绝启动 HTTP 服务
   http_token: ""
   # 出站推送（可选）。配置后回复优先 POST 到此 URL，失败再入 /api/outbound 轮询队列
   # 请求体：{"source","chat_id","text"}，Header 可带 Authorization: Bearer <http_token>

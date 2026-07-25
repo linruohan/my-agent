@@ -17,6 +17,13 @@ data/search_cache.db
 data/sessions.db
 data/task.db
 data/note.db
+# 旧库合并进 app.db 后的归档（含 wal/shm sidecar）
+data/*.migrated
+data/*.migrated-shm
+data/*.migrated-wal
+data/*.db.migrated
+data/*.db.migrated-shm
+data/*.db.migrated-wal
 data/checkpoints/*.db-shm
 data/checkpoints/*.db-wal
 web/fonts/

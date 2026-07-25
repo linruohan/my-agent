@@ -43,7 +43,7 @@ Authorization: Bearer <http_token>   # 若配置了 token
 
 ## 安全建议
 
-- 生产环境**务必**设置非空 `http_token`
+- **强制**：`enabled: true` 且 `http_enabled: true` 时必须设置非空 `http_token`，否则 HTTP 服务不会启动并记 error 日志
 - 仅绑定 `127.0.0.1` 或置于反向代理之后，并由代理终止 TLS
 - Discord/Slack 频道消息需 @mention 机器人才会入站
 

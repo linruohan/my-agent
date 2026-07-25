@@ -40,8 +40,9 @@ class GatewayHttpServer:
                 logger.debug("[gateway-http] " + format, *args)
 
             def _auth_ok(self) -> bool:
+                # 空 token 一律拒绝（GatewayService 在启用 HTTP 前已校验）
                 if not token:
-                    return True
+                    return False
                 auth = self.headers.get("Authorization", "")
                 if auth == f"Bearer {token}":
                     return True

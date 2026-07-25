@@ -22,10 +22,8 @@ from src.agent.hitl import (
 )
 from src.agent.memory_session import reset_memory_thread_id, set_memory_thread_id
 from src.memory.memory_writer import (
-    ExtractMemoriesInput,
-    extract_memories,
-    get_last_memory_write_ts,
     memory_extraction_config,
+    schedule_memory_extraction,
 )
 
 
@@ -85,55 +83,17 @@ class AgentRunner:
         return self._thread_id
 
     def _trigger_memory_extraction(self) -> None:
-        """在对话正常结束后，启动后台线程提取记忆（fire-and-forget）。"""
-        if not self.llm or not self._thread_id:
+        """对话结束后排队记忆抽取（单 worker + coalesce，可选专用 provider）。"""
+        if not self.llm or not self._thread_id or not self._config:
             return
         if not memory_extraction_config().get("enabled", True):
             return
-
-        def _extract_worker() -> None:
-            try:
-                snapshot = self.graph.get_state(self._config)
-                messages = snapshot.values.get("messages", [])
-                if not messages:
-                    return
-
-                message_dicts = []
-                for msg in messages:
-                    if isinstance(msg, dict):
-                        message_dicts.append(msg)
-                    elif hasattr(msg, "role") and hasattr(msg, "content"):
-                        message_dicts.append({
-                            "role": msg.role,
-                            "content": str(msg.content),
-                        })
-                    elif hasattr(msg, "type") and hasattr(msg, "content"):
-                        role = "assistant" if msg.type in ("ai", "assistant") else msg.type
-                        if role == "human":
-                            role = "user"
-                        message_dicts.append({
-                            "role": role,
-                            "content": str(msg.content),
-                        })
-
-                input_data = ExtractMemoriesInput(
-                    conversation_id=self._thread_id,
-                    messages=message_dicts,
-                    has_memory_writes_since=get_last_memory_write_ts(),
-                    current_work_dir="",
-                )
-
-                result = extract_memories(self.llm, input_data)
-                if result.memories_written:
-                    logger.info(
-                        "[memory] 对话结束后提取到 {} 条记忆",
-                        len(result.memories_written),
-                    )
-            except Exception:
-                logger.exception("[memory] 后台记忆提取失败")
-
-        extraction_thread = threading.Thread(target=_extract_worker, daemon=True)
-        extraction_thread.start()
+        schedule_memory_extraction(
+            llm=self.llm,
+            graph=self.graph,
+            thread_id=self._thread_id,
+            config=self._config,
+        )
 
     def resume_after_approval(self, approved: bool) -> None:
         """UI 线程在用户确认/拒绝后调用，唤醒 Agent 继续执行。"""

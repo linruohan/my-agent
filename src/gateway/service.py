@@ -8,7 +8,7 @@ from typing import Callable
 import httpx
 from loguru import logger
 
-from src.gateway.config import load_gateway_config
+from src.gateway.config import load_gateway_config, validate_http_token
 from src.gateway.discord_bot import DiscordGateway
 from src.gateway.http_server import GatewayHttpServer
 from src.gateway.inbox import GatewayInbox, GatewayMessage
@@ -100,13 +100,17 @@ class GatewayService:
         self._http_token = str(cfg.get("http_token") or "").strip()
 
         if cfg.get("http_enabled"):
-            self._http = GatewayHttpServer(
-                self.inbox,
-                host=cfg["http_host"],
-                port=cfg["http_port"],
-                token=cfg["http_token"],
-            )
-            self._http.start()
+            token_error = validate_http_token(cfg)
+            if token_error:
+                logger.error("{}", token_error)
+            else:
+                self._http = GatewayHttpServer(
+                    self.inbox,
+                    host=cfg["http_host"],
+                    port=cfg["http_port"],
+                    token=cfg["http_token"],
+                )
+                self._http.start()
 
         tg = cfg.get("telegram") or {}
         if tg.get("enabled") and tg.get("bot_token"):

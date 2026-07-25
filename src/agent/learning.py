@@ -128,13 +128,16 @@ def apply_learning(
                     else:
                         logger.debug("自动 Skill 跳过: {}", exc)
 
-    note = str(analysis.get("memory_note") or "").strip()
+    note_raw = analysis.get("memory_note") or ""
+    note = str(note_raw).strip() if note_raw is not None else ""
     if auto_update_memory and note:
-        if memory_note_exists(note):
+        from src.memory.memory_writer import looks_like_test_artifact, write_structured_memory_note
+
+        if looks_like_test_artifact(note):
+            logger.warning("学习闭环拒绝写入疑似测试/Mock 噪声: {}", note[:120])
+        elif memory_note_exists(note):
             logger.debug("学习闭环跳过重复 MEMORY 条目")
         else:
-            from src.memory.memory_writer import write_structured_memory_note
-
             written = write_structured_memory_note(note, memory_type="feedback")
             if written:
                 parts.append(f"已写入结构化记忆 {written.file_name}")

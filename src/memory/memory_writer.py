@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -21,6 +22,24 @@ from src.memory.memory_index import write_memory_index
 MEMORY_TYPES = ["user", "feedback", "project", "reference"]
 _LAST_WRITE_NAME = ".last_write"
 _DEFAULT_MIN_INTERVAL_SEC = 60.0
+
+# 测试/Mock 污染内容（如 MagicMock.__str__ 被误写入记忆）
+_TEST_ARTIFACT_RE = re.compile(
+    r"(?i)(<MagicMock\b|<_?Mock\b|unittest\.mock|name=['\"]analyze_turn|"
+    r"id=['\"]\d+['\"]\s*>)"
+)
+
+_extract_lock = threading.Lock()
+_extract_busy = False
+_extract_pending: dict[str, Any] | None = None
+
+
+def looks_like_test_artifact(text: str) -> bool:
+    """识别 MagicMock / unittest.mock 等不应入库的测试噪声。"""
+    body = (text or "").strip()
+    if not body:
+        return False
+    return bool(_TEST_ARTIFACT_RE.search(body))
 
 
 def last_write_path(project_root: Path | None = None) -> Path:
@@ -49,6 +68,10 @@ def memory_extraction_config() -> dict[str, Any]:
     return {
         "enabled": bool(cfg.get("enabled", True)),
         "min_interval_sec": float(cfg.get("min_interval_sec", _DEFAULT_MIN_INTERVAL_SEC) or _DEFAULT_MIN_INTERVAL_SEC),
+        # 可选：专用 provider 名称；空则使用主对话 LLM
+        "provider": str(cfg.get("provider") or "").strip(),
+        # 忙碌时只保留最新请求，避免与主对话争抢堆积
+        "coalesce": bool(cfg.get("coalesce", True)),
     }
 
 
@@ -237,6 +260,10 @@ def _write_memory_file(
         logger.warning(f"无效记忆类型: {memory_type}")
         return None
 
+    if looks_like_test_artifact(name) or looks_like_test_artifact(description) or looks_like_test_artifact(content):
+        logger.warning("[memory] 拒绝写入疑似测试/Mock 噪声: {}", str(name or content)[:120])
+        return None
+
     valid, errors = _validate_memory_content(memory_type, name, description, content)
     if not valid:
         logger.warning(f"记忆格式校验失败: {', '.join(errors)}")
@@ -282,6 +309,9 @@ def write_structured_memory_note(
     body = re.sub(r"^[-*•]\s*", "", body)
     if not body:
         return None
+    if looks_like_test_artifact(body) or looks_like_test_artifact(name or "") or looks_like_test_artifact(description or ""):
+        logger.warning("[memory] 拒绝写入疑似测试/Mock 噪声: {}", body[:120])
+        return None
 
     slug_src = name or body[:40]
     mem_name = (name or slug_src).strip() or "learned-note"
@@ -306,6 +336,118 @@ def write_structured_memory_note(
     if result:
         write_memory_index(project_root)
     return result
+
+
+def resolve_extraction_llm(fallback: BaseChatModel | None) -> BaseChatModel | None:
+    """解析记忆抽取用 LLM：优先配置的专用 provider，否则回退主模型。"""
+    cfg = memory_extraction_config()
+    provider_name = cfg.get("provider") or ""
+    if not provider_name:
+        return fallback
+    try:
+        from src.infra.config import load_merged_providers
+        from src.llm.factory import create_llm
+
+        _default, providers = load_merged_providers()
+        provider = providers.get(provider_name)
+        if not provider:
+            logger.warning("[memory] 抽取 provider「{}」不存在，回退主 LLM", provider_name)
+            return fallback
+        return create_llm(provider)
+    except Exception as exc:
+        logger.warning("[memory] 创建抽取 LLM 失败，回退主 LLM: {}", exc)
+        return fallback
+
+
+def schedule_memory_extraction(
+    *,
+    llm: BaseChatModel | None,
+    graph: Any,
+    thread_id: str,
+    config: dict[str, Any],
+) -> None:
+    """队列化记忆抽取：单 worker、忙碌时 coalesce 最新请求，避免与主对话争抢堆积。"""
+    if not llm or not thread_id:
+        return
+    if not memory_extraction_config().get("enabled", True):
+        return
+
+    job = {
+        "llm": llm,
+        "graph": graph,
+        "thread_id": thread_id,
+        "config": config,
+    }
+
+    global _extract_busy, _extract_pending
+    with _extract_lock:
+        if _extract_busy:
+            if memory_extraction_config().get("coalesce", True):
+                _extract_pending = job
+                logger.debug("[memory] 抽取忙碌，合并为最新请求 thread={}", thread_id[:8])
+            else:
+                logger.debug("[memory] 抽取忙碌且 coalesce=false，丢弃请求")
+            return
+        _extract_busy = True
+        pending = job
+
+    def _run_one(payload: dict[str, Any]) -> None:
+        extract_llm = resolve_extraction_llm(payload.get("llm"))
+        if not extract_llm:
+            return
+        try:
+            snapshot = payload["graph"].get_state(payload["config"])
+            messages = snapshot.values.get("messages", [])
+            if not messages:
+                return
+
+            message_dicts = []
+            for msg in messages:
+                if isinstance(msg, dict):
+                    message_dicts.append(msg)
+                elif hasattr(msg, "role") and hasattr(msg, "content"):
+                    message_dicts.append({
+                        "role": msg.role,
+                        "content": str(msg.content),
+                    })
+                elif hasattr(msg, "type") and hasattr(msg, "content"):
+                    role = "assistant" if msg.type in ("ai", "assistant") else msg.type
+                    if role == "human":
+                        role = "user"
+                    message_dicts.append({
+                        "role": role,
+                        "content": str(msg.content),
+                    })
+
+            input_data = ExtractMemoriesInput(
+                conversation_id=payload["thread_id"],
+                messages=message_dicts,
+                has_memory_writes_since=get_last_memory_write_ts(),
+                current_work_dir="",
+            )
+            result = extract_memories(extract_llm, input_data)
+            if result.memories_written:
+                logger.info(
+                    "[memory] 对话结束后提取到 {} 条记忆",
+                    len(result.memories_written),
+                )
+        except Exception:
+            logger.exception("[memory] 后台记忆提取失败")
+
+    def _worker() -> None:
+        global _extract_busy, _extract_pending
+        current = pending
+        while current is not None:
+            try:
+                _run_one(current)
+            finally:
+                with _extract_lock:
+                    current = _extract_pending
+                    _extract_pending = None
+                    if current is None:
+                        _extract_busy = False
+
+    threading.Thread(target=_worker, daemon=True, name="memory-extract").start()
 
 
 def extract_memories(
