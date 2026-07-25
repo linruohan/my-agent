@@ -29,7 +29,9 @@ def _discover_tools() -> list:
                     if isinstance(tools_list, list):
                         all_discovered.extend(tools_list)
         except Exception:
-            pass
+            from loguru import logger
+
+            logger.debug("工具模块加载失败: {}", module_name, exc_info=True)
     return all_discovered
 
 

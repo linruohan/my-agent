@@ -46,7 +46,7 @@ def main() -> None:
         try:
             ns.update(pickle.loads(session_path.read_bytes()))
         except Exception:
-            pass
+            pass  # 会话状态损坏时以空命名空间继续
 
     stdout = io.StringIO()
     stderr = io.StringIO()
@@ -70,7 +70,7 @@ def main() -> None:
         session_path.parent.mkdir(parents=True, exist_ok=True)
         session_path.write_bytes(pickle.dumps(keep))
     except Exception:
-        pass
+        pass  # 沙箱子进程无法写会话时忽略，不影响本次执行结果
 
     payload = {
         "stdout": stdout.getvalue(),

@@ -121,8 +121,21 @@ API Key 存储优先级：
 | `load_files_config()` | 加载 files.yaml |
 | `load_weather_config()` | 加载 weather.yaml |
 | `load_llm_providers_config()` | 加载 llm_providers.yaml |
+| `reload_runtime_config()` | 清除 YAML/JSON 与记忆派生缓存并重载 app.yaml |
 
 `load_merged_settings()` 供记忆系统读取 `critical_rules`、`memory.team_memory_enabled`、`memory.stale_days` 等；critical 提权写入 `.my-agent/settings.local.json`，**不会**修改 `config/app.yaml`。
+
+### 配置热重载
+
+修改 `config/*.yaml` 或用户 settings 后，无需整进程重启即可生效：
+
+| 入口 | 说明 |
+|------|------|
+| 斜杠 `/reload` | UI 聊天中执行，刷新配置、重启 Gateway、后台重建 Agent |
+| js_api `reload_config()` | 设置面板 / 自动化调用 |
+| `reload_runtime_config()` | 仅清缓存并返回新 `app.yaml`（供测试或内部使用） |
+
+YAML/JSON 本身按文件 mtime+size 缓存；显式热重载会强制清空，并同步清记忆选择 / 上下文文件缓存。Agent 图在后台重建期间若正在跑任务，会等当前回合结束后再应用。
 
 ### Gateway
 
@@ -136,8 +149,6 @@ API Key 存储优先级：
 ### API 目录说明
 
 Python js_api / 设置接口位于 **`src/ui/api/`**（无顶层 `src/api/`）。Gateway HTTP 位于 `src/gateway/http_server.py`。
-
-配置在首次调用时加载并缓存，修改 YAML 后需重启应用生效。
 
 ## 日志
 

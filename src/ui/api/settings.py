@@ -51,3 +51,7 @@ class SettingsApiMixin(ApiBase):
 
     def save_input_history(self, text: str) -> None:
         self._ctrl.save_input_history(text)
+
+    def reload_config(self) -> dict[str, Any]:
+        """热重载 YAML/JSON 配置、Gateway 与 Agent。"""
+        return self._ctrl.reload_app_config()

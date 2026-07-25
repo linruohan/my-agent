@@ -30,11 +30,12 @@ INTENT_WEATHER = "weather"
 INTENT_SLASH_WEATHER = "slash_weather"
 INTENT_SLASH_CACHE = "slash_cache"
 INTENT_SLASH_METRICS = "slash_metrics"
+INTENT_SLASH_RELOAD = "slash_reload"
 INTENT_SLASH_TASK = "slash_task"
 INTENT_SLASH_SKILL = "slash_skill"
 INTENT_SLASH_FILE = "slash_file"
 
-_SYSTEM_SLASH = {"note", "ocr", "search", "weather", "cache", "metrics", "tsk", "file"}
+_SYSTEM_SLASH = {"note", "ocr", "search", "weather", "cache", "metrics", "reload", "tsk", "file"}
 _SLASH_GENERIC_RE = re.compile(r"^/([\w-]+)\b\s*(.*)$", re.IGNORECASE | re.DOTALL)
 _OCR_HINT_RE = re.compile(
     r"识别|提取文字|查看文本|识图|文字识别|图片识别|ocr",
@@ -139,6 +140,14 @@ def parse_slash_command(text: str) -> InputIntent | None:
             slash_cmd="metrics",
             slash_args=args,
             reason="slash:/metrics",
+        )
+
+    if cmd == "reload":
+        return InputIntent(
+            kind=INTENT_SLASH_RELOAD,
+            slash_cmd="reload",
+            slash_args=args,
+            reason="slash:/reload",
         )
 
     if cmd == "tsk":

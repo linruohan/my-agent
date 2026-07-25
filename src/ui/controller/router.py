@@ -16,6 +16,7 @@ from src.ui.input import (
     INTENT_SLASH_METRICS,
     INTENT_SLASH_NOTE,
     INTENT_SLASH_OCR,
+    INTENT_SLASH_RELOAD,
     INTENT_SLASH_SKILL,
     INTENT_SLASH_TASK,
     INTENT_SLASH_WEATHER,
@@ -117,6 +118,10 @@ class RouterMixin:
 
             if intent.kind == INTENT_SLASH_METRICS:
                 self._handle_slash_metrics(intent)
+                return
+
+            if intent.kind == INTENT_SLASH_RELOAD:
+                self._handle_slash_reload(intent)
                 return
 
             if intent.kind == INTENT_SLASH_TASK:

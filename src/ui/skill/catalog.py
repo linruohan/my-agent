@@ -20,6 +20,7 @@ SYSTEM_SLASH_TOOLS: list[dict[str, Any]] = [
     {"kind": "tool", "name": "tsk", "label": "/tsk", "desc": "任务管理", "slash": "/tsk"},
     {"kind": "tool", "name": "cache", "label": "/cache", "desc": "搜索缓存管理", "slash": "/cache"},
     {"kind": "tool", "name": "metrics", "label": "/metrics", "desc": "耗时指标", "slash": "/metrics"},
+    {"kind": "tool", "name": "reload", "label": "/reload", "desc": "热重载配置与 Gateway", "slash": "/reload"},
     {"kind": "tool", "name": "search", "label": "/search", "desc": "网络搜索", "slash": "/search"},
     {"kind": "tool", "name": "weather", "label": "/weather", "desc": "天气预报", "slash": "/weather"},
     {"kind": "tool", "name": "ocr", "label": "/ocr", "desc": "图片 OCR", "slash": "/ocr"},

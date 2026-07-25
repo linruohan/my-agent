@@ -93,6 +93,27 @@ def invalidate_json_cache() -> None:
     _json_cache.clear()
 
 
+def reload_runtime_config() -> dict[str, Any]:
+    """强制清除配置与记忆相关缓存，并重新加载 app.yaml。
+
+    YAML/JSON 本身按 mtime 失效；本函数用于显式热重载（斜杠命令 / API），
+    并同步清掉依赖配置的进程内派生缓存。
+    """
+    invalidate_yaml_cache()
+    invalidate_json_cache()
+    try:
+        from src.memory.context_files import invalidate_context_file_cache
+        from src.memory.memory_reader import clear_memory_selection_cache
+
+        invalidate_context_file_cache()
+        clear_memory_selection_cache()
+    except Exception:
+        from loguru import logger
+
+        logger.debug("热重载时清除记忆缓存失败", exc_info=True)
+    return load_app_config()
+
+
 def load_app_config() -> dict[str, Any]:
     cfg = _load_yaml_cached(CONFIG_DIR / "app.yaml")
     paths = cfg.setdefault("paths", {})

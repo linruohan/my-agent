@@ -106,7 +106,7 @@ class SearchCache:
                 raw = json.loads(_LEGACY_JSON.read_text(encoding="utf-8"))
                 rows = raw.get("entries", [])
             except Exception:
-                pass
+                logger.debug("搜索缓存遗留 JSON 迁移跳过", exc_info=True)
             for item in rows:
                 user_q = str(item.get("user_query", "")).strip()
                 search_q = str(item.get("search_query", "")).strip() or user_q

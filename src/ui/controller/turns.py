@@ -71,6 +71,27 @@ class TurnsMixin:
             logger.exception("metrics 命令失败")
             self.chat.append_error(f"metrics 命令失败: {exc}")
 
+    def _handle_slash_reload(self, intent: InputIntent) -> None:
+        try:
+            with log_timing("reload_command"):
+                result = self.reload_app_config()
+            if result.get("ok"):
+                gw = result.get("gateway") or {}
+                lines = [
+                    "配置已热重载。",
+                    f"- 标题: {result.get('title') or '(未变)'}",
+                    f"- Gateway: {'开' if gw.get('enabled') else '关'}"
+                    f" / HITL={gw.get('remote_hitl') or '-'}"
+                    f" / webhook={'开' if gw.get('http_webhook') else '关'}",
+                    "- Agent 将在后台重建以应用新配置。",
+                ]
+                self.chat.append_assistant_complete("\n".join(lines))
+            else:
+                self.chat.append_error(f"配置热重载失败: {result.get('error') or '未知错误'}")
+        except Exception as exc:
+            logger.exception("reload 命令失败")
+            self.chat.append_error(f"reload 命令失败: {exc}")
+
     def _handle_slash_task(self, intent: InputIntent) -> None:
         try:
             with log_timing("task_command", args=(intent.slash_args or "")[:40]):

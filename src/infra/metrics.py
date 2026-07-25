@@ -139,7 +139,9 @@ def record_timing(label: str, elapsed_ms: int, fields: dict[str, Any] | None = N
     try:
         get_metrics_store().record_timing(label, elapsed_ms, fields)
     except Exception:
-        pass
+        from loguru import logger
+
+        logger.debug("记录 metrics 失败 label={}", label, exc_info=True)
 
 
 def close_metrics_store() -> None:

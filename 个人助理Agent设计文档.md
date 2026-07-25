@@ -368,9 +368,11 @@ Agent 生成 tool_call
 文档导入 → RecursiveCharacterTextSplitter 分块
          → Embedding（与 LLM 同 Provider 或本地模型）
          → 存入 FAISS/Chroma
-         → 检索时 top-k + MMR 去重
+         → 检索时 top-k 相似度（MMR 去重标 Phase 2，当前未实现）
          → 注入 Prompt 上下文
 ```
+
+实现侧为 FAISS + 本地/API embedding；无 Chroma。
 
 ---
 

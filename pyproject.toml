@@ -53,6 +53,7 @@ speech = [
 dev = [
     "pytest>=8.0",
     "ruff>=0.6",
+    "mypy>=1.11",
 ]
 build = [
     "pyinstaller>=6.0",
@@ -83,3 +84,11 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
 ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_unused_ignores = true
+check_untyped_defs = false
+# 渐进接入：先对基础设施与配置做可选检查
+files = ["src/infra/config.py", "src/infra/paths.py"]

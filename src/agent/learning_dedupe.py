@@ -135,7 +135,9 @@ def memory_note_exists(note: str) -> bool:
             if content:
                 texts.append(content)
     except Exception:
-        pass
+        from loguru import logger
+
+        logger.debug("学习去重读取结构化记忆失败", exc_info=True)
 
     for memory_text in texts:
         blob = normalize_text(memory_text)

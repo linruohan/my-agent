@@ -117,7 +117,9 @@ def _extract_paddle_text(raw: Any) -> list[str]:
                 if isinstance(payload, dict):
                     rec_texts = payload.get("rec_texts")
             except Exception:
-                pass
+                from loguru import logger
+
+                logger.debug("OCR 页面 json 解析跳过", exc_info=True)
 
         if rec_texts:
             for text in rec_texts:

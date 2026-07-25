@@ -9,7 +9,7 @@ from typing import Any
 import webview
 from loguru import logger
 
-from src.infra.config import load_llm_providers_config, save_api_key
+from src.infra.config import load_llm_providers_config, reload_runtime_config, save_api_key
 from src.infra.user_settings import (
     activate_provider,
     create_user_provider,
@@ -279,6 +279,29 @@ class SettingsMixin:
 
         self._current_provider_name, self._providers = load_merged_providers()
         self._current_provider = self._providers[self._current_provider_name]
+
+    def reload_app_config(self) -> dict[str, Any]:
+        """热重载 config/*.yaml 与派生缓存，并重启 Gateway / 重建 Agent。"""
+        try:
+            self.app_cfg = reload_runtime_config()
+            self._reload_providers()
+            gateway = getattr(self, "_gateway", None)
+            if gateway is not None:
+                gateway.reload(on_inbound=self._handle_gateway_inbound)
+            self._schedule_agent_reinit()
+            status = self._status_text("配置已热重载")
+            self.chat.set_status(status)
+            gw_status = gateway.status() if gateway is not None else {}
+            logger.info("配置热重载完成 gateway={}", gw_status)
+            return {
+                "ok": True,
+                "status_text": status,
+                "gateway": gw_status,
+                "title": (self.app_cfg.get("app") or {}).get("title", ""),
+            }
+        except Exception as exc:
+            logger.exception("配置热重载失败")
+            return {"ok": False, "error": str(exc)}
 
     def knowledge_stats_text(self) -> dict[str, str]:
         stats = get_knowledge_stats()

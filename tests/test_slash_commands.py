@@ -13,6 +13,7 @@ from src.ui.input.intent import (
     INTENT_SLASH_CACHE,
     INTENT_SLASH_FILE,
     INTENT_SLASH_METRICS,
+    INTENT_SLASH_RELOAD,
     INTENT_SLASH_TASK,
     parse_slash_command,
 )
@@ -30,6 +31,13 @@ def test_parse_slash_metrics():
     assert intent is not None
     assert intent.kind == INTENT_SLASH_METRICS
     assert intent.slash_args == "stats"
+
+
+def test_parse_slash_reload():
+    intent = parse_slash_command("/reload")
+    assert intent is not None
+    assert intent.kind == INTENT_SLASH_RELOAD
+    assert intent.slash_cmd == "reload"
 
 
 def test_parse_slash_tsk():
