@@ -25,11 +25,15 @@ def learning_loop_config() -> dict[str, Any]:
     agent = load_app_config().get("agent", {}) or {}
     cfg = agent.get("learning_loop", {}) or {}
     dedupe = cfg.get("dedupe", {}) or {}
+    extraction = agent.get("memory_extraction", {}) or {}
+    extraction_enabled = bool(extraction.get("enabled", True))
+    # 与 extract_memories 互斥：结构化提取开启时，学习闭环默认只写 Skill
+    auto_memory_default = not extraction_enabled
     return {
         "enabled": bool(cfg.get("enabled", False)),
         "min_tool_calls": int(cfg.get("min_tool_calls", 3) or 3),
         "auto_create_skill": bool(cfg.get("auto_create_skill", True)),
-        "auto_update_memory": bool(cfg.get("auto_update_memory", True)),
+        "auto_update_memory": bool(cfg.get("auto_update_memory", auto_memory_default)),
         "dedupe_enabled": bool(dedupe.get("enabled", True)),
     }
 
@@ -129,10 +133,11 @@ def apply_learning(
         if memory_note_exists(note):
             logger.debug("学习闭环跳过重复 MEMORY 条目")
         else:
-            from src.tools.memory.tools import update_agent_memory
+            from src.memory.memory_writer import write_structured_memory_note
 
-            update_agent_memory.invoke({"content": f"- {note}", "mode": "append"})
-            parts.append("已写入 MEMORY.md")
+            written = write_structured_memory_note(note, memory_type="feedback")
+            if written:
+                parts.append(f"已写入结构化记忆 {written.file_name}")
 
     return "；".join(parts) if parts else None
 

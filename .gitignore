@@ -8,12 +8,17 @@ venv/
 data/temp/
 data/secrets.json
 data/user_settings.yaml
+data/app.db
+data/app.db-shm
+data/app.db-wal
 data/metrics.db
 data/metrics_export.csv
 data/search_cache.db
 data/sessions.db
 data/task.db
 data/note.db
+data/checkpoints/*.db-shm
+data/checkpoints/*.db-wal
 web/fonts/
 data/vectorstore/*
 !data/vectorstore/.gitkeep

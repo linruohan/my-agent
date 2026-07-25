@@ -28,9 +28,13 @@ DATA_SUBDIRS = (
 SKIP_DATA_NAMES = frozenset({
     "secrets.json",
     "user_settings.yaml",
+    "app.db",
+    "app.db-shm",
+    "app.db-wal",
     "metrics.db",
     "metrics.db-shm",
     "metrics.db-wal",
+    # 旧版分散库（迁移后可能残留）
     "sessions.db",
     "sessions.db-shm",
     "sessions.db-wal",

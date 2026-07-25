@@ -34,8 +34,10 @@ def _setup_iso_memory_env(tmp_path: Path, monkeypatch):
     import src.memory.rules_loader as rl_mod
     import src.memory.config_init as ci_mod
     import src.memory.context_files as cf_mod
+    import src.memory.settings_store as ss_mod
+    import src.infra.config as config_mod
 
-    for mod in (mi_mod, mw_mod, mr_mod, mv_mod, mp_mod, rl_mod, ci_mod):
+    for mod in (mi_mod, mw_mod, mr_mod, mv_mod, mp_mod, rl_mod, ci_mod, ss_mod):
         monkeypatch.setattr(mod, "global_config_dir", lambda: global_dir, raising=False)
         monkeypatch.setattr(mod, "project_config_dir", lambda _=None: project_dir, raising=False)
         monkeypatch.setattr(mod, "managed_config_dir", lambda: managed_dir, raising=False)
@@ -43,6 +45,10 @@ def _setup_iso_memory_env(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(cf_mod, "global_config_dir", lambda: global_dir)
     monkeypatch.setattr(cf_mod, "project_config_dir", lambda _=None: project_dir)
     monkeypatch.setattr(cf_mod, "managed_config_dir", lambda: managed_dir)
+    monkeypatch.setattr(config_mod, "global_config_dir", lambda: global_dir)
+    monkeypatch.setattr(config_mod, "project_config_dir", lambda _=None: project_dir)
+    monkeypatch.setattr(config_mod, "managed_config_dir", lambda: managed_dir)
+    config_mod.invalidate_json_cache()
 
     def fake_workspace_dir():
         ws = project_root / "workspace"
@@ -330,17 +336,20 @@ class TestMemoryReader:
 
     def test_is_stale_fresh(self, tmp_path, monkeypatch):
         """测试新创建的记忆不过期。"""
+        from datetime import datetime
+
         _setup_iso_memory_env(tmp_path, monkeypatch)
         from src.memory.memory_index import MemoryEntry
         from src.memory.memory_reader import _is_stale
 
+        today = datetime.now().strftime("%Y-%m-%d")
         entry = MemoryEntry(
             file_name="test.md",
             name="测试",
             description="测试内容",
             memory_type="user",
-            created="2026-07-05",
-            updated="2026-07-05",
+            created=today,
+            updated=today,
             tags=["test"],
             path=Path("/tmp/test.md"),
         )
@@ -528,6 +537,30 @@ class TestMemoryPromotion:
         assert rules_dir.is_dir()
         rule_files = list(rules_dir.glob("*.md"))
         assert len(rule_files) > 0
+
+    def test_promote_critical_writes_settings_local_not_app_yaml(self, tmp_path, monkeypatch):
+        """critical 提权只写 settings.local.json，禁止污染 config/app.yaml。"""
+        env = _setup_iso_memory_env(tmp_path, monkeypatch)
+        from src.infra.config import CONFIG_DIR
+        from src.memory.memory_promotion import promote_memory
+
+        app_yaml = CONFIG_DIR / "app.yaml"
+        before = app_yaml.read_bytes() if app_yaml.is_file() else None
+
+        result = promote_memory(
+            memory_content="绝对不要删除生产数据",
+            memory_name="禁止删生产",
+            memory_description="生产安全",
+        )
+        assert "settings.local.json" in result
+
+        local = env["project_dir"] / "settings.local.json"
+        assert local.is_file()
+        data = json.loads(local.read_text(encoding="utf-8"))
+        assert any(r.get("name") == "禁止删生产" for r in data.get("critical_rules", []))
+
+        after = app_yaml.read_bytes() if app_yaml.is_file() else None
+        assert before == after
 
 
 class TestRulesLoader:
@@ -1213,3 +1246,80 @@ class TestConfigMergingEdgeCases:
 
         merged = load_merged_settings()
         assert merged == {}
+
+    def test_extract_respects_last_write_interval(self, tmp_path, monkeypatch):
+        """近期写入后提取应被限流跳过。"""
+        import time
+
+        env = _setup_iso_memory_env(tmp_path, monkeypatch)
+        from src.memory.memory_writer import (
+            ExtractMemoriesInput,
+            extract_memories,
+            mark_memory_written,
+        )
+
+        now = time.time()
+        mark_memory_written(ts=now)
+        monkeypatch.setattr(
+            "src.memory.memory_writer.memory_extraction_config",
+            lambda: {"enabled": True, "min_interval_sec": 60.0},
+        )
+
+        class DummyLLM:
+            def invoke(self, *_a, **_k):
+                raise AssertionError("限流时应跳过 LLM")
+
+        out = extract_memories(
+            DummyLLM(),
+            ExtractMemoriesInput(
+                conversation_id="t1",
+                messages=[{"role": "user", "content": "hi"}],
+                has_memory_writes_since=now,
+                current_work_dir="",
+            ),
+        )
+        assert out.memories_written == []
+        assert out.index_updated is False
+        assert (env["project_dir"] / "memory" / ".last_write").is_file()
+
+    def test_team_memory_flag_gates_entries(self, tmp_path, monkeypatch):
+        """team 记忆仅在 feature flag 开启时加载。"""
+        env = _setup_iso_memory_env(tmp_path, monkeypatch)
+        team_dir = env["project_dir"] / "memory" / "team"
+        team_dir.mkdir(parents=True)
+        (team_dir / "feedback-team.md").write_text(
+            '---\nname: "team"\ndescription: "t"\ntype: "feedback"\n'
+            'created: "2026-01-01"\nupdated: "2026-01-01"\ntags: []\n---\n\n'
+            "**Why:** x\n\n**How to apply:** y\n",
+            encoding="utf-8",
+        )
+        from src.memory.memory_index import load_all_memory_entries
+
+        assert load_all_memory_entries() == []
+
+        (env["project_dir"] / "settings.local.json").write_text(
+            json.dumps({"memory": {"team_memory_enabled": True}}),
+            encoding="utf-8",
+        )
+        from src.infra.config import invalidate_json_cache
+
+        invalidate_json_cache()
+        entries = load_all_memory_entries()
+        assert any(e.file_name == "feedback-team.md" for e in entries)
+
+    def test_injection_includes_verification_prompt(self, tmp_path, monkeypatch):
+        """注入块应附带路径/函数主动验证提示。"""
+        env = _setup_iso_memory_env(tmp_path, monkeypatch)
+        mem_dir = env["project_dir"] / "memory"
+        mem_dir.mkdir(parents=True)
+        (mem_dir / "reference-path.md").write_text(
+            '---\nname: "path"\ndescription: "p"\ntype: "reference"\n'
+            'created: "2026-01-01"\nupdated: "2026-01-01"\ntags: []\n---\n\n'
+            "重要路径 D:\\\\codehub\\\\my-agent\\\\src\\\\main.py\n",
+            encoding="utf-8",
+        )
+        from src.memory.memory_reader import FoundMemory, build_memory_injection_block
+
+        block = build_memory_injection_block([FoundMemory("reference-path.md", 0.9, "path")])
+        assert "使用以下记忆前，请先验证" in block
+        assert "文件路径" in block

@@ -38,7 +38,8 @@ def mini_project(tmp_path: Path) -> Path:
     (dist / "my-agent.exe").write_bytes(b"MZ")
     data = project / "data"
     data.mkdir()
-    (data / "sessions.db").write_bytes(b"db")
+    (data / "app.db").write_bytes(b"db")
+    (data / "custom_seed.txt").write_text("ok", encoding="utf-8")
     (data / "secrets.json").write_text("{}", encoding="utf-8")
     return project
 
@@ -62,7 +63,9 @@ def test_stage_release_skips_secrets_when_include_dev_data(mini_project: Path, t
     release = tmp_path / "release"
     stage_release(mini_project, release, include_dev_data=True, init_databases=False)
 
-    assert (release / "data" / "sessions.db").is_file()
+    # 统一库与密钥均跳过；允许拷贝非敏感种子文件
+    assert (release / "data" / "custom_seed.txt").is_file()
+    assert not (release / "data" / "app.db").exists()
     assert not (release / "data" / "secrets.json").exists()
 
 

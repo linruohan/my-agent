@@ -80,7 +80,11 @@ def load_all_memory_entries(project_root: Path | None = None) -> list[MemoryEntr
 
     _load_from_dir(global_config_dir() / "memory")
     _load_from_dir(project_config_dir(project_root) / "memory")
-    _load_from_dir(project_config_dir(project_root) / "memory" / "team")
+
+    from src.memory.settings_store import is_team_memory_enabled
+
+    if is_team_memory_enabled(project_root):
+        _load_from_dir(project_config_dir(project_root) / "memory" / "team")
 
     return entries
 

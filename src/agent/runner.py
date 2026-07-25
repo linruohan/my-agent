@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import queue
 import threading
-import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable
@@ -21,7 +20,13 @@ from src.agent.hitl import (
     needs_user_approval,
     reject_pending_tools,
 )
-from src.memory.memory_writer import ExtractMemoriesInput, extract_memories
+from src.agent.memory_session import reset_memory_thread_id, set_memory_thread_id
+from src.memory.memory_writer import (
+    ExtractMemoriesInput,
+    extract_memories,
+    get_last_memory_write_ts,
+    memory_extraction_config,
+)
 
 
 _EVENT_QUEUE_MAX_SIZE = 1000
@@ -62,6 +67,7 @@ class AgentRunner:
         self._approval_event.clear()
 
         def _worker() -> None:
+            token = set_memory_thread_id(self._thread_id)
             try:
                 self._put_event(StreamEvent("start", {"thread_id": self._thread_id}))
                 with log_timing("agent_turn", thread_id=self._thread_id[:8]):
@@ -71,6 +77,8 @@ class AgentRunner:
             except Exception as exc:
                 logger.exception("Agent 执行失败")
                 self._put_event(StreamEvent("error", str(exc)))
+            finally:
+                reset_memory_thread_id(token)
 
         self._thread = threading.Thread(target=_worker, daemon=True)
         self._thread.start()
@@ -79,6 +87,8 @@ class AgentRunner:
     def _trigger_memory_extraction(self) -> None:
         """在对话正常结束后，启动后台线程提取记忆（fire-and-forget）。"""
         if not self.llm or not self._thread_id:
+            return
+        if not memory_extraction_config().get("enabled", True):
             return
 
         def _extract_worker() -> None:
@@ -97,11 +107,19 @@ class AgentRunner:
                             "role": msg.role,
                             "content": str(msg.content),
                         })
+                    elif hasattr(msg, "type") and hasattr(msg, "content"):
+                        role = "assistant" if msg.type in ("ai", "assistant") else msg.type
+                        if role == "human":
+                            role = "user"
+                        message_dicts.append({
+                            "role": role,
+                            "content": str(msg.content),
+                        })
 
                 input_data = ExtractMemoriesInput(
                     conversation_id=self._thread_id,
                     messages=message_dicts,
-                    has_memory_writes_since=time.time() - 300,
+                    has_memory_writes_since=get_last_memory_write_ts(),
                     current_work_dir="",
                 )
 

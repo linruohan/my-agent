@@ -83,17 +83,16 @@ API Key 存储优先级：
 
 | 路径 | 格式 | 用途 |
 |------|------|------|
-| `data/sessions.db` | SQLite | 会话列表 + 聊天事件 JSON |
+| `data/app.db` | SQLite | 统一库：会话、任务、笔记、搜索缓存、Gateway、Cron、学习记录等 |
 | `data/checkpoints/agent.db` | SQLite | LangGraph Agent Checkpoint |
-| `data/task.db` | SQLite | 待办任务 |
-| `data/note.db` | SQLite | 笔记 |
-| `data/search_cache.db` | SQLite | 搜索回答缓存 |
 | `data/vectorstore/` | FAISS + JSON | 向量索引与元数据 |
 | `data/workspace/calendar.json` | JSON | 日历事件 |
 | `data/workspace/knowledge/` | 文件目录 | RAG 知识库文档 |
 | `data/input_history.json` | JSON | 输入框历史 |
 | `data/user_settings.yaml` | YAML | 用户偏好 |
 | `data/secrets.json` | JSON | API Key（fallback） |
+
+旧版分散库（`sessions.db` / `task.db` / `note.db` 等）会在首次启动时合并进 `app.db` 并归档为 `*.migrated`。
 
 ## 路径解析
 
@@ -116,11 +115,14 @@ API Key 存储优先级：
 | 函数 | 说明 |
 |------|------|
 | `load_app_config()` | 加载 app.yaml |
+| `load_merged_settings()` | 合并四层 `settings.json`（Managed→Global→Project→Local） |
 | `load_tools_config()` | 加载 tools.yaml |
 | `load_search_config()` | 加载 search.yaml |
 | `load_files_config()` | 加载 files.yaml |
 | `load_weather_config()` | 加载 weather.yaml |
 | `load_llm_providers_config()` | 加载 llm_providers.yaml |
+
+`load_merged_settings()` 供记忆系统读取 `critical_rules`、`memory.team_memory_enabled`、`memory.stale_days` 等；critical 提权写入 `.my-agent/settings.local.json`，**不会**修改 `config/app.yaml`。
 
 配置在首次调用时加载并缓存，修改 YAML 后需重启应用生效。
 

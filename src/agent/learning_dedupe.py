@@ -117,24 +117,38 @@ def shared_ledger() -> LearningLedger:
 
 
 def memory_note_exists(note: str) -> bool:
-    """MEMORY.md 中是否已有相同或极相似条目。"""
+    """扁平 MEMORY.md 或结构化记忆文件中是否已有相同或极相似条目。"""
     target = normalize_memory_line(note)
     if not target or len(target) < 4:
         return False
-    memory_text = read_context_file(memory_file_path(), max_chars=50000)
-    if not memory_text:
-        return False
-    blob = normalize_text(memory_text)
-    if target in blob:
-        return True
-    for line in memory_text.splitlines():
-        line_norm = normalize_memory_line(line)
-        if not line_norm:
-            continue
-        if line_norm == target:
+
+    texts: list[str] = []
+    flat = read_context_file(memory_file_path(), max_chars=50000)
+    if flat:
+        texts.append(flat)
+    try:
+        from src.memory.memory_index import load_all_memory_entries
+        from src.memory.memory_reader import read_memory_content
+
+        for entry in load_all_memory_entries():
+            content = read_memory_content(entry.file_name)
+            if content:
+                texts.append(content)
+    except Exception:
+        pass
+
+    for memory_text in texts:
+        blob = normalize_text(memory_text)
+        if target in blob:
             return True
-        if len(target) >= 12 and (target in line_norm or line_norm in target):
-            return True
+        for line in memory_text.splitlines():
+            line_norm = normalize_memory_line(line)
+            if not line_norm:
+                continue
+            if line_norm == target:
+                return True
+            if len(target) >= 12 and (target in line_norm or line_norm in target):
+                return True
     return False
 
 

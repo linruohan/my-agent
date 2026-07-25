@@ -92,7 +92,8 @@ _DEFAULT_SETTINGS = """{
   "memory": {
     "enabled": true,
     "max_memories": 100,
-    "stale_days": 2
+    "stale_days": 2,
+    "team_memory_enabled": false
   },
   "critical_rules": []
 }

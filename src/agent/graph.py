@@ -10,15 +10,16 @@ from langgraph.prebuilt import create_react_agent
 from src.agent.history import make_pre_model_hook
 from src.infra.config import load_app_config
 from src.infra.time_context import current_date_context, current_year
+from src.agent.memory_session import get_memory_conversation_state
 from src.memory.context_files import build_memory_prompt_block, build_claude_prompt_block
 from src.memory.memory_index import load_all_memory_entries
 from src.memory.memory_reader import (
-    ConversationState,
     FindRelevantMemoriesInput,
     build_memory_injection_block,
     find_relevant_memories,
 )
 from src.memory.rules_loader import build_rules_prompt_block
+from src.memory.settings_store import build_critical_rules_prompt_block
 from src.tools import get_enabled_tools
 from src.tools.process_wrap import wrap_tools_for_process
 
@@ -61,7 +62,11 @@ def build_system_prompt(
     claude_block = build_claude_prompt_block(current_file=current_file)
     rules_block = build_rules_prompt_block(current_file=current_file)
 
+    critical_block = build_critical_rules_prompt_block()
+
     parts = [base, time_block.strip()]
+    if critical_block:
+        parts.append(f"【强制约束 CRITICAL】\n{critical_block}")
     if claude_block:
         parts.append(f"【项目指导 CLAUDE.md】\n{claude_block}")
     if rules_block:
@@ -124,7 +129,7 @@ def _build_relevant_memories_block(
     if not memory_entries:
         return ""
 
-    conversation_state = state.get("_memory_state") or ConversationState()
+    conversation_state = get_memory_conversation_state()
     already_surfaced = list(conversation_state.already_surfaced_memories)
     recent_tools = _extract_recent_tools(messages)
 
@@ -141,8 +146,6 @@ def _build_relevant_memories_block(
         return ""
 
     conversation_state.add_surfaced([m.file_name for m in found_memories])
-    if "_memory_state" not in state:
-        state["_memory_state"] = conversation_state
 
     injection = build_memory_injection_block(found_memories)
     if injection:

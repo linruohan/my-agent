@@ -1,6 +1,7 @@
 # 个人助理 Agent —— 设计方案（v2）
 
-> 技术栈：**LangChain + LangGraph** | **CustomTkinter** | **可插拔外部 LLM API**
+> 技术栈：**LangChain + LangGraph** | **pywebview + Web UI** | **可插拔外部 LLM API**  
+> 注：早期草案曾规划 CustomTkinter；以 `doc/` 与当前实现为准。
 
 ---
 

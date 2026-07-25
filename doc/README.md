@@ -93,13 +93,10 @@ Agent 可调用的工具在 `config/tools.yaml` 中配置启用状态与风险�
 
 | 路径 | 用途 |
 |------|------|
-| `data/sessions.db` | 会话与聊天事件 |
-| `data/checkpoints/agent.db` | Agent 状态 Checkpoint |
-| `data/task.db` | 任务 |
-| `data/note.db` | 笔记 |
-| `data/search_cache.db` | 搜索回答缓存 |
+| `data/app.db` | 统一应用库（会话、任务、笔记、搜索缓存、Gateway、Cron、学习记录等） |
+| `data/checkpoints/agent.db` | LangGraph Agent Checkpoint |
 | `data/vectorstore/` | FAISS 向量索引 |
-| `data/workspace/` | 日历、知识库文档 |
+| `data/workspace/` | 日历、知识库文档、旧版扁平 MEMORY 兼容 |
 
 ## 技术栈
 

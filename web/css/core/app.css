@@ -1,7 +1,7 @@
 :root {
   --radius-input: 12px;
-  --radius-bubble: 16px;
-  --radius-chip: 16px;
+  --radius-bubble: 20px;
+  --radius-chip: 18px;
   --radius-avatar: 20px;
   --radius-panel: 20px;
   --radius-card: 24px;
@@ -12,9 +12,9 @@
   --font-caption: 11px;
   --font-large: 16px;
   --font-title: 20px;
-  --font-display: 28px;
+  --font-display: 32px;
   --bubble-inset: 16px 20px;
-  --message-gap: 24px;
+  --message-gap: 28px;
   --sidebar-width: 280px;
   --sidebar-collapsed: 56px;
   --chat-width-pct: 80%;
@@ -22,23 +22,25 @@
   --scrollbar-thumb: color-mix(in srgb, var(--fg-muted) 20%, transparent);
   --scrollbar-thumb-hover: color-mix(in srgb, var(--fg-muted) 40%, transparent);
   --shadow-color: var(--fg);
-  --mac-shadow-sm: 0 1px 3px color-mix(in srgb, var(--shadow-color) 3%, transparent);
-  --mac-shadow-md: 0 4px 16px color-mix(in srgb, var(--shadow-color) 5%, transparent);
-  --mac-shadow-lg: 0 12px 48px color-mix(in srgb, var(--shadow-color) 8%, transparent);
-  --mac-shadow-xl: 0 20px 60px color-mix(in srgb, var(--shadow-color) 12%, transparent);
+  --mac-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 4px rgba(0, 0, 0, 0.02);
+  --mac-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.04);
+  --mac-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.08), 0 4px 16px rgba(0, 0, 0, 0.06);
+  --mac-shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.1), 0 8px 24px rgba(0, 0, 0, 0.08);
   --mac-blur: saturate(180%) blur(20px);
-  --mac-glass: rgba(255, 255, 255, 0.72);
-  --mac-glass-dark: rgba(26, 26, 26, 0.72);
+  --mac-glass: rgba(255, 255, 255, 0.75);
+  --mac-glass-dark: rgba(30, 30, 30, 0.75);
+  --mac-glass-light: rgba(255, 255, 255, 0.85);
   --session-accent: color-mix(in srgb, var(--fg-muted) 15%, var(--bg-sidebar, var(--bg-app)));
-  --aurora-blue: rgba(162, 210, 255, 0.35);
-  --aurora-purple: rgba(200, 180, 255, 0.3);
-  --aurora-pink: rgba(255, 180, 220, 0.25);
+  --aurora-blue: rgba(138, 200, 255, 0.4);
+  --aurora-purple: rgba(190, 170, 255, 0.35);
+  --aurora-pink: rgba(255, 170, 210, 0.3);
+  --aurora-cyan: rgba(150, 230, 255, 0.25);
   --accent-tool: var(--warning);
   --accent-skill: var(--info);
-  --overlay-backdrop: color-mix(in srgb, var(--fg) 30%, transparent);
+  --overlay-backdrop: rgba(0, 0, 0, 0.35);
   --overlay-fg: var(--primary-fg, var(--fg));
-  --overlay-control-bg: color-mix(in srgb, var(--overlay-fg) 12%, transparent);
-  --overlay-control-bg-hover: color-mix(in srgb, var(--overlay-fg) 22%, transparent);
+  --overlay-control-bg: rgba(255, 255, 255, 0.15);
+  --overlay-control-bg-hover: rgba(255, 255, 255, 0.25);
   --mark-highlight: color-mix(in srgb, var(--warning) 35%, transparent);
   --range-thumb-bg: var(--bg-popover, var(--bg-app));
   --range-thumb-border: color-mix(in srgb, var(--border) 60%, transparent);
@@ -52,6 +54,7 @@
   --spacing-xl: 32px;
   --spring-ease: cubic-bezier(0.25, 1, 0.5, 1);
   --spring-fast: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --spring-smooth: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 * {
@@ -81,28 +84,64 @@ body {
 body::before {
   content: "";
   position: fixed;
-  inset: 0;
-  background: radial-gradient(ellipse 60% 50% at 20% 30%, var(--aurora-blue), transparent 55%),
-              radial-gradient(ellipse 50% 40% at 80% 70%, var(--aurora-purple), transparent 50%),
-              radial-gradient(ellipse 40% 35% at 50% 90%, var(--aurora-pink), transparent 45%);
-  opacity: 0.6;
+  inset: -50%;
+  background: 
+    radial-gradient(ellipse 80% 60% at 15% 20%, var(--aurora-blue), transparent 50%),
+    radial-gradient(ellipse 70% 50% at 85% 80%, var(--aurora-purple), transparent 45%),
+    radial-gradient(ellipse 60% 45% at 50% 60%, var(--aurora-pink), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 90% 10%, var(--aurora-cyan), transparent 50%),
+    radial-gradient(ellipse 65% 55% at 10% 90%, rgba(200, 180, 255, 0.2), transparent 55%);
+  opacity: 0.55;
   pointer-events: none;
   z-index: 0;
-  animation: aurora-float 20s ease-in-out infinite;
+  animation: aurora-float 25s ease-in-out infinite;
+  filter: blur(80px);
+  -webkit-filter: blur(80px);
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: -30%;
+  background: 
+    radial-gradient(ellipse 50% 30% at 30% 40%, rgba(255, 255, 255, 0.08), transparent),
+    radial-gradient(ellipse 60% 40% at 70% 20%, rgba(255, 255, 255, 0.05), transparent);
+  pointer-events: none;
+  z-index: 0;
+  animation: aurora-shimmer 20s ease-in-out infinite;
 }
 
 @keyframes aurora-float {
   0%, 100% {
     transform: translate(0, 0) scale(1);
-    opacity: 0.6;
-  }
-  33% {
-    transform: translate(3%, -2%) scale(1.02);
     opacity: 0.55;
   }
-  66% {
-    transform: translate(-2%, 3%) scale(0.98);
-    opacity: 0.65;
+  20% {
+    transform: translate(5%, -3%) scale(1.05);
+    opacity: 0.5;
+  }
+  40% {
+    transform: translate(-3%, 5%) scale(0.98);
+    opacity: 0.6;
+  }
+  60% {
+    transform: translate(4%, 2%) scale(1.02);
+    opacity: 0.55;
+  }
+  80% {
+    transform: translate(-2%, -4%) scale(0.96);
+    opacity: 0.6;
+  }
+}
+
+@keyframes aurora-shimmer {
+  0%, 100% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 0.8;
+  }
+  50% {
+    transform: translate(10%, -10%) rotate(2deg);
+    opacity: 1;
   }
 }
 
@@ -178,15 +217,16 @@ html[data-theme-mode="dark"] body::before {
 .sidebar {
   display: flex;
   flex-direction: column;
-  background: color-mix(in srgb, var(--bg-sidebar, var(--bg-app)) 85%, transparent);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: color-mix(in srgb, var(--bg-sidebar, var(--bg-app)) 80%, transparent);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
   color: var(--fg-sidebar, var(--fg));
   border-right: 1px solid color-mix(in srgb, var(--border-sidebar, var(--border)) 40%, transparent);
   padding: 12px;
   gap: 8px;
   min-height: 0;
   overflow: hidden;
+  transition: background 0.3s var(--spring-ease), border-color 0.3s var(--spring-ease);
 }
 
 .sidebar-top {
@@ -236,7 +276,7 @@ html[data-theme-mode="dark"] body::before {
   font-weight: 500;
   cursor: pointer;
   text-align: left;
-  transition: background 0.2s var(--spring-ease), color 0.2s var(--spring-ease), transform 0.15s var(--spring-fast), box-shadow 0.2s var(--spring-ease);
+  transition: all 0.25s var(--spring-ease);
   user-select: none;
   -webkit-user-select: none;
   position: relative;
@@ -250,14 +290,27 @@ html[data-theme-mode="dark"] body::before {
   top: 50%;
   transform: translateY(-50%) scaleX(0);
   width: 3px;
-  height: 20px;
+  height: 18px;
   background: var(--primary-bg);
-  border-radius: 0 3px 3px 0;
+  border-radius: 0 999px 999px 0;
   transition: transform 0.25s var(--spring-ease);
 }
 
+.nav-item::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--ripple-x, 50%) var(--ripple-y, 50%), color-mix(in srgb, var(--fg) 8%, transparent) 0%, transparent 50%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.nav-item:active::after {
+  opacity: 1;
+}
+
 .nav-item:hover {
-  background: color-mix(in srgb, var(--bg-list-hover, var(--bg-muted)) 75%, transparent);
+  background: color-mix(in srgb, var(--bg-list-hover, var(--bg-muted)) 80%, transparent);
   color: var(--fg);
   transform: translateX(2px);
 }
@@ -265,7 +318,8 @@ html[data-theme-mode="dark"] body::before {
 .nav-item.active {
   background: var(--primary-bg);
   color: var(--primary-fg);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-bg) 25%, transparent);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--primary-bg) 30%, transparent), 0 2px 8px color-mix(in srgb, var(--shadow-color) 8%, transparent);
+  transform: translateX(0);
 }
 
 .nav-item.active::before {
@@ -323,26 +377,25 @@ html[data-theme-mode="dark"] body::before {
 
 .sidebar-search-input {
   width: 100%;
-  padding: 9px 12px;
-  border: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+  padding: 10px 14px;
+  border: none;
   border-radius: var(--radius-input);
   background: color-mix(in srgb, var(--bg-input, var(--bg-muted)) 85%, transparent);
   color: var(--fg);
   font: inherit;
   font-size: var(--font-body);
   outline: none;
-  transition: border-color 0.2s var(--spring-ease), box-shadow 0.2s var(--spring-ease), background 0.2s var(--spring-ease);
+  transition: all 0.25s var(--spring-ease);
 }
 
 .sidebar-search-input:focus {
-  border-color: color-mix(in srgb, var(--ring, var(--primary-bg)) 50%, var(--border));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring, var(--primary-bg)) 12%, transparent);
   background: var(--bg-input, var(--bg-popover));
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--shadow-color) 8%, transparent), 0 0 0 3px color-mix(in srgb, var(--ring, var(--primary-bg)) 12%, transparent);
 }
 
 .sidebar-search-input::placeholder {
   color: var(--fg-muted);
-  opacity: 0.6;
+  opacity: 0.5;
 }
 
 .sidebar-section {
@@ -391,24 +444,23 @@ html[data-theme-mode="dark"] body::before {
   font-weight: 500;
   color: var(--fg-muted);
   cursor: pointer;
-  transition: background 0.2s var(--spring-ease), color 0.2s var(--spring-ease), transform 0.15s var(--spring-ease), box-shadow 0.2s var(--spring-ease);
+  transition: all 0.25s var(--spring-ease);
   position: relative;
   animation: fade-in-up 0.3s var(--spring-ease);
 }
 
 .session-item:hover {
-  background: color-mix(in srgb, var(--bg-list-hover) 65%, transparent);
+  background: color-mix(in srgb, var(--bg-list-hover, var(--bg-muted)) 70%, transparent);
   color: var(--fg);
   transform: translateX(2px);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--fg) 4%, transparent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--shadow-color) 6%, transparent);
 }
 
 .session-item.active {
-  background: color-mix(in srgb, var(--primary-bg) 10%, transparent);
+  background: color-mix(in srgb, var(--primary-bg) 12%, transparent);
   color: var(--fg);
   font-weight: 600;
-  border: 1px solid color-mix(in srgb, var(--primary-bg) 30%, transparent);
-  box-shadow: 0 2px 10px color-mix(in srgb, var(--primary-bg) 15%, transparent);
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--primary-bg) 18%, transparent);
 }
 
 .session-item.active::before {
@@ -421,7 +473,7 @@ html[data-theme-mode="dark"] body::before {
   height: 4px;
   border-radius: 50%;
   background: var(--primary-bg);
-  box-shadow: 0 0 6px var(--primary-bg);
+  box-shadow: 0 0 8px var(--primary-bg);
 }
 
 .session-empty {
@@ -482,17 +534,18 @@ html[data-theme-mode="dark"] body::before {
   padding: 8px 12px;
   border: none;
   border-radius: var(--radius-input);
-  background: color-mix(in srgb, var(--bg-muted) 55%, transparent);
+  background: color-mix(in srgb, var(--bg-input, var(--bg-muted)) 70%, transparent);
   color: var(--fg);
   cursor: pointer;
   text-align: left;
   font: inherit;
-  transition: background 0.2s var(--spring-ease), transform 0.15s var(--spring-ease);
+  transition: all 0.25s var(--spring-ease);
 }
 
 .sidebar-profile:hover {
-  background: color-mix(in srgb, var(--bg-muted) 70%, transparent);
+  background: color-mix(in srgb, var(--bg-list-hover, var(--bg-muted)) 80%, transparent);
   transform: translateY(-1px);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--shadow-color) 8%, transparent);
 }
 
 .sidebar-profile-avatar {
@@ -781,7 +834,7 @@ html[data-theme-mode="dark"] body::before {
 
 .sidebar-footer-btn:hover,
 .sidebar-footer-btn.active {
-  background: color-mix(in srgb, var(--bg-muted) 65%, transparent);
+  background: color-mix(in srgb, var(--bg-list-hover, var(--bg-muted)) 60%, transparent);
   color: var(--fg);
   transform: scale(1.05);
 }
@@ -800,10 +853,11 @@ html[data-theme-mode="dark"] body::before {
   position: relative;
   z-index: 20;
   overflow: visible;
-  background: color-mix(in srgb, var(--bg-app) 70%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--bg-panel, var(--bg-app)) 50%, transparent);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
   border-bottom: 1px solid color-mix(in srgb, var(--border) 30%, transparent);
+  transition: background 0.3s var(--spring-ease), border-color 0.3s var(--spring-ease);
 }
 
 .chat-title-btn {
@@ -1107,20 +1161,22 @@ html[data-theme-mode="dark"] body::before {
   align-items: center;
   gap: 6px;
   padding: 6px 10px 6px 6px;
-  background: color-mix(in srgb, var(--bg-popover) 90%, transparent);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid color-mix(in srgb, var(--input-border, var(--border)) 30%, transparent);
+  background: color-mix(in srgb, var(--bg-panel, var(--bg-popover)) 80%, transparent);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
   border-radius: var(--radius-pill);
-  box-shadow: 0 2px 12px color-mix(in srgb, var(--shadow-color) 4%, transparent);
-  transition: border-color 0.25s var(--spring-ease), box-shadow 0.25s var(--spring-ease), transform 0.15s var(--spring-ease);
+  box-shadow: var(--mac-shadow-md);
+  transition: all 0.25s var(--spring-ease);
 }
 
 .composer-pill:focus-within {
   border-color: color-mix(in srgb, var(--ring, var(--primary-bg)) 50%, transparent);
   box-shadow:
-    0 4px 20px color-mix(in srgb, var(--shadow-color) 8%, transparent),
-    0 0 0 3px color-mix(in srgb, var(--ring, var(--primary-bg)) 12%, transparent);
+    0 8px 24px color-mix(in srgb, var(--ring, var(--primary-bg)) 12%, transparent),
+    var(--mac-shadow-md),
+    0 0 0 3px color-mix(in srgb, var(--ring, var(--primary-bg)) 10%, transparent);
+  transform: translateY(-1px);
 }
 
 .composer-pill.drag-over {
@@ -1442,28 +1498,29 @@ html[data-theme-mode="dark"] body::before {
 
 .pill-action {
   flex-shrink: 0;
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   border: none;
-  background: var(--primary-bg, #171717);
-  color: var(--primary-fg, #fafafa);
+  background: var(--primary-bg);
+  color: var(--primary-fg);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.2s var(--spring-ease), background 0.2s var(--spring-ease), opacity 0.2s var(--spring-ease), box-shadow 0.2s var(--spring-ease);
-  box-shadow: 0 3px 10px color-mix(in srgb, var(--primary-bg) 30%, transparent);
+  transition: all 0.25s var(--spring-ease);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-bg) 30%, transparent);
 }
 
 .pill-action:hover {
   background: var(--primary-hover, var(--primary-bg));
-  transform: scale(1.06);
-  box-shadow: 0 5px 14px color-mix(in srgb, var(--primary-bg) 40%, transparent);
+  transform: scale(1.08);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--primary-bg) 40%, transparent);
 }
 
 .pill-action:active {
-  transform: scale(0.95);
+  transform: scale(0.94);
+  background: color-mix(in srgb, var(--primary-bg) 80%, black);
 }
 
 .pill-action.running {
@@ -1610,12 +1667,12 @@ html[data-theme-mode="dark"] body::before {
 .btn {
   border: none;
   border-radius: var(--radius-button);
-  padding: 8px 16px;
+  padding: 9px 18px;
   font: inherit;
   font-weight: 600;
   font-size: var(--font-body);
   cursor: pointer;
-  transition: background 0.2s var(--spring-ease), transform 0.15s var(--spring-ease), box-shadow 0.2s var(--spring-ease);
+  transition: all 0.25s var(--spring-ease);
   user-select: none;
   -webkit-user-select: none;
   letter-spacing: -0.01em;
@@ -1627,7 +1684,7 @@ html[data-theme-mode="dark"] body::before {
   content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at var(--ripple-x, 50%) var(--ripple-y, 50%), color-mix(in srgb, var(--fg) 10%, transparent) 0%, transparent 50%);
+  background: radial-gradient(circle at var(--ripple-x, 50%) var(--ripple-y, 50%), color-mix(in srgb, var(--fg) 15%, transparent) 0%, transparent 50%);
   opacity: 0;
   transition: opacity 0.3s;
 }
@@ -1647,29 +1704,29 @@ html[data-theme-mode="dark"] body::before {
 }
 
 .btn-primary:hover {
-  background: var(--primary-hover);
+  background: var(--primary-hover, var(--primary-bg));
   transform: scale(1.02);
   box-shadow: 0 6px 20px color-mix(in srgb, var(--primary-bg) 40%, transparent);
 }
 
 .btn-secondary {
-  background: var(--bg-muted);
-  color: var(--fg);
+  background: color-mix(in srgb, var(--secondary-bg, var(--bg-muted)) 80%, transparent);
+  color: var(--secondary-fg, var(--fg));
 }
 
 .btn-secondary:hover {
-  background: color-mix(in srgb, var(--bg-muted) 90%, var(--fg) 5%);
+  background: color-mix(in srgb, var(--secondary-bg, var(--bg-muted)) 100%, transparent);
   transform: scale(1.01);
 }
 
 .btn-muted {
-  background: color-mix(in srgb, var(--bg-muted) 40%, transparent);
+  background: transparent;
   color: var(--fg-muted);
   border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
 }
 
 .btn-muted:hover {
-  background: color-mix(in srgb, var(--bg-muted) 70%, transparent);
+  background: color-mix(in srgb, var(--bg-muted) 60%, transparent);
   color: var(--fg);
   border-color: color-mix(in srgb, var(--border) 80%, transparent);
 }
@@ -2398,10 +2455,10 @@ html[data-theme-mode="dark"] body::before {
 .modal-panel {
   width: min(560px, 92vw);
   max-height: 90vh;
-  background: color-mix(in srgb, var(--bg-popover) 95%, transparent);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid color-mix(in srgb, var(--border) 35%, transparent);
+  background: color-mix(in srgb, var(--bg-panel, var(--bg-popover)) 85%, transparent);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
   border-radius: var(--radius-card);
   color: var(--fg);
   display: flex;
@@ -2446,10 +2503,10 @@ html[data-theme-mode="dark"] body::before {
   margin-bottom: 24px;
   padding: 20px 24px;
   border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--bg-popover) 88%, transparent);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid color-mix(in srgb, var(--border) 30%, transparent);
+  background: color-mix(in srgb, var(--bg-panel, var(--bg-popover)) 70%, transparent);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid color-mix(in srgb, var(--border) 35%, transparent);
   box-shadow: var(--mac-shadow-sm);
 }
 
@@ -2477,23 +2534,22 @@ html[data-theme-mode="dark"] body::before {
 .field input,
 .field select,
 .field textarea {
-  padding: 10px 12px;
+  padding: 10px 14px;
   border-radius: var(--radius-input);
-  border: 1px solid color-mix(in srgb, var(--input-border, var(--border)) 50%, transparent);
-  background: color-mix(in srgb, var(--bg-input, var(--bg-muted)) 85%, transparent);
+  border: none;
+  background: color-mix(in srgb, var(--bg-input, var(--bg-muted)) 80%, transparent);
   color: var(--fg);
   font: inherit;
   font-size: var(--font-body);
-  transition: border-color 0.2s var(--spring-ease), box-shadow 0.2s var(--spring-ease), background 0.2s var(--spring-ease);
+  transition: all 0.25s var(--spring-ease);
 }
 
 .field input:focus,
 .field select:focus,
 .field textarea:focus {
   outline: none;
-  border-color: color-mix(in srgb, var(--ring, var(--primary-bg)) 60%, var(--border));
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ring, var(--primary-bg)) 15%, transparent);
   background: var(--bg-input, var(--bg-popover));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring, var(--primary-bg)) 15%, transparent), 0 4px 12px color-mix(in srgb, var(--shadow-color) 8%, transparent);
 }
 
 .field-checkbox {
@@ -2573,9 +2629,9 @@ html[data-theme-mode="dark"] body::before {
 
 .knowledge-stats,
 .knowledge-log {
-  background: color-mix(in srgb, var(--bg-popover) 90%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--bg-panel, var(--bg-popover)) 75%, transparent);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
   border-radius: var(--radius-panel);
   padding: 16px 18px;
   font-size: var(--font-body);
@@ -2833,10 +2889,10 @@ html[data-theme-mode="dark"] body::before {
   overflow-y: auto;
   padding: 8px;
   border-radius: var(--radius-panel);
-  background: color-mix(in srgb, var(--bg-popover) 85%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid color-mix(in srgb, var(--border) 30%, transparent);
+  background: color-mix(in srgb, var(--bg-panel, var(--bg-popover)) 70%, transparent);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid color-mix(in srgb, var(--border) 35%, transparent);
   box-shadow: var(--mac-shadow-sm);
 }
 

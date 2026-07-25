@@ -46,17 +46,25 @@ def read_agent_memory() -> str:
 
 @tool
 def update_agent_memory(content: str, mode: str = "append") -> str:
-    """更新 MEMORY.md Agent 记忆。学到可复用经验或用户要求记住的信息时使用。
+    """更新 Agent 记忆。默认写入结构化记忆文件并刷新索引；mode=replace 时整文件替换旧版扁平 MEMORY.md。
 
     Args:
         content: 要写入的 Markdown 内容
-        mode: append 或 replace，默认 append
+        mode: append（结构化文件）或 replace（替换 workspace MEMORY.md），默认 append
     """
     body = (content or "").strip()
     if not body:
-        return "内容为空，未更新 MEMORY.md。"
-    write_context_file(memory_file_path(), body, mode=mode if mode in ("append", "replace") else "append")
-    return f"已{'追加' if mode != 'replace' else '替换'} MEMORY.md（{len(body)} 字符）。"
+        return "内容为空，未更新记忆。"
+    if mode == "replace":
+        write_context_file(memory_file_path(), body, mode="replace")
+        return f"已替换 MEMORY.md（{len(body)} 字符）。"
+
+    from src.memory.memory_writer import write_structured_memory_note
+
+    written = write_structured_memory_note(body, memory_type="feedback")
+    if not written:
+        return "内容为空或与已有记忆重复，未写入。"
+    return f"已写入结构化记忆 {written.file_name}。"
 
 
 @tool

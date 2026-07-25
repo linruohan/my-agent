@@ -59,7 +59,7 @@ src/memory/search_cache/  # 搜索回答缓存
 | `ttl_days` | 7 | 缓存有效期 |
 | `max_entries` | 100 | 最大条目数 |
 
-缓存存储在 `data/search_cache.db`。用户可通过 `/cache` 斜杠命令管理（查看/清除）。
+缓存存储在 `data/app.db` 的搜索缓存表。用户可通过 `/cache` 斜杠命令管理（查看/清除）。
 
 ## 配置
 
@@ -74,7 +74,7 @@ search:
 
 cache:
   enabled: true
-  db_path: "data/search_cache.db"
+  db_path: "data/app.db"
   text_similarity_threshold: 0.65
   ttl_days: 7
   max_entries: 100

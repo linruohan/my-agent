@@ -74,10 +74,10 @@ my-agent 的记忆机制是**两条独立的线**，并行工作：
 
 | 层级 | Claude Code 概念 | my-agent 实现 | 状态 |
 |------|------------------|--------------|------|
-| **L1** | Settings（强制配置） | 全局/项目/本地 settings.json 分层合并 | 待实现 |
-| **L2** | CLAUDE.md（指导层） | 六层叠加 + @include + 条件规则 | 待实现 |
-| **L3** | Auto Memory（记忆层） | 四种类型 + 索引常驻 + 内容按需 | 核心增强 |
-| **L4** | Session Transcripts（会话层） | SessionStore（数据库） | ✅ 已完善 |
+| **L1** | Settings（强制配置） | `load_merged_settings()` 四层合并；critical 写入 `settings.local.json` | ✅ 已接入 |
+| **L2** | CLAUDE.md（指导层） | Managed/User/Project/Local/Nested + @include + 条件规则 | ✅ 已实现 |
+| **L3** | Auto Memory（记忆层） | 四种类型 + 索引常驻 + 内容按需；Team 层受 feature flag 控制 | ✅ 核心可用 |
+| **L4** | Session Transcripts（会话层） | SessionStore（`data/app.db`） | ✅ 已完善 |
 | **L5** | Skills/Agents/MCP（扩展层） | src/ui/skill/ + src/tools/ | ✅ 已完善 |
 | **L6** | App State（状态层） | user_settings.yaml + secrets.json | ✅ 已完善 |
 

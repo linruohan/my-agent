@@ -209,7 +209,12 @@ def build_memory_injection_block(
             except ValueError:
                 pass
 
-        injection = f"<system-reminder>\n{stale_warning}{content}\n</system-reminder>"
+        from src.memory.memory_validator import build_verification_prompt
+
+        verify = build_verification_prompt(content)
+        verify_block = f"{verify}\n\n" if verify else ""
+
+        injection = f"<system-reminder>\n{stale_warning}{verify_block}{content}\n</system-reminder>"
         parts.append(injection)
 
     return "\n\n".join(parts)

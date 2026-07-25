@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -13,10 +14,42 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from loguru import logger
 
+from src.infra.config import load_app_config
 from src.infra.paths import project_config_dir
 from src.memory.memory_index import write_memory_index
 
 MEMORY_TYPES = ["user", "feedback", "project", "reference"]
+_LAST_WRITE_NAME = ".last_write"
+_DEFAULT_MIN_INTERVAL_SEC = 60.0
+
+
+def last_write_path(project_root: Path | None = None) -> Path:
+    return project_config_dir(project_root) / "memory" / _LAST_WRITE_NAME
+
+
+def get_last_memory_write_ts(project_root: Path | None = None) -> float:
+    path = last_write_path(project_root)
+    if not path.is_file():
+        return 0.0
+    try:
+        return float(path.read_text(encoding="utf-8").strip() or "0")
+    except (OSError, ValueError):
+        return 0.0
+
+
+def mark_memory_written(project_root: Path | None = None, ts: float | None = None) -> None:
+    path = last_write_path(project_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(str(ts if ts is not None else time.time()), encoding="utf-8")
+
+
+def memory_extraction_config() -> dict[str, Any]:
+    agent = load_app_config().get("agent", {}) or {}
+    cfg = agent.get("memory_extraction", {}) or {}
+    return {
+        "enabled": bool(cfg.get("enabled", True)),
+        "min_interval_sec": float(cfg.get("min_interval_sec", _DEFAULT_MIN_INTERVAL_SEC) or _DEFAULT_MIN_INTERVAL_SEC),
+    }
 
 
 @dataclass
@@ -225,7 +258,8 @@ def _write_memory_file(
 
     formatted = _format_memory_content(memory_type, name, description, content, tags)
     file_path.write_text(formatted + "\n", encoding="utf-8")
-    logger.info(f"已写入记忆: {file_name}")
+    logger.info("已写入记忆: {}", file_name)
+    mark_memory_written(project_root)
 
     return MemoryWriteResult(
         file_name=file_name,
@@ -235,11 +269,65 @@ def _write_memory_file(
     )
 
 
+def write_structured_memory_note(
+    note: str,
+    *,
+    memory_type: str = "feedback",
+    name: str | None = None,
+    description: str | None = None,
+    project_root: Path | None = None,
+) -> MemoryWriteResult | None:
+    """将一句可复用事实写入结构化记忆文件（学习闭环 / update_agent_memory 共用）。"""
+    body = (note or "").strip()
+    body = re.sub(r"^[-*•]\s*", "", body)
+    if not body:
+        return None
+
+    slug_src = name or body[:40]
+    mem_name = (name or slug_src).strip() or "learned-note"
+    desc = (description or body[:80]).strip()
+    content = body
+    if memory_type in ("feedback", "project"):
+        if "**Why:**" not in content and "Why:" not in content:
+            content = (
+                f"{body}\n\n"
+                f"**Why:** 对话中确认的可复用事实\n\n"
+                f"**How to apply:** 后续相关任务优先遵循此约定"
+            )
+
+    result = _write_memory_file(
+        memory_type=memory_type,
+        name=mem_name,
+        description=desc,
+        content=content,
+        tags=["auto-learn"],
+        project_root=project_root,
+    )
+    if result:
+        write_memory_index(project_root)
+    return result
+
+
 def extract_memories(
     llm: BaseChatModel,
     input_data: ExtractMemoriesInput,
+    *,
+    project_root: Path | None = None,
 ) -> ExtractMemoriesOutput:
     """从对话中提取并写入记忆。"""
+    cfg = memory_extraction_config()
+    if not cfg["enabled"]:
+        return ExtractMemoriesOutput(memories_written=[], index_updated=False)
+
+    last_ts = input_data.has_memory_writes_since
+    if last_ts > 0 and (time.time() - last_ts) < cfg["min_interval_sec"]:
+        logger.debug(
+            "[memory] 距上次写入仅 {:.1f}s，跳过提取（min_interval={}）",
+            time.time() - last_ts,
+            cfg["min_interval_sec"],
+        )
+        return ExtractMemoriesOutput(memories_written=[], index_updated=False)
+
     memories = _extract_memories_from_messages(llm, input_data.messages)
     if not memories:
         return ExtractMemoriesOutput(memories_written=[], index_updated=False)
@@ -253,6 +341,7 @@ def extract_memories(
             description=str(mem.get("description", "")),
             content=str(mem.get("content", "")),
             tags=mem.get("tags", []),
+            project_root=project_root,
         )
         if result:
             written.append(result)
@@ -263,15 +352,16 @@ def extract_memories(
                 memory_content=str(mem.get("content", "")),
                 memory_name=str(mem.get("name", "")),
                 memory_description=str(mem.get("description", "")),
+                project_root=project_root,
             )
             if promotion_result and "提权" in promotion_result:
                 promoted.append(promotion_result)
 
     if written:
-        write_memory_index()
+        write_memory_index(project_root)
 
     if promoted:
-        logger.info(f"[memory] {len(promoted)} 条记忆已提权")
+        logger.info("[memory] {} 条记忆已提权", len(promoted))
 
     return ExtractMemoriesOutput(
         memories_written=written,

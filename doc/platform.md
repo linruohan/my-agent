@@ -1,35 +1,16 @@
 # Windows 平台能力
 
-my-agent 深度集成 Windows 平台特性，包括语音识别、OCR、系统通知等。这些功能在非 Windows 平台上不可用或功能受限。
+my-agent 深度集成 Windows 平台特性，包括 OCR、系统通知等。部分能力在非 Windows 平台上不可用或功能受限。
 
 ## 语音识别
 
-### 源码
+**现状：未实现（规划中）。**
 
-```
-src/ui/speech/
-└── win.py        # Windows 语音识别
+- `pyproject.toml` 仍声明 winrt SpeechRecognition 依赖，供后续接入
+- Web 前端 Composer 区保留麦克风相关样式，但无可用桥接
+- 文档旧路径 `src/ui/speech/` **不存在**；实现前请勿按此路径引用
 
-src/ui/speech_win.py  # 遗留入口
-```
-
-### 技术
-
-- 基于 Windows Runtime（winrt）的 `SpeechRecognition`
-- 支持中文语音识别
-- Web 前端 Composer 区有麦克风按钮
-
-### 依赖
-
-```
-winrt-Windows.Media.SpeechRecognition
-winrt-Windows.Globalization
-winrt-Windows.Foundation
-```
-
-### 使用
-
-在 **设置 → 语音** 中勾选「启用语音输入」（默认关闭）。开启后，Composer 区显示麦克风按钮 → 点击 → 说话 → 识别结果填入输入框。
+计划能力：Windows Runtime `SpeechRecognition` → 设置开关 → Composer 麦克风填入输入框。
 
 ## OCR 文字识别
 
@@ -116,7 +97,7 @@ pywin32
 | 包 | 用途 |
 |----|------|
 | winrt-runtime | Windows Runtime 基础 |
-| winrt-Windows.Media.SpeechRecognition | 语音识别 |
+| winrt-Windows.Media.SpeechRecognition | 语音识别（规划中） |
 | winrt-Windows.Media.Ocr | OCR |
 | winrt-Windows.Graphics.Imaging | 图像处理 |
 | winrt-Windows.Storage | 文件存储 |
@@ -129,5 +110,5 @@ pywin32
 
 - **核心 Agent 功能**（对话、工具调用、文件操作）在 macOS/Linux 上可运行
 - **UI**（pywebview）跨平台
-- **语音、OCR、Toast 通知** 仅 Windows
+- **OCR、Toast 通知** 仅 Windows；语音尚未接线
 - 建议在 Windows 10/11 上使用以获得完整体验

@@ -52,13 +52,13 @@ src/ui/ (相关)
 
 `TaskReminderService` 后台定时检查：
 
-- 扫描 `data/task.db` 中未完成的到期任务
+- 扫描 `data/app.db` 中未完成的到期任务
 - 到期时发送 Windows Toast 通知（`win11toast`）
 - 可在用户设置中配置 owner 过滤
 
 ## 数据存储
 
-- 数据库：`data/task.db`（SQLite）
+- 数据库：`data/app.db` 的 `tasks` 表（SQLite）
 - 字段：id、title、description、due_date、priority、status、owner、created_at、attachments
 
 ## 遗留迁移

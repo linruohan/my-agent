@@ -108,10 +108,12 @@ Web 模态窗口提供：
 | `router.py` | 消息发送与意图路由 |
 | `turns.py` | 搜索/链接/Agent/斜杠/天气/OCR |
 | `agent.py` | Agent 事件轮询与 HITL |
-| `voice.py` | 语音输入与文件选择 |
+| `files.py` | 文件选择与附件相关 |
+
+> 语音输入尚未实现，勿引用不存在的 `voice.py` / `src/ui/speech/`。
 
 ## 会话管理
 
-- `src/ui/session_store.py` 管理会话 CRUD
-- 存储：`data/sessions.db`
+- 会话 CRUD 位于 `src/ui/controller/session.py`（底层 SessionStore）
+- 存储：`data/app.db`（`sessions` / `session_messages` 表）
 - 每条消息以 JSON 事件序列持久化，支持历史回放

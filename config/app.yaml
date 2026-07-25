@@ -49,11 +49,16 @@ agent:
       - get_weather_forecast
       - read_calendar
       - browser_get_page
+  # 结构化记忆提取（.my-agent/memory/*.md）；与 learning_loop.auto_update_memory 互斥
+  memory_extraction:
+    enabled: true
+    min_interval_sec: 60
   learning_loop:
     enabled: true
     min_tool_calls: 3
     auto_create_skill: true
-    auto_update_memory: true
+    # 开启 memory_extraction 时保持 false，避免双轨重复写记忆
+    auto_update_memory: false
     dedupe:
       enabled: true
 

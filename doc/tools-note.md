@@ -31,7 +31,7 @@ Agent 可通过自然语言「帮我记一下…」触发 `add_note`。
 
 ## 数据存储
 
-- 数据库：`data/note.db`（SQLite）
+- 数据库：`data/app.db` 的 `notes` 表（SQLite）
 - 字段：id、content、tags、created_at、updated_at
 
 ## 使用示例
