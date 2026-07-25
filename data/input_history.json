@@ -1,4 +1,8 @@
 [
+"/search 今日 头条",
+"/search",
+"/note list",
+"/tsk",
 "搜索 python3.14新特性",
 "python3.14 新特性",
 "python3.14",
@@ -27,7 +31,6 @@
 "/tsk notify 1",
 "/tsk mod 1 @rem-6.21.08:28",
 "/tsk add 写报告 D:\\work\\draft.docx https://example.com/spec",
-"/note list",
 "/docx-py d盘新建一个docx 内容是123",
 "/doc-diff-tool \"D:\\codehub\\skills\\doc-diff-tool\\tests\\test.docx\" 第二章节  输出到桌面 001.xlsx",
 "/docx-py 桌面新建一个docx 内容是123",
