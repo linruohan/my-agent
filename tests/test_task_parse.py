@@ -20,7 +20,8 @@ from src.tools.task.parse import (
     parse_task_edit,
     tokenize_task_text,
 )
-from src.tools.task.store import TaskStore, handle_task_command
+from src.tools.task.commands import handle_task_command
+from src.tools.task.store import TaskStore
 
 TZ = timezone(timedelta(hours=8))
 REF = datetime(2026, 6, 21, 10, 0, tzinfo=TZ)

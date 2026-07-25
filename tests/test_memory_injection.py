@@ -2,6 +2,14 @@ def test_memory_injection_prefers_recent_tail(tmp_path, monkeypatch):
     from src.memory.context_files import build_memory_prompt_block, memory_file_path, write_context_file
 
     monkeypatch.setattr("src.memory.context_files.workspace_dir", lambda: tmp_path)
+    monkeypatch.setattr(
+        "src.memory.context_files.read_user_profile_merged",
+        lambda max_chars=3500: "",
+    )
+    monkeypatch.setattr(
+        "src.memory.memory_index.read_memory_index",
+        lambda project_root=None: "",
+    )
     path = memory_file_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     old = "旧条目\n" * 1200

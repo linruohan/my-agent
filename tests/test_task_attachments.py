@@ -5,7 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from src.tools.task.attachments import apply_content_attachments, extract_attachments
-from src.tools.task.store import TaskStore, handle_task_command
+from src.tools.task.commands import handle_task_command
+from src.tools.task.store import TaskStore
 
 
 def test_extract_url_and_file():

@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-import threading
 from typing import Callable
 
 import httpx
 from loguru import logger
 
+from src.gateway.base import PollingGateway
 from src.gateway.inbox import GatewayInbox
 
 
-class TelegramGateway:
+class TelegramGateway(PollingGateway):
     API = "https://api.telegram.org/bot{token}/{method}"
 
     def __init__(
@@ -23,25 +23,17 @@ class TelegramGateway:
         poll_interval: float = 2.0,
         on_outbound: Callable[[str, str, str], None] | None = None,
     ) -> None:
-        self.inbox = inbox
+        super().__init__(inbox, source="telegram", allowed_chat_ids=allowed_chat_ids)
         self.bot_token = bot_token
-        self.allowed_chat_ids = allowed_chat_ids or set()
         self.poll_interval = poll_interval
         self.on_outbound = on_outbound
-        self._stop = threading.Event()
-        self._thread: threading.Thread | None = None
         self._offset = 0
 
     def start(self) -> None:
-        if self._thread and self._thread.is_alive():
-            return
-        self._stop.clear()
-        self._thread = threading.Thread(target=self._loop, daemon=True, name="gateway-telegram")
-        self._thread.start()
-        logger.info("Gateway Telegram 轮询已启动")
-
-    def stop(self) -> None:
-        self._stop.set()
+        was_alive = bool(self._thread and self._thread.is_alive())
+        super().start()
+        if not was_alive:
+            logger.info("Gateway Telegram 轮询已启动")
 
     def send_message(self, chat_id: str, text: str) -> bool:
         try:
@@ -56,7 +48,7 @@ class TelegramGateway:
             logger.warning("Telegram 发送失败: {}", exc)
             return False
 
-    def _loop(self) -> None:
+    def run_loop(self) -> None:
         while not self._stop.is_set():
             try:
                 self._poll_once()
@@ -86,13 +78,8 @@ class TelegramGateway:
         text = str(message.get("text") or "").strip()
         if not chat_id or not text:
             return False
-        if self.allowed_chat_ids and chat_id not in self.allowed_chat_ids:
+        if not self._accept_chat(chat_id):
             logger.debug("忽略未授权 Telegram chat_id={}", chat_id)
             return False
-        self.inbox.push_inbound(
-            "telegram",
-            chat_id,
-            text,
-            meta={"update_id": item.get("update_id")},
-        )
+        self.push_text(chat_id, text, meta={"update_id": item.get("update_id")})
         return True

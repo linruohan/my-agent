@@ -87,24 +87,33 @@ class SlackGateway(PollingGateway):
             await ws.send(json.dumps({"envelope_id": ack}))
         payload = envelope.get("payload") or {}
         event = payload.get("event") or {}
+        if not self._bot_user_id:
+            self._bot_user_id = await self._fetch_bot_user()
+        self.ingest_event(event)
+
+    def ingest_event(self, event: dict) -> bool:
+        """处理 Slack message 事件（便于单测）。成功入站返回 True。"""
         if event.get("type") != "message":
-            return
+            return False
         if event.get("subtype") or event.get("bot_id"):
-            return
+            return False
         channel = str(event.get("channel") or "")
         text = str(event.get("text") or "").strip()
         user = str(event.get("user") or "")
         if not channel or not text:
-            return
-        if not self._bot_user_id:
-            self._bot_user_id = await self._fetch_bot_user()
+            return False
         if self._bot_user_id and user == self._bot_user_id:
-            return
+            return False
         if channel.startswith("C") and self._bot_user_id:
             if f"<@{self._bot_user_id}>" not in text:
-                return
+                return False
             text = text.replace(f"<@{self._bot_user_id}>", "").strip()
+        if not text:
+            return False
+        if not self._accept_chat(channel):
+            return False
         self.push_text(channel, text, meta={"user": user, "ts": event.get("ts")})
+        return True
 
     async def _fetch_bot_user(self) -> str | None:
         with httpx.Client(timeout=20) as client:

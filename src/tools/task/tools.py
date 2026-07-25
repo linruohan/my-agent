@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from langchain_core.tools import tool
 
-from src.tools.task.store import TaskStore, format_task_list, format_task_search
+from src.tools.task.commands import format_task_list, format_task_search
+from src.tools.task.store import TaskStore
 
 
 @tool

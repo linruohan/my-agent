@@ -52,6 +52,7 @@ speech = [
 ]
 dev = [
     "pytest>=8.0",
+    "ruff>=0.6",
 ]
 build = [
     "pyinstaller>=6.0",
@@ -74,3 +75,11 @@ markers = [
     "linux: 仅 Linux 平台运行",
     "browser_integration: 需要 playwright install chromium 的端到端浏览器测试",
 ]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+ignore = ["E501"]

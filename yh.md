@@ -3,8 +3,8 @@
 > 审查日期：2026-07-25  
 > 范围：`src/`、`web/`、`doc/`、设计文档、测试与工程配置  
 > 说明：按优先级排列，便于排期；路径以仓库根目录为准。  
-> **2026-07-25 已落地（两轮）**：记忆统一 / critical / settings / 文档 / gitignore；  
-> 以及 A11 日历冲突、A14 remote HITL `ask`、A18 增量迁移、A7 语音依赖可选化、Gateway mock 测试、宽 except 日志。
+> **2026-07-25 已落地（三轮）**：记忆 / critical / Gateway HITL / 日历冲突 / 增量迁移；  
+> A13 Telegram→PollingGateway、Discord/Slack ingest 测试、记忆选择缓存、多盘搜索失败反馈、task 模块拆分、ruff。
 
 ---
 
@@ -38,14 +38,14 @@
 | ID | 位置 | 现状 | 建议 |
 |----|------|------|------|
 | A9 | ~~设计文档多节点图~~ ✅ | 设计文档已注明「纯 ReAct + UI 意图路由」 | 已完成 |
-| A10 | `个人助理Agent设计文档.md` | `send_email`、跨应用、**系统托盘**未实现 | Phase 2 / out-of-scope |
+| A10 | ~~邮件/托盘~~ ✅（文档标注） | 设计文档已标 Phase 2 / out-of-scope | 按需排期 |
 | A11 | ~~日历无冲突检测~~ ✅ | `find_calendar_conflicts` + 创建时提示 | 已完成 |
-| A12 | Gateway 测试 | HTTP/Telegram ingest / deliver_reply 已补 mock | Discord/Slack 仍可加深；webhook 可选 |
-| A13 | `src/gateway/telegram_bot.py` | 未继承 `PollingGateway`，与 Discord/Slack 不一致 | 统一基类或抽取公共鉴权/推送 |
+| A12 | ~~Gateway 测试~~ ✅ | HTTP/Telegram/Discord/Slack ingest + deliver_reply | webhook 可选 |
+| A13 | ~~Telegram 基类不一致~~ ✅ | 已继承 `PollingGateway`，统一 `push_text`/`_accept_chat` | 已完成 |
 | A14 | ~~远程 HITL 无交互~~ ✅ | `remote_hitl: ask` + `/approve`/`/reject`；忙时提示排队 | 已完成 |
 | A15 | `design_memory.md` §6.1 | `runForkedAgent` / prompt cache 复用未实现；extract 与主对话同步抢同一 LLM | 后台轻量模型或队列化抽取 |
 | A16 | ~~Team 无 flag~~ ✅ | `memory.team_memory_enabled` | 已完成 |
-| A17 | 设计文档 §4.1 | `langgraph.store` 长期记忆未实现 | 实现 Store，或从设计文档删除 |
+| A17 | ~~langgraph.store~~ ✅（文档同步） | 设计改为文件记忆 + FAISS | 已完成 |
 | A18 | ~~无增量迁移~~ ✅ | `app.db` 已存在时仍 `INSERT OR IGNORE` 合并并归档 | 已完成 |
 | A19 | ~~learning 与 extract 并行~~ ✅ | `auto_update_memory: false` + 配置互斥默认 | 已完成 |
 
@@ -53,11 +53,11 @@
 
 | ID | 位置 | 现状 | 建议 |
 |----|------|------|------|
-| A20 | 根目录 `test_search.py` | 手动调试脚本（搜用户 home 下文件），非 pytest | 移入 `scripts/` 或删除 |
-| A21 | `src/ui/input_intent.py` 等 | 多处 shim 重导出 | 收敛导入路径 |
+| A20 | ~~根目录 test_search~~ ✅ | 已移至 `scripts/test_search.py` | 已完成 |
+| A21 | shim 重导出 | 保留兼容层（`input_intent` 等） | 低优先级收敛 |
 | A22 | `web/js/features/holidays.js` | 节假日硬编码至约 2027 | 外部数据源或配置化 |
-| A23 | `context_files.py` | 读取 `USER.md.local`（非设计路径） | 对齐 `CLAUDE.local.md` 体系或删除 |
-| A24 | `src/gateway/base.py` | `NotImplementedError` 为抽象基类，非 stub | 文档说明即可 |
+| A23 | ~~USER.md.local~~ ✅ | 同时支持 `USER.local.md` | 已完成 |
+| A24 | `src/gateway/base.py` | 抽象基类 `PollingGateway`（非 stub） | 无需改动 |
 
 ---
 
@@ -67,10 +67,10 @@
 
 | 位置 | 现状 | 建议 |
 |------|------|------|
-| `src/agent/graph.py` 记忆选择 | 每轮用户消息可能触发 **LLM 记忆选择**（同主模型） | 小模型/规则预筛；缓存 query→memories |
-| `runner.py` + `memory_writer.py` | 每轮结束 fire-and-forget 再调 LLM 抽取 | 限流（每 N 轮一次）或仅在有反馈信号时触发 |
-| `src/tools/task/store.py`（约 680+ 行） | 单文件职责混合 | 拆分 CRUD / 提醒 / 迁移 |
-| `src/tools/file/search.py` | 多盘符搜索；部分路径静默吞错 | 汇总失败盘符并反馈用户 |
+| `src/agent/graph.py` 记忆选择 | ~~无缓存~~ ✅ | 120s TTL 选择缓存 | 可再接小模型预筛 |
+| `runner.py` + `memory_writer.py` | ~~无间隔~~ ✅ | `min_interval_sec` 限流 | 已完成 |
+| `src/tools/task/store.py` | ~~过大~~ ✅ | 拆为 `store` / `commands` / `migrate` | 已完成 |
+| 多盘符全局搜索 | ~~静默失败~~ ✅ | 汇总失败盘符提示用户 | 已完成 |
 
 ### 架构
 
@@ -92,7 +92,7 @@
 
 | 位置 | 现状 | 建议 |
 |------|------|------|
-| `pyproject.toml` | 无 ruff/mypy/black；`src/` 宽 `except` 较多 | 引入 linter 并渐进收紧 |
+| `pyproject.toml` | ~~无 ruff~~ ✅ | `dev` extras 含 ruff + 基础规则 | 可继续收紧 / 加 mypy |
 | CI | Linux 忽略 OCR；无 playwright install 专用 job | browser 测试加 setup 或默认 skip |
 | `packaging/stage_release.py` | 仍列举旧分散库名 | 更新为 `app.db` 中心描述 |
 | 配置热更新 | `app.yaml` 改完需重启 | 对标 Gateway `reload()` 做配置热加载 |

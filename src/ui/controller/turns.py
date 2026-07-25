@@ -132,8 +132,10 @@ class TurnsMixin:
                             if os.path.exists(f"{d}:\\")
                         ]
                         all_results = []
+                        failed_drives: list[str] = []
+                        search_drives = drives[:5]
                         with ThreadPoolExecutor(
-                            max_workers=min(len(drives[:5]), 4),
+                            max_workers=min(len(search_drives) or 1, 4),
                             thread_name_prefix="file-search",
                         ) as executor:
                             future_to_drive = {
@@ -144,21 +146,30 @@ class TurnsMixin:
                                     file_type="file",
                                     max_results=10,
                                 ): drive
-                                for drive in drives[:5]
+                                for drive in search_drives
                             }
                             for future in as_completed(future_to_drive):
+                                drive = future_to_drive[future]
                                 try:
                                     drive_result = future.result(timeout=30)
                                     if drive_result and "共" in drive_result:
                                         all_results.append(drive_result)
-                                except Exception:
-                                    from loguru import logger as _logger
-
-                                    _logger.debug("轮次收尾忽略异常", exc_info=True)
+                                except Exception as exc:
+                                    failed_drives.append(drive)
+                                    logger.warning(
+                                        "全局文件搜索盘符 {} 失败: {}",
+                                        drive,
+                                        exc,
+                                    )
                         if all_results:
                             result = "\n\n---\n\n".join(all_results)
                         else:
                             result = f"未找到文件名包含「{pattern}」的文件"
+                        if failed_drives:
+                            result += (
+                                "\n\n⚠️ 以下盘符搜索失败或超时，未计入结果："
+                                + "、".join(failed_drives)
+                            )
                     else:
                         self.chat.set_tool_status(
                             f"🔍 从项目目录搜索文件名「{pattern}」…",

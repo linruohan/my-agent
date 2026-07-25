@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -17,6 +19,30 @@ from src.memory.memory_index import MemoryEntry, load_all_memory_entries
 
 _MAX_RESULTS = 5
 _STALE_DAYS = 2
+_CACHE_TTL_SEC = 120.0
+_cache: dict[str, tuple[float, list[FoundMemory]]] = {}
+
+
+def clear_memory_selection_cache() -> None:
+    _cache.clear()
+
+
+def _selection_cache_key(input_data: FindRelevantMemoriesInput) -> str:
+    files = sorted(e.file_name for e in input_data.memory_files)
+    surfaced = sorted(input_data.already_surfaced)
+    tools = sorted(input_data.recent_tools)
+    raw = json.dumps(
+        {
+            "q": (input_data.query or "").strip().lower(),
+            "files": files,
+            "surfaced": surfaced,
+            "tools": tools,
+            "n": input_data.max_results,
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
 
 
 @dataclass
@@ -114,7 +140,7 @@ def find_relevant_memories(
     llm: BaseChatModel,
     input_data: FindRelevantMemoriesInput,
 ) -> list[FoundMemory]:
-    """使用小模型选择最相关的记忆。"""
+    """使用小模型选择最相关的记忆（短时缓存，降低重复查询成本）。"""
     entries = input_data.memory_files
 
     entries = [e for e in entries if e.file_name not in input_data.already_surfaced]
@@ -123,6 +149,11 @@ def find_relevant_memories(
 
     if not entries:
         return []
+
+    cache_key = _selection_cache_key(input_data)
+    cached = _cache.get(cache_key)
+    if cached and (time.time() - cached[0]) < _CACHE_TTL_SEC:
+        return list(cached[1])
 
     memory_list = _build_memory_list(entries)
     max_results = min(input_data.max_results, _MAX_RESULTS)
@@ -158,6 +189,11 @@ Format: JSON object with "memories" array containing file_name, confidence (0-1)
                 confidence=float(mem.get("confidence", 0)),
                 reason=str(mem.get("reason", "")),
             ))
+        _cache[cache_key] = (time.time(), list(found))
+        if len(_cache) > 64:
+            # 简单淘汰最旧条目
+            oldest = min(_cache.items(), key=lambda kv: kv[1][0])[0]
+            _cache.pop(oldest, None)
         return found
     except Exception:
         logger.exception("记忆选择 LLM 调用失败")

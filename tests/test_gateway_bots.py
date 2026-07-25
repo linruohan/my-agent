@@ -114,3 +114,59 @@ def test_deliver_reply_uses_telegram_when_available(tmp_path):
     svc.deliver_reply("telegram", "7", "ok")
     mock_tg.send_message.assert_called_once_with("7", "ok")
     assert inbox.pop_outbound_batch() == []
+
+
+def test_discord_ingest_requires_mention_in_guild(tmp_path):
+    from src.gateway.discord_bot import DiscordGateway
+
+    inbox = GatewayInbox(db_path=tmp_path / "dc.db")
+    bot = DiscordGateway(inbox, bot_token="t", allowed_channel_ids={"99"})
+    bot._bot_user_id = "123"
+
+    assert bot.ingest_message(
+        {
+            "author": {"bot": False},
+            "channel_id": "99",
+            "guild_id": "1",
+            "content": "hello without mention",
+            "id": "m1",
+        }
+    ) is False
+
+    assert bot.ingest_message(
+        {
+            "author": {"bot": False},
+            "channel_id": "99",
+            "guild_id": "1",
+            "content": "<@123> hello",
+            "id": "m2",
+        }
+    ) is True
+    msg = inbox.pop_inbound()
+    assert msg is not None
+    assert msg.text == "hello"
+
+
+def test_slack_ingest_channel_requires_mention(tmp_path):
+    from src.gateway.slack_bot import SlackGateway
+
+    inbox = GatewayInbox(db_path=tmp_path / "sl.db")
+    bot = SlackGateway(inbox, bot_token="t", app_token="a", allowed_channel_ids={"C1"})
+    bot._bot_user_id = "U9"
+
+    assert bot.ingest_event(
+        {"type": "message", "channel": "C1", "text": "hi", "user": "U1"}
+    ) is False
+    assert bot.ingest_event(
+        {"type": "message", "channel": "C1", "text": "<@U9> hi", "user": "U1"}
+    ) is True
+    msg = inbox.pop_inbound()
+    assert msg is not None
+    assert msg.text == "hi"
+
+
+def test_telegram_inherits_polling_gateway():
+    from src.gateway.base import PollingGateway
+    from src.gateway.telegram_bot import TelegramGateway
+
+    assert issubclass(TelegramGateway, PollingGateway)

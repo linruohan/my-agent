@@ -325,7 +325,9 @@ def read_user_profile_merged(max_chars: int = _MAX_USER_CHARS) -> str:
     paths = [
         global_config_dir() / "USER.md",
         project_config_dir() / "USER.md",
+        # 兼容旧路径 USER.md.local；规范本地画像放在 CLAUDE.local.md 体系旁的 USER 覆盖
         project_config_dir() / "USER.md.local",
+        project_config_dir() / "USER.local.md",
         user_file_path(),
     ]
     for path in paths:

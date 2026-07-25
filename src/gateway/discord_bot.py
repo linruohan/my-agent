@@ -102,23 +102,31 @@ class DiscordGateway(PollingGateway):
                 self._bot_user_id = str(user.get("id") or "")
                 logger.info("Discord Gateway READY bot={}", user.get("username"))
             elif op == 0 and t == "MESSAGE_CREATE":
-                self._on_message(d)
+                self.ingest_message(d)
 
-    def _on_message(self, data: dict) -> None:
+    def ingest_message(self, data: dict) -> bool:
+        """处理 Discord MESSAGE_CREATE 载荷（便于单测）。成功入站返回 True。"""
         author = data.get("author") or {}
         if author.get("bot"):
-            return
+            return False
         channel_id = str(data.get("channel_id") or "")
         raw_content = str(data.get("content") or "").strip()
         if not channel_id or not raw_content:
-            return
+            return False
         guild_id = data.get("guild_id")
         if guild_id:
             if not self._bot_user_id or f"<@{self._bot_user_id}>" not in raw_content:
-                return
+                return False
             content = raw_content.replace(f"<@{self._bot_user_id}>", "").strip()
         else:
             content = raw_content
         if not content:
-            return
+            return False
+        if not self._accept_chat(channel_id):
+            return False
         self.push_text(channel_id, content, meta={"message_id": data.get("id")})
+        return True
+
+    def _on_message(self, data: dict) -> None:
+        """兼容旧调用名。"""
+        self.ingest_message(data)

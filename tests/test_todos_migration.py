@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from src.tools.task.store import TaskStore, migrate_legacy_todos_json
+import src.tools.task.migrate as migrate_mod
+from src.tools.task.migrate import migrate_legacy_todos_json
+from src.tools.task.store import TaskStore
 
 
 def test_migrate_legacy_todos_json(tmp_path: Path):
@@ -32,14 +34,12 @@ def test_migrate_legacy_todos_json(tmp_path: Path):
     db = tmp_path / "task.db"
     store = TaskStore(db)
 
-    import src.tools.task.store as store_mod
-
-    orig = store_mod._LEGACY_TODOS
-    store_mod._LEGACY_TODOS = legacy
+    orig = migrate_mod._LEGACY_TODOS
+    migrate_mod._LEGACY_TODOS = legacy
     try:
         count = migrate_legacy_todos_json(store)
     finally:
-        store_mod._LEGACY_TODOS = orig
+        migrate_mod._LEGACY_TODOS = orig
 
     assert count == 1
     assert not legacy.exists()
