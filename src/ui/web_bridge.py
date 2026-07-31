@@ -50,7 +50,12 @@ class WebChatBridge:
         """批量回放会话历史（单次 JS 调用）。
 
         优先 ChatApp.loadHistory（React UI），回退 ChatUI.loadHistory（旧版）。
+        loadHistory 会重置消息列表，无需再单独 emit clear（避免异步竞态清空刚加载的内容）。
         """
+        self._pending_token_ui = ""
+        self._streaming = False
+        self._stream_buffer = ""
+        self._turn_started_at = None
         window = self._get_window()
         if window is None:
             return

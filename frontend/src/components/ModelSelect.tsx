@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { getApi } from "@/bridge/api";
 import { useAppStore } from "@/stores/app-store";
+import { cn } from "@/lib/cn";
 
 export function ModelSelect() {
   const modelLabel = useAppStore((s) => s.modelLabel);
@@ -25,9 +27,7 @@ export function ModelSelect() {
     setError(null);
     try {
       const res = await api.list_provider_models();
-      const list = [...new Set(res.models || [])].sort((a, b) =>
-        a.localeCompare(b),
-      );
+      const list = [...new Set(res.models || [])].sort((a, b) => a.localeCompare(b));
       const current = res.current_model || modelLabel;
       if (current && current !== "—" && !list.includes(current)) {
         list.unshift(current);
@@ -65,30 +65,42 @@ export function ModelSelect() {
     setOpen(false);
   };
 
+  const shortLabel =
+    !modelLabel || modelLabel === "—"
+      ? "选择模型"
+      : modelLabel.includes("/")
+        ? modelLabel.split("/").pop() || modelLabel
+        : modelLabel;
+
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className="relative shrink-0">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="max-w-[180px] truncate rounded px-1.5 py-0.5 text-[11px] text-muted hover:bg-app hover:text-fg"
-        title="切换模型"
+        className={cn(
+          "inline-flex max-w-[200px] items-center gap-1 rounded-lg px-2 py-1 text-micro transition",
+          "text-muted-foreground hover:bg-surface-hover hover:text-foreground",
+          open && "bg-surface-hover text-foreground",
+        )}
+        title={modelLabel || "切换模型"}
       >
-        {modelLabel || "选择模型"}
+        <span className="truncate">{shortLabel}</span>
+        <ChevronDown className="size-3 shrink-0 opacity-60" strokeWidth={2} />
       </button>
       {open ? (
-        <div className="absolute right-0 bottom-full z-30 mb-2 w-64 overflow-hidden rounded-lg border border-border bg-panel shadow-lg">
+        <div className="absolute right-0 bottom-full z-30 mb-2 w-72 overflow-hidden rounded-xl border border-surface-border bg-surface shadow-[var(--menu-shadow)]">
           <div className="flex items-center gap-2 border-b border-border p-2">
             <input
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="搜索模型…"
-              className="min-w-0 flex-1 rounded border border-border bg-input px-2 py-1 text-xs text-fg outline-none"
+              className="min-w-0 flex-1 rounded-lg border border-surface-border bg-input px-2.5 py-1.5 text-caption text-foreground outline-none focus:border-ring"
             />
             <button
               type="button"
               onClick={() => void loadModels()}
-              className="rounded px-2 py-1 text-xs text-muted hover:bg-app hover:text-fg"
+              className="rounded-lg px-2 py-1.5 text-caption text-muted-foreground hover:bg-surface-hover hover:text-foreground"
             >
               {loading ? "…" : "刷新"}
             </button>
@@ -99,23 +111,24 @@ export function ModelSelect() {
                 key={m}
                 type="button"
                 onClick={() => void pick(m)}
-                className={`block w-full truncate px-3 py-1.5 text-left text-xs ${
+                className={cn(
+                  "block w-full truncate px-3 py-1.5 text-left text-caption",
                   m === modelLabel
-                    ? "bg-app font-medium text-fg"
-                    : "text-muted hover:bg-app hover:text-fg"
-                }`}
+                    ? "bg-surface-selected font-medium text-foreground"
+                    : "text-muted-foreground hover:bg-surface-hover hover:text-foreground",
+                )}
               >
                 {m}
               </button>
             ))}
             {!filtered.length ? (
-              <div className="px-3 py-2 text-xs text-muted">
+              <div className="px-3 py-3 text-center text-caption text-muted-foreground">
                 {loading ? "加载中…" : "无可用模型"}
               </div>
             ) : null}
           </div>
           {error ? (
-            <div className="border-t border-border px-3 py-1.5 text-[11px] text-danger">
+            <div className="border-t border-border px-3 py-1.5 text-micro text-destructive">
               {error}
             </div>
           ) : null}

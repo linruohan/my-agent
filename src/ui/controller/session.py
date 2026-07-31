@@ -78,11 +78,10 @@ class SessionMixin:
             return {"ok": False, "error": "会话不存在", **self.list_sessions_api()}
         self._session_id = info.id
         self._thread_id = info.thread_id
-        self.chat.clear()
         events = self._session_store.load_events(session_id)
+        # 只走 load_history（内部会重置前端消息），避免 clear 事件异步晚到把刚加载的历史清空
         self._skip_persist_events = True
         try:
-            # 始终回放（含空列表），保证前端清空旧会话消息
             self.chat.load_history(events)
         finally:
             self._skip_persist_events = False

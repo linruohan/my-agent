@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { MessageSquare, MoreHorizontal, Pin, Search } from "lucide-react";
+import { MessageSquare, MoreHorizontal, Pin } from "lucide-react";
 import { useAppStore } from "@/stores/app-store";
 import { getApi } from "@/bridge/api";
 import type { ChatEvent, SessionSummary } from "@/bridge/types";
@@ -97,7 +97,6 @@ export function SidebarSessions() {
   const [renameTarget, setRenameTarget] = useState<SessionSummary | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [renameError, setRenameError] = useState("");
-  const [query, setQuery] = useState("");
   const [pinnedIds, setPinnedIds] = useState<string[]>(() => getPinnedSessionIds());
 
   useEffect(() => {
@@ -105,22 +104,16 @@ export function SidebarSessions() {
     setPinnedIds(prunePinnedSessions(valid));
   }, [sessions]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return sessions;
-    return sessions.filter((s) => (s.title || "").toLowerCase().includes(q));
-  }, [sessions, query]);
-
   const pinnedSet = useMemo(() => new Set(pinnedIds), [pinnedIds]);
 
   const pinnedSessions = useMemo(() => {
-    const byId = new Map(filtered.map((s) => [s.id, s]));
+    const byId = new Map(sessions.map((s) => [s.id, s]));
     return pinnedIds.map((id) => byId.get(id)).filter(Boolean) as SessionSummary[];
-  }, [filtered, pinnedIds]);
+  }, [sessions, pinnedIds]);
 
   const recentSessions = useMemo(
-    () => filtered.filter((s) => !pinnedSet.has(s.id)),
-    [filtered, pinnedSet],
+    () => sessions.filter((s) => !pinnedSet.has(s.id)),
+    [sessions, pinnedSet],
   );
 
   const menuSession = menu ? sessions.find((s) => s.id === menu.id) : null;
@@ -138,10 +131,13 @@ export function SidebarSessions() {
   const applySessionResult = (res: {
     sessions?: SessionSummary[];
     events?: ChatEvent[];
+    active_id?: string;
   }) => {
-    if (res.sessions) setSessions(res.sessions);
-    if (res.events !== undefined) {
-      useAppStore.getState().loadHistory(res.events);
+    const nextSessions = (res.sessions || []).filter((s) => !!s?.id);
+    if (res.sessions) setSessions(nextSessions);
+    // 始终用返回的 events 覆盖（含空数组），避免仍显示上一个会话内容
+    if ("events" in res) {
+      useAppStore.getState().loadHistory(res.events || []);
     }
   };
 
@@ -150,7 +146,9 @@ export function SidebarSessions() {
     if (!api?.list_sessions) return;
     try {
       const res = await api.list_sessions();
-      if (res?.sessions) setSessions(res.sessions);
+      if (res?.sessions) {
+        setSessions((res.sessions || []).filter((s) => !!s?.id));
+      }
     } catch (err) {
       console.warn("list_sessions failed:", err);
     }
@@ -158,14 +156,19 @@ export function SidebarSessions() {
 
   const onSwitch = async (id: string) => {
     setMenu(null);
+    if (!id) {
+      await refreshSessions();
+      return;
+    }
     setActiveView("chat");
     const current = sessions.find((s) => s.id === id);
-    if (current?.active) return;
+    // 仅当 id 有效且已是当前会话时跳过；避免 null id 导致全部 active 时永远不切换
+    if (current?.active && current.id) return;
     const api = getApi();
     if (!api) return;
     const res = await api.switch_session(id);
     if (!res?.ok) {
-      if (res?.sessions) setSessions(res.sessions);
+      if (res?.sessions) setSessions((res.sessions || []).filter((s) => !!s?.id));
       else await refreshSessions();
       if (res?.error && res.error !== "会话不存在") {
         window.alert(res.error);
@@ -275,19 +278,6 @@ export function SidebarSessions() {
 
   return (
     <div className="mt-0.5 mb-1 ml-3 border-l border-sidebar-accent pl-2">
-      <div className="relative mb-1.5">
-        <Search
-          className="pointer-events-none absolute top-1/2 left-2 size-3 -translate-y-1/2 text-faint-foreground"
-          strokeWidth={1.75}
-        />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="搜索会话…"
-          className="h-7 w-full rounded-md border-0 bg-sidebar-accent/50 pr-2 pl-7 text-caption text-sidebar-foreground outline-none placeholder:text-faint-foreground focus:bg-sidebar-accent"
-        />
-      </div>
-
       <div className="max-h-[40vh] space-y-2 overflow-y-auto pr-0.5">
         {pinnedSessions.length ? (
           <div>
@@ -305,9 +295,6 @@ export function SidebarSessions() {
           ) : null}
           <div className="space-y-0.5">{recentSessions.map((s) => renderRow(s, false))}</div>
         </div>
-        {!filtered.length && query.trim() ? (
-          <div className="px-2 py-3 text-center text-micro text-faint-foreground">无匹配会话</div>
-        ) : null}
         {!sessions.length ? (
           <div className="px-2 py-3 text-center text-micro text-faint-foreground">暂无会话</div>
         ) : null}

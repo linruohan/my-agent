@@ -274,7 +274,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setReady: (ready) => set({ ready }),
   setBootError: (bootError) => set({ bootError }),
   setApproval: (approval) => set({ approval }),
-  setSessions: (sessions) => set({ sessions }),
+  setSessions: (sessions) => set({ sessions: (sessions || []).filter((s) => !!s?.id) }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setWorkspace: (workspace) => set({ workspace }),
   setModelLabel: (modelLabel) => set({ modelLabel }),
@@ -327,6 +327,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
 
     const chatWidthPct = applyChatWidthToDom(state.chat_width_pct ?? 85);
+    const sessions = (state.sessions || []).filter((s) => !!s?.id);
 
     set({
       ready: true,
@@ -336,7 +337,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       statusText: state.status_text,
       themeVariables: state.theme_variables || {},
       workspace: state.workspace,
-      sessions: state.sessions || [],
+      sessions,
       messages,
       streamingId,
       toolStatus: "",

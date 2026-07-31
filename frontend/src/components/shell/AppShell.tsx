@@ -32,6 +32,9 @@ export function AppShell({ headerActions, headerToolbar, children }: Props) {
             return;
           }
           if (res.sessions) setSessions(res.sessions);
+          if ("events" in res) {
+            useAppStore.getState().loadHistory(res.events || []);
+          }
         })();
       }
     };

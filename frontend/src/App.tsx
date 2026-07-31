@@ -6,7 +6,6 @@ import { ChatWidthControl } from "@/components/ChatWidthControl";
 import { ApprovalDialog } from "@/components/ApprovalDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useAppStore } from "@/stores/app-store";
-import { getApi } from "@/bridge/api";
 
 const SettingsModal = lazy(() =>
   import("@/components/SettingsModal").then((m) => ({ default: m.SettingsModal })),
@@ -33,33 +32,7 @@ function PanelFallback() {
 }
 
 function InboxActions() {
-  const setSessions = useAppStore((s) => s.setSessions);
-  const setActiveView = useAppStore((s) => s.setActiveView);
-
-  const onNew = async () => {
-    setActiveView("chat");
-    const api = getApi();
-    if (!api) return;
-    const res = await api.new_session();
-    if (!res?.ok) {
-      if (res?.error) window.alert(res.error);
-      return;
-    }
-    if (res.sessions) setSessions(res.sessions);
-  };
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => void onNew()}
-        className="h-8 rounded-lg border border-surface-border bg-surface px-2.5 text-label text-foreground hover:bg-surface-hover"
-      >
-        新建对话
-      </button>
-      <ChatWidthControl />
-    </>
-  );
+  return <ChatWidthControl />;
 }
 
 export function App() {

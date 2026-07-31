@@ -9,10 +9,20 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
+import {
+  ArrowUp,
+  FileText,
+  Image as ImageIcon,
+  Link2,
+  Paperclip,
+  Square,
+  X,
+} from "lucide-react";
 import { getApi } from "@/bridge/api";
 import type { AttachmentPayload, SlashCatalogItem } from "@/bridge/types";
 import { useAppStore } from "@/stores/app-store";
 import { ModelSelect } from "@/components/ModelSelect";
+import { cn } from "@/lib/cn";
 
 type LocalAttachment = AttachmentPayload & { preview?: string };
 
@@ -32,6 +42,12 @@ function basename(path: string): string {
   return path.split(/[/\\]/).pop() || path;
 }
 
+function autoResize(el: HTMLTextAreaElement | null) {
+  if (!el) return;
+  el.style.height = "0px";
+  el.style.height = `${Math.min(Math.max(el.scrollHeight, 44), 200)}px`;
+}
+
 export function Composer() {
   const running = useAppStore((s) => s.running);
   const statusText = useAppStore((s) => s.statusText);
@@ -40,6 +56,7 @@ export function Composer() {
   const pushInputHistory = useAppStore((s) => s.pushInputHistory);
   const composerPrefill = useAppStore((s) => s.composerPrefill);
   const setComposerPrefill = useAppStore((s) => s.setComposerPrefill);
+  const sessions = useAppStore((s) => s.sessions);
 
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
@@ -50,13 +67,33 @@ export function Composer() {
   const [historyDraft, setHistoryDraft] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const boxRef = useRef<HTMLTextAreaElement>(null);
+  const attachRef = useRef<HTMLDivElement>(null);
+
+  const activeSession = sessions.find((s) => s.active);
+  const shortSessionId = activeSession?.id ? `${activeSession.id.slice(0, 8)}…` : "—";
 
   useEffect(() => {
     if (!composerPrefill) return;
     setText(composerPrefill);
     setComposerPrefill(null);
-    requestAnimationFrame(() => boxRef.current?.focus());
+    requestAnimationFrame(() => {
+      boxRef.current?.focus();
+      autoResize(boxRef.current);
+    });
   }, [composerPrefill, setComposerPrefill]);
+
+  useEffect(() => {
+    autoResize(boxRef.current);
+  }, [text]);
+
+  useEffect(() => {
+    if (!attachMenuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!attachRef.current?.contains(e.target as Node)) setAttachMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [attachMenuOpen]);
 
   const slashItems = useMemo(() => filterSlash(slashCatalog, text), [slashCatalog, text]);
   const slashOpen = slashItems.length > 0;
@@ -288,8 +325,10 @@ export function Composer() {
     void submit();
   };
 
+  const readyLabel = (statusText || "就绪").replace(/^模型:[^|]*\|\s*/, "").trim();
+
   return (
-    <form onSubmit={onSubmit} className="relative border-t border-border bg-page-canvas px-4 py-3">
+    <form onSubmit={onSubmit} className="relative bg-page-canvas px-4 pt-2 pb-3">
       <div className="chat-column relative flex flex-col gap-2">
         {slashOpen ? (
           <div className="absolute right-0 bottom-full left-0 z-20 mb-2 max-h-56 overflow-y-auto rounded-xl border border-surface-border bg-surface shadow-[var(--menu-shadow)]">
@@ -301,55 +340,23 @@ export function Composer() {
                   ev.preventDefault();
                   applySlash(item);
                 }}
-                className={`flex w-full items-center gap-3 px-3 py-2 text-left text-body ${
-                  idx === slashIndex ? "bg-surface-selected" : "hover:bg-surface-hover"
-                }`}
+                className={cn(
+                  "flex w-full items-center gap-3 px-3 py-2 text-left text-body",
+                  idx === slashIndex ? "bg-surface-selected" : "hover:bg-surface-hover",
+                )}
               >
                 <span
-                  className={`rounded-md px-1.5 py-0.5 font-mono text-micro ${
+                  className={cn(
+                    "rounded-md px-1.5 py-0.5 font-mono text-micro",
                     item.kind === "skill"
                       ? "bg-brand/10 text-brand"
-                      : "bg-surface-hover text-foreground"
-                  }`}
+                      : "bg-surface-hover text-foreground",
+                  )}
                 >
                   {item.slash || `/${item.name}`}
                 </span>
                 <span className="truncate text-muted-foreground">{item.desc || ""}</span>
               </button>
-            ))}
-          </div>
-        ) : null}
-
-        {attachments.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            {attachments.map((att, idx) => (
-              <div
-                key={`${att.type}-${att.path || att.url || idx}`}
-                className="flex max-w-[220px] items-center gap-2 rounded-lg border border-surface-border bg-surface px-2 py-1.5 text-caption text-foreground"
-              >
-                {att.type === "image" && att.preview ? (
-                  <img
-                    src={att.preview}
-                    alt={att.name || "image"}
-                    className="size-8 rounded object-cover"
-                  />
-                ) : (
-                  <span className="rounded bg-surface-hover px-1.5 py-0.5 font-mono text-micro uppercase text-muted-foreground">
-                    {att.type}
-                  </span>
-                )}
-                <span className="min-w-0 flex-1 truncate">
-                  {att.name || att.url || att.path || "附件"}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => removeAttachment(idx)}
-                  className="text-faint-foreground hover:text-foreground"
-                  aria-label="移除附件"
-                >
-                  ×
-                </button>
-              </div>
             ))}
           </div>
         ) : null}
@@ -361,45 +368,50 @@ export function Composer() {
           }}
           onDragLeave={() => setDragOver(false)}
           onDrop={(e) => void onDrop(e)}
-          className={`relative flex items-end gap-2 rounded-xl border bg-surface px-2 py-2 shadow-[var(--surface-shadow)] ${
-            dragOver ? "border-brand ring-1 ring-brand/20" : "border-surface-border"
-          }`}
+          className={cn(
+            "relative flex min-h-[72px] flex-col rounded-2xl border bg-surface pb-11",
+            "shadow-[var(--surface-shadow)] transition-[border-color,box-shadow]",
+            "focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/15",
+            dragOver ? "border-brand ring-2 ring-brand/20" : "border-surface-border",
+          )}
         >
-          <div className="relative shrink-0">
-            <button
-              type="button"
-              onClick={() => setAttachMenuOpen((v) => !v)}
-              className="rounded-lg px-2 py-2 text-body text-muted-foreground hover:bg-surface-hover hover:text-foreground"
-              title="添加附件"
-            >
-              +
-            </button>
-            {attachMenuOpen ? (
-              <div className="absolute bottom-full left-0 z-30 mb-1 min-w-[140px] overflow-hidden rounded-lg border border-surface-border bg-surface shadow-[var(--menu-shadow)]">
-                <button
-                  type="button"
-                  onClick={() => void pickImage()}
-                  className="block w-full px-3 py-2 text-left text-body text-foreground hover:bg-surface-hover"
+          {attachments.length > 0 ? (
+            <div className="flex flex-wrap gap-2 px-3 pt-3">
+              {attachments.map((att, idx) => (
+                <div
+                  key={`${att.type}-${att.path || att.url || idx}`}
+                  className="group/att relative flex max-w-[200px] items-center gap-2 rounded-xl border border-surface-border bg-surface-hover/60 py-1.5 pr-2 pl-1.5"
                 >
-                  图片
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void pickFile()}
-                  className="block w-full px-3 py-2 text-left text-body text-foreground hover:bg-surface-hover"
-                >
-                  文件
-                </button>
-                <button
-                  type="button"
-                  onClick={promptLink}
-                  className="block w-full px-3 py-2 text-left text-body text-foreground hover:bg-surface-hover"
-                >
-                  链接
-                </button>
-              </div>
-            ) : null}
-          </div>
+                  {att.type === "image" && att.preview ? (
+                    <img
+                      src={att.preview}
+                      alt={att.name || "image"}
+                      className="size-9 rounded-lg object-cover"
+                    />
+                  ) : (
+                    <span className="flex size-9 items-center justify-center rounded-lg bg-surface text-muted-foreground">
+                      {att.type === "link" ? (
+                        <Link2 className="size-3.5" strokeWidth={1.75} />
+                      ) : (
+                        <FileText className="size-3.5" strokeWidth={1.75} />
+                      )}
+                    </span>
+                  )}
+                  <span className="min-w-0 flex-1 truncate text-caption text-foreground">
+                    {att.name || att.url || att.path || "附件"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(idx)}
+                    className="rounded-md p-0.5 text-faint-foreground opacity-70 transition hover:bg-surface hover:text-foreground group-hover/att:opacity-100"
+                    aria-label="移除附件"
+                  >
+                    <X className="size-3.5" strokeWidth={1.75} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
 
           <textarea
             ref={boxRef}
@@ -411,30 +423,100 @@ export function Composer() {
             }}
             onKeyDown={onKeyDown}
             onPaste={(e) => void onPaste(e)}
-            rows={2}
+            rows={1}
             placeholder="输入消息或 / 命令… 可粘贴图片"
-            className="min-h-[52px] flex-1 resize-none bg-transparent text-body text-foreground outline-none placeholder:text-faint-foreground"
+            className="min-h-[44px] w-full resize-none bg-transparent px-3.5 pt-3 pb-2 text-body leading-relaxed text-foreground outline-none placeholder:text-faint-foreground"
           />
-          {running ? (
-            <button
-              type="button"
-              onClick={() => void stop()}
-              className="shrink-0 rounded-lg bg-destructive px-3 py-2 text-label font-medium text-white"
-            >
-              停止
-            </button>
-          ) : (
-            <button
-              type="submit"
-              disabled={!canSend || sending}
-              className="shrink-0 rounded-lg bg-primary px-3 py-2 text-label font-medium text-primary-foreground disabled:opacity-40"
-            >
-              发送
-            </button>
-          )}
+
+          {/* 底部工具条：左附件，右发送 */}
+          <div className="absolute right-2 bottom-2 left-2 flex items-center justify-between">
+            <div ref={attachRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setAttachMenuOpen((v) => !v)}
+                className={cn(
+                  "flex size-8 items-center justify-center rounded-lg text-muted-foreground transition",
+                  "hover:bg-surface-hover hover:text-foreground",
+                  attachMenuOpen && "bg-surface-hover text-foreground",
+                )}
+                title="添加附件"
+                aria-label="添加附件"
+              >
+                <Paperclip className="size-4" strokeWidth={1.75} />
+              </button>
+              {attachMenuOpen ? (
+                <div className="absolute bottom-full left-0 z-30 mb-1.5 min-w-[148px] overflow-hidden rounded-xl border border-surface-border bg-surface py-1 shadow-[var(--menu-shadow)]">
+                  <button
+                    type="button"
+                    onClick={() => void pickImage()}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-label text-foreground hover:bg-surface-hover"
+                  >
+                    <ImageIcon className="size-3.5 text-muted-foreground" strokeWidth={1.75} />
+                    图片
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void pickFile()}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-label text-foreground hover:bg-surface-hover"
+                  >
+                    <FileText className="size-3.5 text-muted-foreground" strokeWidth={1.75} />
+                    文件
+                  </button>
+                  <button
+                    type="button"
+                    onClick={promptLink}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-label text-foreground hover:bg-surface-hover"
+                  >
+                    <Link2 className="size-3.5 text-muted-foreground" strokeWidth={1.75} />
+                    链接
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
+            {running ? (
+              <button
+                type="button"
+                onClick={() => void stop()}
+                className="flex size-8 items-center justify-center rounded-full bg-destructive text-white shadow-sm transition hover:opacity-90"
+                title="停止"
+                aria-label="停止"
+              >
+                <Square className="size-3.5 fill-current" strokeWidth={0} />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!canSend || sending}
+                className={cn(
+                  "flex size-8 items-center justify-center rounded-full transition",
+                  canSend && !sending
+                    ? "bg-primary text-primary-foreground shadow-sm hover:opacity-90"
+                    : "bg-surface-selected text-faint-foreground",
+                )}
+                title="发送 (Enter)"
+                aria-label="发送"
+              >
+                <ArrowUp className="size-4" strokeWidth={2.25} />
+              </button>
+            )}
+          </div>
+
+          {dragOver ? (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-2xl bg-brand/5 text-label font-medium text-brand">
+              松开以添加附件
+            </div>
+          ) : null}
         </div>
-        <div className="flex items-center justify-between px-1 text-micro text-muted-foreground">
-          <span>{statusText || "就绪"}</span>
+
+        <div className="flex items-center justify-between gap-3 px-1">
+          <div className="min-w-0 truncate text-micro text-muted-foreground">
+            <span className={running ? "text-brand" : undefined}>{readyLabel || "就绪"}</span>
+            <span className="mx-1.5 text-faint-foreground">·</span>
+            <span className="text-faint-foreground" title={activeSession?.id}>
+              {shortSessionId}
+            </span>
+          </div>
           <ModelSelect />
         </div>
       </div>

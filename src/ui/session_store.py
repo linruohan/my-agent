@@ -9,9 +9,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from loguru import logger
+
 from src.database import app_db_path
 from src.database.schemas.sessions import SCHEMA
 from src.infra.sqlite_store import ReusableSqliteStore
+
+_DEFAULT_EMPTY_TITLES = {"新会话", "当前会话"}
 
 
 @dataclass
@@ -23,10 +27,18 @@ class SessionInfo:
     updated_at: str
 
 
+def _valid_id(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 class SessionStore(ReusableSqliteStore):
     def __init__(self, db_path: Path | None = None) -> None:
         super().__init__(db_path or app_db_path(), foreign_keys=True)
         self._init_schema()
+        self._repair_sessions()
         self._ensure_default()
 
     def _init_schema(self) -> None:
@@ -36,6 +48,98 @@ class SessionStore(ReusableSqliteStore):
     @staticmethod
     def _now() -> str:
         return datetime.now(timezone.utc).isoformat()
+
+    def _repair_sessions(self) -> None:
+        """修复 id 为空的历史脏数据，并清理无消息的空会话。"""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT rowid, id, thread_id, title, created_at, updated_at FROM sessions"
+            ).fetchall()
+            if not rows:
+                return
+
+            used_ids: set[str] = set()
+            for row in rows:
+                sid = _valid_id(row["id"])
+                if sid:
+                    used_ids.add(sid)
+
+            repaired = 0
+            removed = 0
+            for row in rows:
+                rowid = int(row["rowid"])
+                sid = _valid_id(row["id"])
+                thread_id = _valid_id(row["thread_id"]) or str(uuid.uuid4())
+                title = (row["title"] or "").strip() or "新会话"
+
+                msg_count = 0
+                if sid:
+                    msg_count = int(
+                        conn.execute(
+                            "SELECT COUNT(*) AS c FROM session_messages WHERE session_id = ?",
+                            (sid,),
+                        ).fetchone()["c"]
+                    )
+                if msg_count == 0:
+                    msg_count = int(
+                        conn.execute(
+                            "SELECT COUNT(*) AS c FROM session_messages WHERE session_id = ?",
+                            (thread_id,),
+                        ).fetchone()["c"]
+                    )
+
+                # 无 id 且无消息的占位会话：直接删除
+                if not sid and msg_count == 0 and title in _DEFAULT_EMPTY_TITLES:
+                    conn.execute("DELETE FROM sessions WHERE rowid = ?", (rowid,))
+                    removed += 1
+                    continue
+
+                if sid:
+                    continue
+
+                # 用 thread_id 回填 id；冲突则换新 uuid
+                new_id = thread_id if thread_id not in used_ids else str(uuid.uuid4())
+                while new_id in used_ids:
+                    new_id = str(uuid.uuid4())
+                used_ids.add(new_id)
+
+                conn.execute(
+                    "UPDATE sessions SET id = ?, thread_id = ? WHERE rowid = ?",
+                    (new_id, thread_id, rowid),
+                )
+                if thread_id != new_id:
+                    conn.execute(
+                        "UPDATE session_messages SET session_id = ? WHERE session_id = ?",
+                        (new_id, thread_id),
+                    )
+                repaired += 1
+
+            # 再清一轮：合法 id、默认标题、无消息的冗余空会话（至少留 1 个）
+            keep_rows = conn.execute(
+                "SELECT rowid, id, title FROM sessions ORDER BY updated_at DESC"
+            ).fetchall()
+            survivors = len(keep_rows)
+            for row in keep_rows:
+                if survivors <= 1:
+                    break
+                sid = _valid_id(row["id"])
+                title = (row["title"] or "").strip() or "新会话"
+                if not sid or title not in _DEFAULT_EMPTY_TITLES:
+                    continue
+                msg_count = int(
+                    conn.execute(
+                        "SELECT COUNT(*) AS c FROM session_messages WHERE session_id = ?",
+                        (sid,),
+                    ).fetchone()["c"]
+                )
+                if msg_count > 0:
+                    continue
+                conn.execute("DELETE FROM sessions WHERE rowid = ?", (int(row["rowid"]),))
+                survivors -= 1
+                removed += 1
+
+            if repaired or removed:
+                logger.info("会话修复完成: repaired={}, removed={}", repaired, removed)
 
     def _ensure_default(self) -> None:
         if self.list_sessions():
@@ -47,7 +151,17 @@ class SessionStore(ReusableSqliteStore):
             rows = conn.execute(
                 "SELECT id, thread_id, title, created_at, updated_at FROM sessions ORDER BY updated_at DESC"
             ).fetchall()
-        return [SessionInfo(**dict(r)) for r in rows]
+        out: list[SessionInfo] = []
+        for r in rows:
+            data = dict(r)
+            sid = _valid_id(data.get("id"))
+            if not sid:
+                continue
+            data["id"] = sid
+            data["thread_id"] = _valid_id(data.get("thread_id")) or sid
+            data["title"] = (data.get("title") or "").strip() or "新会话"
+            out.append(SessionInfo(**data))
+        return out
 
     def create_session(self, title: str = "新会话") -> SessionInfo:
         sid = str(uuid.uuid4())
@@ -58,37 +172,65 @@ class SessionStore(ReusableSqliteStore):
                 "INSERT INTO sessions (id, thread_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
                 (sid, tid, title.strip() or "新会话", now, now),
             )
-        return SessionInfo(id=sid, thread_id=tid, title=title.strip() or "新会话", created_at=now, updated_at=now)
+        return SessionInfo(
+            id=sid,
+            thread_id=tid,
+            title=title.strip() or "新会话",
+            created_at=now,
+            updated_at=now,
+        )
 
     def get(self, session_id: str) -> SessionInfo | None:
+        sid = _valid_id(session_id)
+        if not sid:
+            return None
         with self._connect() as conn:
             row = conn.execute(
                 "SELECT id, thread_id, title, created_at, updated_at FROM sessions WHERE id = ?",
-                (session_id,),
+                (sid,),
             ).fetchone()
-        return SessionInfo(**dict(row)) if row else None
+        if not row:
+            return None
+        data = dict(row)
+        data["id"] = _valid_id(data.get("id")) or sid
+        data["thread_id"] = _valid_id(data.get("thread_id")) or data["id"]
+        data["title"] = (data.get("title") or "").strip() or "新会话"
+        return SessionInfo(**data)
 
     def rename(self, session_id: str, title: str) -> bool:
+        sid = _valid_id(session_id)
         title = title.strip()
-        if not title:
+        if not sid or not title:
             return False
         with self._connect() as conn:
             cur = conn.execute(
                 "UPDATE sessions SET title = ?, updated_at = ? WHERE id = ?",
-                (title, self._now(), session_id),
+                (title, self._now(), sid),
             )
             return cur.rowcount > 0
 
     def delete(self, session_id: str) -> bool:
+        sid = _valid_id(session_id)
+        if not sid:
+            return False
         with self._connect() as conn:
-            cur = conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+            cur = conn.execute("DELETE FROM sessions WHERE id = ?", (sid,))
             return cur.rowcount > 0
 
     def touch(self, session_id: str) -> None:
+        sid = _valid_id(session_id)
+        if not sid:
+            return
         with self._connect() as conn:
-            conn.execute("UPDATE sessions SET updated_at = ? WHERE id = ?", (self._now(), session_id))
+            conn.execute(
+                "UPDATE sessions SET updated_at = ? WHERE id = ?",
+                (self._now(), sid),
+            )
 
     def append_event(self, session_id: str, event: dict[str, Any]) -> int:
+        sid = _valid_id(session_id)
+        if not sid:
+            return 0
         now = self._now()
         payload = json.dumps(event, ensure_ascii=False)
         with self._connect() as conn:
@@ -101,17 +243,20 @@ class SessionStore(ReusableSqliteStore):
                     ?
                 )
                 """,
-                (session_id, session_id, payload),
+                (sid, sid, payload),
             )
-            conn.execute("UPDATE sessions SET updated_at = ? WHERE id = ?", (now, session_id))
+            conn.execute("UPDATE sessions SET updated_at = ? WHERE id = ?", (now, sid))
             row = conn.execute("SELECT last_insert_rowid() AS id").fetchone()
         return int(row["id"]) if row else 0
 
     def load_events(self, session_id: str) -> list[dict[str, Any]]:
+        sid = _valid_id(session_id)
+        if not sid:
+            return []
         with self._connect() as conn:
             rows = conn.execute(
                 "SELECT event_json FROM session_messages WHERE session_id = ? ORDER BY seq ASC",
-                (session_id,),
+                (sid,),
             ).fetchall()
         events: list[dict[str, Any]] = []
         for row in rows:
@@ -122,8 +267,11 @@ class SessionStore(ReusableSqliteStore):
         return events
 
     def clear_messages(self, session_id: str) -> None:
+        sid = _valid_id(session_id)
+        if not sid:
+            return
         with self._connect() as conn:
-            conn.execute("DELETE FROM session_messages WHERE session_id = ?", (session_id,))
+            conn.execute("DELETE FROM session_messages WHERE session_id = ?", (sid,))
 
     def search_messages(self, keyword: str, *, limit: int = 20) -> list[dict[str, Any]]:
         """跨会话搜索用户/助手消息文本。"""
