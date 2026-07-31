@@ -35,6 +35,9 @@ data/workspace/knowledge/*
 !data/workspace/.gitkeep
 dist/
 build/
+frontend/node_modules/
+frontend/dist/
+web/dist/
 *.spec
 !packaging/*.spec
 

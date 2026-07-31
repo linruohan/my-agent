@@ -7,6 +7,7 @@ from src.ui.api.input import InputApiMixin
 from src.ui.api.session import SessionApiMixin
 from src.ui.api.settings import SettingsApiMixin
 from src.ui.api.system import SystemApiMixin
+from src.ui.api.tasks import TaskApiMixin
 from src.ui.controller import AssistantController
 
 
@@ -16,6 +17,7 @@ class AppApi(
     ChatApiMixin,
     InputApiMixin,
     SystemApiMixin,
+    TaskApiMixin,
 ):
     """pywebview js_api 桥接层。"""
 

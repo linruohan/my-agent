@@ -47,13 +47,24 @@ class WebChatBridge:
             logger.warning("推送聊天事件到 WebView 失败: {}", exc)
 
     def load_history(self, events: list[dict[str, Any]]) -> None:
-        """批量回放会话历史（单次 JS 调用）。"""
+        """批量回放会话历史（单次 JS 调用）。
+
+        优先 ChatApp.loadHistory（React UI），回退 ChatUI.loadHistory（旧版）。
+        """
         window = self._get_window()
         if window is None:
             return
         payload = json.dumps(events, ensure_ascii=False)
+        script = (
+            "(function(p){"
+            "var fn=(window.ChatApp&&window.ChatApp.loadHistory)"
+            "||(window.ChatUI&&window.ChatUI.loadHistory);"
+            "if(fn)fn(p);"
+            "})("
+            f"{payload})"
+        )
         try:
-            window.evaluate_js(f"window.ChatUI.loadHistory({payload})")
+            window.evaluate_js(script)
         except Exception as exc:
             logger.warning("批量加载会话历史失败: {}", exc)
 

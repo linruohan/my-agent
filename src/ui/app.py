@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import threading
+from pathlib import Path
 
 from loguru import logger
 
@@ -12,7 +13,39 @@ from src.infra.process_executor import shutdown_process_pools
 from src.ui.app_api import AppApi
 from src.ui.controller import AssistantController
 
-WEB_INDEX = WEB_DIR / "index.html"
+
+def resolve_web_index() -> Path:
+    """选择前端入口（本地文件）。
+
+    - AGENT_UI=legacy|classic|old → 强制旧版 web/index.html
+    - AGENT_UI=react|new → 强制 web/dist（需先 npm run build）
+    - 未设置时：若 web/dist/index.html 存在则用 React UI，否则旧版
+
+    注意：AGENT_UI=dev|vite|hmr 请用 resolve_web_url()，不走本函数返回值。
+    """
+    ui = os.environ.get("AGENT_UI", "").strip().lower()
+    dist_index = WEB_DIR / "dist" / "index.html"
+    legacy_index = WEB_DIR / "index.html"
+
+    if ui in ("legacy", "classic", "old"):
+        return legacy_index
+    if ui in ("react", "new", "1", "true", "yes"):
+        if not dist_index.is_file():
+            raise FileNotFoundError(
+                f"React UI 未构建: {dist_index}（请在 frontend/ 执行 npm run build）"
+            )
+        return dist_index
+    if dist_index.is_file():
+        return dist_index
+    return legacy_index
+
+
+def resolve_web_url() -> str:
+    """返回 pywebview 加载地址：dev 模式下为 Vite URL，否则为本地 file URI。"""
+    ui = os.environ.get("AGENT_UI", "").strip().lower()
+    if ui in ("dev", "vite", "hmr"):
+        return os.environ.get("AGENT_UI_DEV_URL", "http://127.0.0.1:5173").rstrip("/")
+    return resolve_web_index().as_uri()
 
 _shutdown_lock = threading.Lock()
 _shutdown_done = False
@@ -88,8 +121,11 @@ def run_app() -> None:
     except ImportError as exc:
         raise RuntimeError("需要安装 pywebview：pip install pywebview") from exc
 
-    if not WEB_INDEX.exists():
-        raise FileNotFoundError(f"Web UI 未找到: {WEB_INDEX}")
+    web_url = resolve_web_url()
+    if web_url.startswith("file:"):
+        web_index = resolve_web_index()
+        if not web_index.exists():
+            raise FileNotFoundError(f"Web UI 未找到: {web_index}")
 
     controller = AssistantController()
     api = AppApi(controller)
@@ -108,9 +144,10 @@ def run_app() -> None:
     )
     poll_thread.start()
 
+    logger.info("加载 Web UI: {}", web_url)
     window = webview.create_window(
         title,
-        url=WEB_INDEX.as_uri(),
+        url=web_url,
         js_api=api,
         width=w,
         height=h,
