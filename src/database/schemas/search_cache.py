@@ -20,4 +20,6 @@ CREATE TABLE IF NOT EXISTS search_cache_user_queries (
 );
 
 CREATE INDEX IF NOT EXISTS idx_search_cache_expires ON search_cache(expires_at);
+CREATE INDEX IF NOT EXISTS idx_search_cache_key_prefix ON search_cache(cache_key);
+CREATE INDEX IF NOT EXISTS idx_search_cache_uq_query ON search_cache_user_queries(user_query);
 """

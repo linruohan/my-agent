@@ -15,12 +15,17 @@ from src.infra.timing import log_timing
 
 from src.agent.hitl import (
     format_approval_description,
+    get_hitl_interrupt_payload,
     get_pending_tool_calls,
     is_interrupted_before_tools,
     needs_user_approval,
     reject_pending_tools,
 )
-from src.agent.memory_session import reset_memory_thread_id, set_memory_thread_id
+from src.agent.memory_session import (
+    begin_memory_turn,
+    reset_memory_thread_id,
+    set_memory_thread_id,
+)
 from src.memory.memory_writer import (
     memory_extraction_config,
     schedule_memory_extraction,
@@ -66,6 +71,7 @@ class AgentRunner:
 
         def _worker() -> None:
             token = set_memory_thread_id(self._thread_id)
+            begin_memory_turn(self._thread_id)
             try:
                 self._put_event(StreamEvent("start", {"thread_id": self._thread_id}))
                 with log_timing("agent_turn", thread_id=self._thread_id[:8]):
@@ -123,6 +129,29 @@ class AgentRunner:
                 self._handle_message(msg, meta)
 
             snapshot = self.graph.get_state(self._config)
+            hitl_payload = get_hitl_interrupt_payload(snapshot)
+
+            if hitl_payload is not None:
+                tool_calls = list(hitl_payload.get("tool_calls") or [])
+                description = str(
+                    hitl_payload.get("description")
+                    or format_approval_description(tool_calls)
+                )
+                self._put_event(
+                    StreamEvent(
+                        "approval_required",
+                        {"tool_calls": tool_calls, "description": description},
+                    )
+                )
+                self._approval_event.clear()
+                self._approval_event.wait()
+                if self._stop_flag.is_set():
+                    self._put_event(StreamEvent("stopped"))
+                    return
+                input_data = Command(resume=bool(self._approval_result))
+                continue
+
+            # 兼容旧版 interrupt_before=["tools"]
             if not is_interrupted_before_tools(snapshot):
                 return
 

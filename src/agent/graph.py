@@ -8,9 +8,14 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.prebuilt import create_react_agent
 
 from src.agent.history import make_pre_model_hook
+from src.agent.hitl import make_hitl_post_model_hook
 from src.infra.config import load_app_config
 from src.infra.time_context import current_date_context, current_year
-from src.agent.memory_session import get_memory_conversation_state
+from src.agent.memory_session import (
+    get_cached_memory_injection,
+    get_memory_conversation_state,
+    store_memory_injection,
+)
 from src.memory.context_files import build_memory_prompt_block, build_claude_prompt_block
 from src.memory.memory_index import load_all_memory_entries
 from src.memory.memory_reader import (
@@ -22,7 +27,6 @@ from src.memory.rules_loader import build_rules_prompt_block
 from src.memory.settings_store import build_critical_rules_prompt_block
 from src.tools import get_enabled_tools
 from src.tools.process_wrap import wrap_tools_for_process
-
 
 class AgentGraphBundle:
     """持有 SQLite 连接与编译后的 Agent 图，避免连接被提前关闭。"""
@@ -36,15 +40,10 @@ class AgentGraphBundle:
         self._conn.close()
 
 
-def build_system_prompt(
-    base_prompt: str,
-    llm: BaseChatModel | None = None,
-    state: dict | None = None,
-) -> str:
-    """在基础 Prompt 上注入当前日期、搜索规则、记忆块与相关记忆。"""
+def _search_rules_block() -> str:
     date_ctx = current_date_context()
     year = current_year()
-    time_block = f"""
+    return f"""
 【当前时间】今天是 {date_ctx}。当前年份是 {year} 年。所有涉及版本、发布、新闻的判断必须以此为准。
 
 【搜索回答规则】
@@ -54,17 +53,18 @@ def build_system_prompt(
 4. 收到 web_search 结果后，必须用自然语言**汇总**成结构化回答：开头直接给出结论，再分点说明要点，附 1–3 个关键来源链接即可。
 5. 调用工具前的规划语（如「我需要搜索…」）不要出现在最终回复中；工具执行完毕后只输出面向用户的汇总内容。
 6. 若搜索结果明显过时或不足，如实告知用户并建议换个关键词重搜。
-"""
+""".strip()
+
+
+def _build_static_prompt(base_prompt: str, current_file: str | None) -> str:
+    """构建不含相关记忆检索的静态 prompt 段（文件读取侧已有 mtime 缓存）。"""
     base = base_prompt.strip() or "你是一个 helpful 的个人助理。"
     memory_block = build_memory_prompt_block()
-
-    current_file = state.get("_current_file") if state else None
     claude_block = build_claude_prompt_block(current_file=current_file)
     rules_block = build_rules_prompt_block(current_file=current_file)
-
     critical_block = build_critical_rules_prompt_block()
 
-    parts = [base, time_block.strip()]
+    parts = [base, _search_rules_block()]
     if critical_block:
         parts.append(f"【强制约束 CRITICAL】\n{critical_block}")
     if claude_block:
@@ -73,6 +73,17 @@ def build_system_prompt(
         parts.append(f"【行为规则 RULES】\n{rules_block}")
     if memory_block:
         parts.append(memory_block)
+    return "\n\n".join(parts)
+
+
+def build_system_prompt(
+    base_prompt: str,
+    llm: BaseChatModel | None = None,
+    state: dict | None = None,
+) -> str:
+    """在基础 Prompt 上注入当前日期、搜索规则、记忆块与相关记忆。"""
+    current_file = state.get("_current_file") if state else None
+    parts = [_build_static_prompt(base_prompt, current_file)]
 
     relevant_memories_block = _build_relevant_memories_block(llm, state)
     if relevant_memories_block:
@@ -101,11 +112,22 @@ def _extract_recent_tools(messages: list) -> list[str]:
     return tools
 
 
+def _extract_user_query(messages: list) -> str:
+    for msg in reversed(messages):
+        if isinstance(msg, dict) and msg.get("role") == "user":
+            return str(msg.get("content", ""))
+        if hasattr(msg, "type") and getattr(msg, "type", None) == "human":
+            return str(getattr(msg, "content", "") or "")
+        if hasattr(msg, "role") and msg.role == "user":
+            return str(msg.content)
+    return ""
+
+
 def _build_relevant_memories_block(
     llm: BaseChatModel | None = None,
     state: dict | None = None,
 ) -> str:
-    """使用小模型选择器构建相关记忆注入块。"""
+    """使用小模型选择器构建相关记忆注入块（每用户轮仅检索一次）。"""
     if not llm or not state:
         return ""
 
@@ -113,20 +135,17 @@ def _build_relevant_memories_block(
     if not messages:
         return ""
 
-    user_query = ""
-    for msg in reversed(messages):
-        if isinstance(msg, dict) and msg.get("role") == "user":
-            user_query = str(msg.get("content", ""))
-            break
-        elif hasattr(msg, "role") and msg.role == "user":
-            user_query = str(msg.content)
-            break
-
+    user_query = _extract_user_query(messages)
     if not user_query:
         return ""
 
+    cached = get_cached_memory_injection(user_query)
+    if cached is not None:
+        return cached
+
     memory_entries = load_all_memory_entries()
     if not memory_entries:
+        store_memory_injection(user_query, "")
         return ""
 
     conversation_state = get_memory_conversation_state()
@@ -143,18 +162,19 @@ def _build_relevant_memories_block(
 
     found_memories = find_relevant_memories(llm, input_data)
     if not found_memories:
+        store_memory_injection(user_query, "")
         return ""
 
     conversation_state.add_surfaced([m.file_name for m in found_memories])
 
     injection = build_memory_injection_block(found_memories)
-    if injection:
-        return f"【相关记忆】\n{injection}"
-    return ""
+    block = f"【相关记忆】\n{injection}" if injection else ""
+    store_memory_injection(user_query, block)
+    return block
 
 
 def make_dynamic_system_prompt(base_prompt: str, llm: BaseChatModel):
-    """每次模型调用前刷新 USER/MEMORY 注入，包含动态记忆检索。"""
+    """每次模型调用前刷新 USER/MEMORY 注入；相关记忆每用户轮仅检索一次。"""
 
     def prompt_fn(state: dict) -> str:
         return build_system_prompt(base_prompt, llm, state)
@@ -175,16 +195,23 @@ def build_agent_graph(llm: BaseChatModel, checkpoint_path: str | Path) -> AgentG
     agent_cfg = app_cfg.get("agent", {})
     base_prompt = agent_cfg.get("system_prompt", "").strip()
     max_history = int(agent_cfg.get("max_history_messages", 0) or 0)
+    max_history_tokens = int(agent_cfg.get("max_history_tokens", 0) or 0)
+    tool_result_max_chars = int(agent_cfg.get("tool_result_max_chars", 0) or 0)
     tools = wrap_tools_for_process(get_enabled_tools())
     prompt = make_dynamic_system_prompt(base_prompt, llm)
-    pre_model_hook = make_pre_model_hook(max_history)
+    pre_model_hook = make_pre_model_hook(
+        max_history,
+        max_tokens=max_history_tokens,
+        tool_result_max_chars=tool_result_max_chars,
+    )
+    post_model_hook = make_hitl_post_model_hook()
 
     graph = create_react_agent(
         llm,
         tools,
         prompt=prompt,
         checkpointer=checkpointer,
-        interrupt_before=["tools"],
         pre_model_hook=pre_model_hook,
+        post_model_hook=post_model_hook,
     )
     return AgentGraphBundle(graph, conn, checkpointer)

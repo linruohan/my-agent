@@ -88,10 +88,18 @@ class _BrowserSession:
             return
 
         try:
+            from src.tools.browser.media import install_media_blocker
+
             with sync_playwright() as p:
-                browser = p.chromium.launch(headless=self._cfg["headless"])
+                launch_kwargs: dict[str, Any] = {"headless": self._cfg["headless"]}
+                args = self._cfg.get("chromium_args") or []
+                if args:
+                    launch_kwargs["args"] = list(args)
+                browser = p.chromium.launch(**launch_kwargs)
                 page = browser.new_page(user_agent=self._cfg["user_agent"])
                 page.set_default_timeout(self._cfg["timeout_ms"])
+                if self._cfg.get("block_media", True):
+                    install_media_blocker(page)
                 self._ready.set()
                 while True:
                     item = self._queue.get()

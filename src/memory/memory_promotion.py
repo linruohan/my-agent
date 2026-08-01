@@ -8,7 +8,7 @@ from pathlib import Path
 from loguru import logger
 
 from src.infra.paths import project_config_dir
-from src.memory.memory_index import write_memory_index
+from src.memory.memory_index import schedule_write_memory_index
 from src.memory.settings_store import upsert_critical_rule
 
 INSTRUCTION_WORDS = ["必须", "不要", "禁止", "不能", "应该", "应当", "切勿"]
@@ -99,7 +99,7 @@ def promote_memory(
         formatted = _format_rule_content(memory_name, memory_description, memory_content)
         file_path.write_text(formatted + "\n", encoding="utf-8")
         logger.info("记忆提权到 rules/: {}", file_name)
-        write_memory_index(project_root)
+        schedule_write_memory_index(project_root)
         return f"记忆「{memory_name}」已提权到 .my-agent/rules/（强约束力）"
 
     return "未知类型，未提权"

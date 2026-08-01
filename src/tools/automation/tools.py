@@ -96,6 +96,9 @@ def add_cron_job(
         delivery=normalized_delivery,
         next_run_at=nxt.isoformat() if nxt else None,
     )
+    from src.automation.scheduler import notify_cron_schedule_changed
+
+    notify_cron_schedule_changed()
     return (
         f"已创建定时任务 #{job.id[:8]}「{job.name}」"
         f"，类型 {at}，{format_schedule(schedule)}"
@@ -116,6 +119,9 @@ def pause_cron_job(job_id: str) -> str:
     if not job:
         return f"未找到任务：{job_id}"
     store.set_enabled(job.id, False)
+    from src.automation.scheduler import notify_cron_schedule_changed
+
+    notify_cron_schedule_changed()
     return f"已暂停「{job.name}」。"
 
 
@@ -134,6 +140,9 @@ def resume_cron_job(job_id: str) -> str:
     store.set_enabled(job.id, True)
     if nxt:
         store.set_next_run(job.id, nxt.isoformat())
+    from src.automation.scheduler import notify_cron_schedule_changed
+
+    notify_cron_schedule_changed()
     return f"已恢复「{job.name}」，下次运行 {nxt.isoformat() if nxt else '未排程'}。"
 
 
@@ -149,6 +158,9 @@ def delete_cron_job(job_id: str) -> str:
     if not job:
         return f"未找到任务：{job_id}"
     store.delete(job.id)
+    from src.automation.scheduler import notify_cron_schedule_changed
+
+    notify_cron_schedule_changed()
     return f"已删除「{job.name}」。"
 
 

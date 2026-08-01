@@ -220,6 +220,60 @@ def backfill_conversation_index(
     return added
 
 
+_queue_lock = threading.Lock()
+_pending_jobs: list[dict[str, Any]] = []
+_worker_started = False
+_wake = threading.Event()
+
+
+def _index_worker_loop() -> None:
+    while True:
+        _wake.wait(timeout=0.25)
+        _wake.clear()
+        with _queue_lock:
+            jobs = list(_pending_jobs)
+            _pending_jobs.clear()
+        if not jobs:
+            continue
+        # 批量 embedding，锁外计算；DB 写入仍串行
+        texts: list[str] = []
+        prepared: list[tuple[dict[str, Any], str, str]] = []
+        idx = shared_conversation_index()
+        for job in jobs:
+            fields = _event_to_index_fields(job["event"])
+            if not fields:
+                continue
+            role, text = fields
+            mid = int(job["message_id"])
+            if idx.has_entry(mid):
+                continue
+            body = text[:1500]
+            texts.append(body)
+            prepared.append((job, role, body))
+        if not prepared:
+            continue
+        try:
+            vectors = _embeddings().embed_documents(texts)
+        except Exception:
+            logger.exception("对话索引批量 Embedding 失败 n={}", len(texts))
+            continue
+        with _index_lock:
+            for (job, role, body), vec in zip(prepared, vectors):
+                try:
+                    idx.upsert(
+                        message_id=int(job["message_id"]),
+                        session_id=str(job["session_id"]),
+                        session_title=str(job["session_title"]),
+                        role=role,
+                        text=body,
+                        embedding=list(vec),
+                    )
+                except Exception:
+                    logger.exception(
+                        "对话索引写入失败 message_id={}", job.get("message_id")
+                    )
+
+
 def schedule_index_chat_message(
     *,
     message_id: int,
@@ -227,18 +281,28 @@ def schedule_index_chat_message(
     session_title: str,
     event: dict[str, Any],
 ) -> None:
-    """后台线程增量索引，避免阻塞 UI。"""
+    """排队增量索引：单 worker + 批量 embed，避免每消息一线程。"""
+    global _worker_started
+    cfg = conversation_search_config()
+    if not cfg.get("index_enabled", True):
+        return
+    if not _event_to_index_fields(event):
+        return
 
-    def worker() -> None:
-        try:
-            with _index_lock:
-                index_chat_message(
-                    message_id=message_id,
-                    session_id=session_id,
-                    session_title=session_title,
-                    event=event,
-                )
-        except Exception:
-            logger.exception("对话索引后台线程异常 message_id={}", message_id)
-
-    threading.Thread(target=worker, daemon=True, name="conv-index").start()
+    with _queue_lock:
+        _pending_jobs.append(
+            {
+                "message_id": message_id,
+                "session_id": session_id,
+                "session_title": session_title,
+                "event": event,
+            }
+        )
+        if not _worker_started:
+            threading.Thread(
+                target=_index_worker_loop,
+                daemon=True,
+                name="conv-index-worker",
+            ).start()
+            _worker_started = True
+    _wake.set()

@@ -53,14 +53,14 @@ _shutdown_done = False
 
 def _poll_loop(controller: AssistantController, stop: threading.Event) -> None:
     while not stop.is_set():
+        runner = controller.runner
+        # 先等唤醒（最多 50ms），再消费队列，降低空转延迟并减少丢唤醒风险
+        runner.event_notify.wait(timeout=0.05)
+        runner.event_notify.clear()
         try:
             controller.poll_agent_events()
         except Exception:
             logger.exception("事件轮询异常")
-        runner = controller.runner
-        if runner.event_queue.empty():
-            runner.event_notify.wait(timeout=0.5)
-            runner.event_notify.clear()
 
 
 def _interrupt_background_work(controller: AssistantController) -> None:
@@ -143,6 +143,10 @@ def run_app() -> None:
         name="agent-event-poll",
     )
     poll_thread.start()
+
+    from src.infra.warmup import schedule_startup_warmup
+
+    schedule_startup_warmup()
 
     logger.info("加载 Web UI: {}", web_url)
     window = webview.create_window(

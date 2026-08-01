@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -27,6 +28,7 @@ class GatewayMessage:
 class GatewayInbox(ReusableSqliteStore):
     def __init__(self, db_path: Path | None = None) -> None:
         super().__init__(db_path or app_db_path(), foreign_keys=True)
+        self._notify = threading.Event()
         self._init_schema()
 
     def _init_schema(self) -> None:
@@ -36,6 +38,16 @@ class GatewayInbox(ReusableSqliteStore):
     @staticmethod
     def _now() -> str:
         return datetime.now(timezone.utc).isoformat()
+
+    def notify(self) -> None:
+        self._notify.set()
+
+    def wait_notify(self, timeout: float | None = None) -> bool:
+        """等待入站通知；返回是否被唤醒（超时为 False）。"""
+        ok = self._notify.wait(timeout=timeout)
+        if ok:
+            self._notify.clear()
+        return ok
 
     def push_inbound(
         self,
@@ -55,7 +67,11 @@ class GatewayInbox(ReusableSqliteStore):
                 """,
                 (mid, source, chat_id, text, json.dumps(meta or {}, ensure_ascii=False), now),
             )
-        return GatewayMessage(id=mid, source=source, chat_id=chat_id, text=text, meta=meta or {}, created_at=now)
+        msg = GatewayMessage(
+            id=mid, source=source, chat_id=chat_id, text=text, meta=meta or {}, created_at=now
+        )
+        self.notify()
+        return msg
 
     def pop_inbound(self) -> GatewayMessage | None:
         with self._connect() as conn:

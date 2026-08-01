@@ -122,6 +122,18 @@ class CronJobStore(ReusableSqliteStore):
             ).fetchall()
         return [self._row_to_job(r) for r in rows]
 
+    def earliest_next_run(self) -> str | None:
+        """最近一次待执行任务的 next_run_at（ISO），无则 None。"""
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT MIN(next_run_at) AS n FROM cron_jobs
+                WHERE enabled = 1 AND next_run_at IS NOT NULL AND next_run_at != ''
+                """
+            ).fetchone()
+        val = row["n"] if row else None
+        return str(val) if val else None
+
     def update_run(
         self,
         job_id: str,

@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import {
   BookOpen,
   LayoutDashboard,
@@ -9,6 +15,7 @@ import {
 import { getApi } from "@/bridge/api";
 import type { SlashCatalogItem, TaskItem } from "@/bridge/types";
 import { useAppStore } from "@/stores/app-store";
+import { applySessionApiResult } from "@/lib/session-api";
 import { cn } from "@/lib/cn";
 
 type HitKind = "session" | "task" | "skill" | "knowledge";
@@ -47,12 +54,18 @@ export function GlobalSearch({ collapsed, className }: Props) {
   const setComposerPrefill = useAppStore((s) => s.setComposerPrefill);
 
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [knowledgeLines, setKnowledgeLines] = useState<string[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedQuery(query), 150);
+    return () => window.clearTimeout(t);
+  }, [query]);
 
   useEffect(() => {
     if (!open) return;
@@ -98,7 +111,7 @@ export function GlobalSearch({ collapsed, className }: Props) {
   }, [open]);
 
   const hits = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = debouncedQuery.trim().toLowerCase();
     if (!q) return [] as SearchHit[];
     const out: SearchHit[] = [];
 
@@ -150,11 +163,11 @@ export function GlobalSearch({ collapsed, className }: Props) {
     }
 
     return out.slice(0, 40);
-  }, [query, sessions, tasks, slashCatalog, knowledgeLines]);
+  }, [debouncedQuery, sessions, tasks, slashCatalog, knowledgeLines]);
 
   useEffect(() => {
     setActiveIndex(0);
-  }, [query, hits.length]);
+  }, [debouncedQuery, hits.length]);
 
   const grouped = useMemo(() => {
     const order: HitKind[] = ["session", "task", "skill", "knowledge"];
@@ -174,10 +187,7 @@ export function GlobalSearch({ collapsed, className }: Props) {
       setActiveView("chat");
       if (!api || !hit.id) return;
       const res = await api.switch_session(hit.id);
-      if (res?.sessions) setSessions((res.sessions || []).filter((s) => !!s?.id));
-      if ("events" in (res || {})) {
-        useAppStore.getState().loadHistory(res?.events || []);
-      }
+      applySessionApiResult(res, setSessions);
       return;
     }
 

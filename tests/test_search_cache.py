@@ -40,6 +40,21 @@ def test_search_cache_lookup_text_match(tmp_path: Path):
     assert "cached answer" in hit
 
 
+def test_search_cache_exact_and_fuzzy_bucket(tmp_path: Path):
+    db = tmp_path / "cache.db"
+    cache = SearchCache(db_path=db)
+    cache.enabled = True
+    cache.text_threshold = 0.65
+    cache.min_response_chars = 5
+    cache.save("问法一", "langchain agent", "exact hit answer", skip_quality=True)
+
+    exact = cache.lookup("langchain agent")
+    assert exact == "exact hit answer"
+
+    fuzzy = cache.lookup("langchain agents")
+    assert fuzzy == "exact hit answer"
+
+
 def test_search_cache_save_and_reload(tmp_path: Path):
     db = tmp_path / "cache.db"
     cache = SearchCache(db_path=db)

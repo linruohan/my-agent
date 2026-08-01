@@ -17,7 +17,7 @@ from loguru import logger
 
 from src.infra.config import load_app_config
 from src.infra.paths import project_config_dir
-from src.memory.memory_index import write_memory_index
+from src.memory.memory_index import schedule_write_memory_index
 
 MEMORY_TYPES = ["user", "feedback", "project", "reference"]
 _LAST_WRITE_NAME = ".last_write"
@@ -334,7 +334,7 @@ def write_structured_memory_note(
         project_root=project_root,
     )
     if result:
-        write_memory_index(project_root)
+        schedule_write_memory_index(project_root)
     return result
 
 
@@ -500,7 +500,7 @@ def extract_memories(
                 promoted.append(promotion_result)
 
     if written:
-        write_memory_index(project_root)
+        schedule_write_memory_index(project_root)
 
     if promoted:
         logger.info("[memory] {} 条记忆已提权", len(promoted))

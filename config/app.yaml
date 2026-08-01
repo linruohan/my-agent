@@ -3,6 +3,8 @@ app:
   theme: "dark"
   window_width: 1280
   window_height: 800
+  # 会话切换/启动时最多加载的历史事件条数；0 表示不限制
+  session_history_limit: 200
 
 paths:
   checkpoints: "data/checkpoints"
@@ -27,6 +29,9 @@ agent:
     历史：search_past_conversations 支持 auto/keyword/semantic 模式检索跨会话记录。
     浏览器：动态网页、登录表单、复杂交互可用 browser_navigate → browser_get_page / browser_click / browser_fill（同 session_id 保持会话）；完成后 browser_close。
   max_history_messages: 40
+  # 粗估 token 预算；0 表示仅按条数截断。工具结果过大时优先压缩。
+  max_history_tokens: 24000
+  tool_result_max_chars: 2000
   user_file: USER.md
   memory_file: MEMORY.md
   code_sandbox:
@@ -107,3 +112,5 @@ browser:
   idle_close_sec: 600
   max_sessions: 8
   idle_cleanup_interval_sec: 120
+  # 拦截图片/字体/媒体，加快导航与正文抓取
+  block_media: true

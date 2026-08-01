@@ -5,7 +5,12 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from src.ui.skill.catalog import default_skills_dir, get_skill_dirs, resolve_skill
+from src.ui.skill.catalog import (
+    default_skills_dir,
+    get_skill_dirs,
+    invalidate_skill_catalog_cache,
+    resolve_skill,
+)
 
 
 def _slugify(name: str) -> str:
@@ -65,6 +70,7 @@ Agent 可通过 `get_skill_details` / `run_skill_tool` 调用本 Skill。
         scripts.mkdir(parents=True, exist_ok=True)
         (scripts / "main.py").write_text(script.strip() + "\n", encoding="utf-8")
 
+    invalidate_skill_catalog_cache()
     return root, True
 
 
@@ -81,4 +87,5 @@ def update_skill_instructions(name: str, instructions: str, *, mode: str = "appe
     else:
         new_text = existing.rstrip() + "\n\n## 经验更新\n\n" + block + "\n"
     skill_md.write_text(new_text, encoding="utf-8")
+    invalidate_skill_catalog_cache()
     return root

@@ -27,4 +27,9 @@ def load_browser_config() -> dict[str, Any]:
         "idle_close_sec": int(cfg.get("idle_close_sec", 600) or 600),
         "max_sessions": int(cfg.get("max_sessions", 8) or 8),
         "idle_cleanup_interval_sec": int(cfg.get("idle_cleanup_interval_sec", 120) or 120),
+        "block_media": bool(cfg.get("block_media", True)),
+        "chromium_args": list(
+            cfg.get("chromium_args")
+            or ["--disable-dev-shm-usage", "--disable-gpu", "--no-sandbox"]
+        ),
     }

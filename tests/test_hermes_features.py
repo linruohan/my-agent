@@ -98,3 +98,20 @@ def test_scheduler_tick_runs_due_job(tmp_path):
     with patch("src.automation.delivery.send_cron_toast", return_value=True):
         svc.tick()
     assert delivered and "done" in delivered[0]
+
+
+def test_earliest_next_run_and_adaptive_sleep(tmp_path):
+    store = CronJobStore(tmp_path / "cron.db")
+    future = (datetime.now(timezone.utc) + timedelta(seconds=5)).isoformat()
+    store.add(
+        name="soon",
+        action_type="notify",
+        action={"message": "x"},
+        schedule={"type": "interval", "minutes": 10},
+        next_run_at=future,
+    )
+    assert store.earliest_next_run() == future
+    svc = CronSchedulerService(store, interval_sec=30)
+    sleep_for = svc._next_sleep_sec()
+    assert 1.0 <= sleep_for <= 30.0
+    assert sleep_for <= 6.0

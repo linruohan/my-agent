@@ -3,6 +3,7 @@ import { NavRail } from "@/components/shell/NavRail";
 import { MainHeader } from "@/components/shell/MainHeader";
 import { useAppStore } from "@/stores/app-store";
 import { getApi } from "@/bridge/api";
+import { applySessionApiResult } from "@/lib/session-api";
 import { cn } from "@/lib/cn";
 
 type Props = {
@@ -30,10 +31,7 @@ export function AppShell({ children }: Props) {
             if (res?.error) window.alert(res.error);
             return;
           }
-          if (res.sessions) setSessions(res.sessions);
-          if ("events" in res) {
-            useAppStore.getState().loadHistory(res.events || []);
-          }
+          applySessionApiResult(res, setSessions);
         })();
       }
     };

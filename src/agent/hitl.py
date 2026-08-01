@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 
 from langchain_core.messages import AIMessage, ToolMessage
-from loguru import logger
+from langgraph.types import interrupt
 
 from src.tools import get_tool_meta, requires_confirmation
 
@@ -114,7 +113,7 @@ def gateway_should_auto_approve(tool_calls: list[dict[str, Any]], policy: str) -
 
 
 def reject_pending_tools(state_values: dict[str, Any]) -> list[ToolMessage]:
-    """为待执行的工具调用生成拒绝消息。"""
+    """为待执行的敏感工具调用生成拒绝消息。"""
     messages = []
     for tc in get_pending_tool_calls(state_values):
         if requires_confirmation(tc.get("name", "")):
@@ -129,6 +128,51 @@ def reject_pending_tools(state_values: dict[str, Any]) -> list[ToolMessage]:
 
 
 def is_interrupted_before_tools(snapshot) -> bool:
+    """兼容旧 interrupt_before=['tools'] 检测。"""
     if not snapshot or not snapshot.next:
         return False
     return any(node == "tools" for node in snapshot.next)
+
+
+def get_hitl_interrupt_payload(snapshot) -> dict[str, Any] | None:
+    """从 checkpoint 读取 post_model_hook 的 interrupt() 载荷。"""
+    if not snapshot:
+        return None
+    interrupts = getattr(snapshot, "interrupts", None) or ()
+    for intr in interrupts:
+        value = getattr(intr, "value", None)
+        if isinstance(value, dict) and "tool_calls" in value:
+            return value
+    for task in getattr(snapshot, "tasks", ()) or ():
+        for intr in getattr(task, "interrupts", ()) or ():
+            value = getattr(intr, "value", None)
+            if isinstance(value, dict) and "tool_calls" in value:
+                return value
+    return None
+
+
+def is_hitl_interrupted(snapshot) -> bool:
+    """是否因敏感工具审批或旧版 tools 节点中断而暂停。"""
+    if get_hitl_interrupt_payload(snapshot) is not None:
+        return True
+    return is_interrupted_before_tools(snapshot)
+
+
+def make_hitl_post_model_hook():
+    """仅在需要确认的工具调用前 interrupt，低风险工具零中断开销。"""
+
+    def hook(state: dict[str, Any]) -> dict[str, Any]:
+        tool_calls = get_pending_tool_calls(state)
+        if not tool_calls or not needs_user_approval(tool_calls):
+            return {}
+
+        payload = {
+            "tool_calls": tool_calls,
+            "description": format_approval_description(tool_calls),
+        }
+        approved = interrupt(payload)
+        if approved:
+            return {}
+        return {"messages": reject_pending_tools(state)}
+
+    return hook

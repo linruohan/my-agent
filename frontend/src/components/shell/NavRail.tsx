@@ -20,6 +20,7 @@ import { useAppStore, type MainView } from "@/stores/app-store";
 import { getApi } from "@/bridge/api";
 import { SidebarSessions } from "@/components/shell/SidebarSessions";
 import { GlobalSearch } from "@/components/shell/GlobalSearch";
+import { applySessionApiResult } from "@/lib/session-api";
 import { cn } from "@/lib/cn";
 
 const TOP_NAV: { view: MainView; label: string; Icon: LucideIcon }[] = [
@@ -96,10 +97,7 @@ export function NavRail() {
       if (res?.error) window.alert(res.error);
       return;
     }
-    if (res.sessions) setSessions((res.sessions || []).filter((s) => !!s?.id));
-    if ("events" in res) {
-      useAppStore.getState().loadHistory(res.events || []);
-    }
+    applySessionApiResult(res, setSessions);
   };
 
   const onRefreshSessions = async () => {

@@ -28,42 +28,56 @@ class TelegramGateway(PollingGateway):
         self.poll_interval = poll_interval
         self.on_outbound = on_outbound
         self._offset = 0
+        self._client = httpx.Client(timeout=35.0)
 
     def start(self) -> None:
+        if self._client.is_closed:
+            self._client = httpx.Client(timeout=35.0)
         was_alive = bool(self._thread and self._thread.is_alive())
         super().start()
         if not was_alive:
             logger.info("Gateway Telegram 轮询已启动")
 
+    def stop(self) -> None:
+        super().stop()
+        try:
+            self._client.close()
+        except Exception:
+            pass
+
     def send_message(self, chat_id: str, text: str) -> bool:
         try:
-            with httpx.Client(timeout=30) as client:
-                resp = client.post(
-                    self.API.format(token=self.bot_token, method="sendMessage"),
-                    json={"chat_id": chat_id, "text": text[:4000]},
-                )
-                resp.raise_for_status()
-                return True
+            resp = self._client.post(
+                self.API.format(token=self.bot_token, method="sendMessage"),
+                json={"chat_id": chat_id, "text": text[:4000]},
+                timeout=30.0,
+            )
+            resp.raise_for_status()
+            return True
         except Exception as exc:
             logger.warning("Telegram 发送失败: {}", exc)
             return False
 
     def run_loop(self) -> None:
         while not self._stop.is_set():
+            had_error = False
             try:
                 self._poll_once()
             except Exception:
+                had_error = True
                 logger.exception("Telegram 轮询异常")
-            self._stop.wait(self.poll_interval)
+            # 长轮询已阻塞 ~timeout；成功时仅短暂让出，出错时再按 poll_interval 退避
+            wait = self.poll_interval if had_error else 0.05
+            if self._stop.wait(wait):
+                break
 
     def _poll_once(self) -> None:
-        with httpx.Client(timeout=35) as client:
-            resp = client.get(
-                self.API.format(token=self.bot_token, method="getUpdates"),
-                params={"offset": self._offset, "timeout": 25},
-            )
-            resp.raise_for_status()
-            data = resp.json()
+        resp = self._client.get(
+            self.API.format(token=self.bot_token, method="getUpdates"),
+            params={"offset": self._offset, "timeout": 25},
+        )
+        resp.raise_for_status()
+        data = resp.json()
         if not data.get("ok"):
             return
         for item in data.get("result") or []:

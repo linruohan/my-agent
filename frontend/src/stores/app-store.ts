@@ -83,6 +83,7 @@ type AppStore = {
   applyInitialState: (state: InitialState) => void;
   applyTheme: (variables: ThemeVariables) => void;
   handleBridgeEvent: (ev: BridgeEvent) => void;
+  handleBridgeEvents: (events: BridgeEvent[]) => void;
   loadHistory: (events: ChatEvent[]) => void;
   setSessions: (sessions: SessionSummary[]) => void;
   setApproval: (description: string | null) => void;
@@ -206,6 +207,13 @@ function reduceChatEvent(
           ],
           streamingId: id,
         };
+      }
+      // 流式消息通常在末尾：避免整表 map
+      const last = messages[messages.length - 1];
+      if (last && last.id === streamingId && last.role === "assistant") {
+        const next = messages.slice(0, -1);
+        next.push({ ...last, content: last.content + (ev.content || "") });
+        return { messages: next, streamingId };
       }
       return {
         messages: messages.map((m) =>
@@ -390,29 +398,50 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   handleBridgeEvent: (ev) => {
-    if (ev.type === "running") {
-      set({ running: !!ev.running });
-      return;
-    }
-    if (ev.type === "status") {
-      set({ statusText: ev.text || "" });
-      return;
-    }
-    if (ev.type === "approval") {
-      set({ approval: ev.description || "" });
-      return;
-    }
-    if (ev.type === "theme") {
-      get().applyTheme(ev.variables || {});
-      return;
+    get().handleBridgeEvents([ev]);
+  },
+
+  handleBridgeEvents: (events) => {
+    if (!events?.length) return;
+    let { messages, streamingId, toolStatus, running, statusText, approval } = get();
+    let themeVars: ThemeVariables | null = null;
+    let touchedChat = false;
+    let touchedUi = false;
+
+    for (const ev of events) {
+      if (ev.type === "running") {
+        running = !!ev.running;
+        touchedUi = true;
+        continue;
+      }
+      if (ev.type === "status") {
+        statusText = ev.text || "";
+        touchedUi = true;
+        continue;
+      }
+      if (ev.type === "approval") {
+        approval = ev.description || "";
+        touchedUi = true;
+        continue;
+      }
+      if (ev.type === "theme") {
+        themeVars = ev.variables || {};
+        continue;
+      }
+      const next = reduceChatEvent(messages, streamingId, ev);
+      messages = next.messages;
+      streamingId = next.streamingId;
+      if (next.toolStatus !== undefined) toolStatus = next.toolStatus;
+      touchedChat = true;
     }
 
-    const { messages, streamingId } = get();
-    const next = reduceChatEvent(messages, streamingId, ev);
+    if (themeVars) get().applyTheme(themeVars);
+    if (!touchedChat && !touchedUi) return;
     set({
-      messages: next.messages,
-      streamingId: next.streamingId,
-      ...(next.toolStatus !== undefined ? { toolStatus: next.toolStatus } : {}),
+      ...(touchedChat
+        ? { messages, streamingId, toolStatus }
+        : {}),
+      ...(touchedUi ? { running, statusText, approval } : {}),
     });
   },
 

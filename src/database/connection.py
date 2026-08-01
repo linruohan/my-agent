@@ -5,7 +5,7 @@ from __future__ import annotations
 import atexit
 import sqlite3
 import threading
-import warnings
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,6 +19,7 @@ class _PoolEntry:
     conn: sqlite3.Connection
     lock: threading.Lock
     refs: int = 0
+    idle_since: float | None = None
 
 
 _POOL: dict[str, _PoolEntry] = {}
@@ -40,6 +41,22 @@ def _pool_key(db_path: Path) -> str:
     return str(db_path.resolve())
 
 
+def _evict_idle_locked() -> None:
+    """在已持有 _POOL_GUARD 时淘汰多余空闲连接。"""
+    idle = [(key, entry) for key, entry in _POOL.items() if entry.refs <= 0]
+    overflow = len(idle) - _MAX_IDLE_CONNECTIONS
+    if overflow <= 0:
+        return
+    idle.sort(key=lambda item: item[1].idle_since or 0.0)
+    for key, entry in idle[:overflow]:
+        try:
+            entry.conn.close()
+            logger.debug("[db-pool] 淘汰空闲连接: {}", key)
+        except Exception as exc:
+            logger.debug("[db-pool] 淘汰空闲连接失败: {} - {}", key, exc)
+        _POOL.pop(key, None)
+
+
 def acquire_connection(db_path: Path) -> tuple[sqlite3.Connection, threading.Lock, bool]:
     """获取（或创建）共享连接，返回 (conn, lock, pooled)。"""
     key = _pool_key(db_path)
@@ -50,6 +67,7 @@ def acquire_connection(db_path: Path) -> tuple[sqlite3.Connection, threading.Loc
             _POOL[key] = entry
             logger.debug("[db-pool] 创建新连接: {}", key)
         entry.refs += 1
+        entry.idle_since = None
         return entry.conn, entry.lock, True
 
 
@@ -62,12 +80,9 @@ def release_connection(db_path: Path) -> None:
             return
         entry.refs -= 1
         if entry.refs <= 0:
-            try:
-                entry.conn.close()
-                logger.debug("[db-pool] 关闭连接: {}", key)
-            except Exception as exc:
-                logger.warning("[db-pool] 关闭连接失败: {} - {}", key, exc)
-            del _POOL[key]
+            entry.refs = 0
+            entry.idle_since = time.monotonic()
+            _evict_idle_locked()
 
 
 @contextmanager
@@ -97,19 +112,21 @@ def close_all_connections() -> None:
 
 def _check_leaked_connections() -> None:
     with _POOL_GUARD:
-        if _POOL:
+        active = [key for key, entry in _POOL.items() if entry.refs > 0]
+        if active:
             logger.warning(
                 "[db-pool] 程序退出时仍有 {} 个连接未释放: {}",
-                len(_POOL),
-                list(_POOL.keys()),
+                len(active),
+                active,
             )
 
 
 atexit.register(_check_leaked_connections)
+atexit.register(close_all_connections)
 
 
 class ReusableSqliteStore:
-    """按 db 路径复用连接，使用 connection_scope 管理生命周期防止泄漏。"""
+    """按 db 路径复用长连接；Store 存活期间保持引用，避免热路径反复建连。"""
 
     def __init__(self, db_path: Path, *, foreign_keys: bool = False, shared: bool = True) -> None:
         self.db_path = Path(db_path)
@@ -147,22 +164,12 @@ class ReusableSqliteStore:
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
-        if self._shared:
-            with connection_scope(self.db_path) as (conn, lock):
-                with lock:
-                    try:
-                        yield conn
-                        conn.commit()
-                    except Exception:
-                        conn.rollback()
-                        raise
-        else:
-            conn = self._get_conn()
-            lock = self._lock or threading.Lock()
-            with lock:
-                try:
-                    yield conn
-                    conn.commit()
-                except Exception:
-                    conn.rollback()
-                    raise
+        conn = self._get_conn()
+        lock = self._lock or threading.Lock()
+        with lock:
+            try:
+                yield conn
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise

@@ -99,4 +99,25 @@ def shutdown_process_pools(*, wait: bool = False, timeout: float = 10.0) -> None
     logger.info("[process] 所有进程池关闭完成，耗时 {:.2f}s", elapsed)
 
 
+def _warmup_ping() -> str:
+    """可 pickle 的预热探针。"""
+    return "ok"
+
+
+def warmup_process_pools(
+    pools: tuple[str, ...] = ("tools", "ui", "rag"),
+    *,
+    timeout: float = 90.0,
+) -> None:
+    """空闲时预热 spawn 子进程，降低首轮工具/RAG 冷启动。"""
+    if _shutdown_event.is_set():
+        return
+    for name in pools:
+        try:
+            run_in_process(_warmup_ping, pool=name, timeout=timeout)
+            logger.info("[process] 进程池已预热: {}", name)
+        except Exception as exc:
+            logger.debug("[process] 预热 {} 失败: {}", name, exc)
+
+
 atexit.register(shutdown_process_pools)

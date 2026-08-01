@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.infra.metrics import export_metrics_csv, get_metrics_store, metrics_enabled
+from src.infra.metrics import export_metrics_csv, flush_metrics, get_metrics_store, metrics_enabled
 
 
 def format_metrics_stats() -> str:
     if not metrics_enabled():
         return "metrics 已关闭（设置环境变量 AGENT_METRICS=1 开启）。"
+    flush_metrics()
     store = get_metrics_store()
     labels = store.labels()
     if not labels:

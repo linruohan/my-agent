@@ -209,6 +209,12 @@ input {
   font: inherit;
 }
 
+/* 长会话：跳过屏外消息布局/绘制，降低滚动开销 */
+.chat-msg {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 72px;
+}
+
 .chat-column {
   margin-inline: auto;
   width: var(--chat-width-pct, 100%);

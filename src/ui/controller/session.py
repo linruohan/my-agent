@@ -78,7 +78,11 @@ class SessionMixin:
             return {"ok": False, "error": "会话不存在", **self.list_sessions_api()}
         self._session_id = info.id
         self._thread_id = info.thread_id
-        events = self._session_store.load_events(session_id)
+        from src.ui.session_history import session_history_limit
+
+        limit = session_history_limit()
+        total = self._session_store.count_events(session_id)
+        events = self._session_store.load_events(session_id, limit=limit)
         # 只走 load_history（内部会重置前端消息），避免 clear 事件异步晚到把刚加载的历史清空
         self._skip_persist_events = True
         try:
@@ -87,10 +91,16 @@ class SessionMixin:
             self._skip_persist_events = False
         if announce and not events:
             self.chat.append_system(f"新会话：{info.title}")
+        elif limit and total > len(events):
+            self.chat.append_system(f"仅显示最近 {len(events)} 条消息（共 {total} 条）")
         self.chat.set_status(self._status_text("就绪"))
+        # 历史已通过 WebChatBridge.load_history 推送，不再回传 events，
+        # 避免前端二次 loadHistory + 大 JSON IPC。
         return {
             "ok": True,
             "active_id": session_id,
-            "events": events,
+            "history_via_bridge": True,
+            "history_total": total,
+            "history_truncated": bool(limit and total > len(events)),
             **self.list_sessions_api(),
         }

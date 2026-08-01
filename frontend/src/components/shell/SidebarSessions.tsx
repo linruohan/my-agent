@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { MessageSquare, MoreHorizontal, Pin } from "lucide-react";
 import { useAppStore } from "@/stores/app-store";
 import { getApi } from "@/bridge/api";
-import type { ChatEvent, SessionSummary } from "@/bridge/types";
+import type { OkSessionsResult, SessionSummary } from "@/bridge/types";
 import { confirmAction } from "@/stores/confirm-store";
 import {
   getPinnedSessionIds,
@@ -11,6 +11,7 @@ import {
   togglePinSession,
   unpinSession,
 } from "@/lib/session-pins";
+import { applySessionApiResult } from "@/lib/session-api";
 import { cn } from "@/lib/cn";
 
 type MenuState = {
@@ -128,17 +129,8 @@ export function SidebarSessions() {
     setMenu({ id, x: Math.max(pad, x), y: Math.max(pad, y) });
   };
 
-  const applySessionResult = (res: {
-    sessions?: SessionSummary[];
-    events?: ChatEvent[];
-    active_id?: string;
-  }) => {
-    const nextSessions = (res.sessions || []).filter((s) => !!s?.id);
-    if (res.sessions) setSessions(nextSessions);
-    // 始终用返回的 events 覆盖（含空数组），避免仍显示上一个会话内容
-    if ("events" in res) {
-      useAppStore.getState().loadHistory(res.events || []);
-    }
+  const applySessionResult = (res: OkSessionsResult) => {
+    applySessionApiResult(res, setSessions);
   };
 
   const refreshSessions = async () => {

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { memo, useEffect, useState, type ReactNode } from "react";
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -157,7 +157,7 @@ const components: Components = {
   },
 };
 
-export function Markdown({ content, className = "" }: Props) {
+export const Markdown = memo(function Markdown({ content, className = "" }: Props) {
   const [existsMap, setExistsMap] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -188,4 +188,4 @@ export function Markdown({ content, className = "" }: Props) {
       </div>
     </LocalPathExistsContext.Provider>
   );
-}
+});

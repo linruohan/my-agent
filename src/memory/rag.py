@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
@@ -22,6 +23,10 @@ _VECTOR_DIR = DATA_DIR / "vectorstore"
 _INDEX_META = _VECTOR_DIR / "index_meta.json"
 _DOCS_DIR = DATA_DIR / "workspace" / "knowledge"
 _current_provider: ProviderConfig | None = None
+
+_store_lock = threading.Lock()
+_cached_store: Any | None = None
+_cached_store_key: tuple[Any, ...] | None = None
 
 
 def set_rag_provider(provider: ProviderConfig | None) -> None:
@@ -122,23 +127,74 @@ def _embeddings_for_index(provider: ProviderConfig | None = None) -> Embeddings:
     return create_embeddings(provider)
 
 
-def _load_vectorstore(provider: ProviderConfig | None = None):
-    from langchain_community.vectorstores import FAISS
-
+def _index_cache_key() -> tuple[Any, ...] | None:
     index_path = _VECTOR_DIR / "faiss_index"
     if not index_path.exists():
         return None
-    embeddings = _embeddings_for_index(provider)
-    return FAISS.load_local(
-        str(index_path),
-        embeddings,
-        allow_dangerous_deserialization=True,
+    meta = _load_meta()
+    try:
+        mtime_ns = index_path.stat().st_mtime_ns
+    except OSError:
+        mtime_ns = 0
+    faiss_bin = index_path / "index.faiss"
+    try:
+        faiss_mtime = faiss_bin.stat().st_mtime_ns if faiss_bin.exists() else 0
+    except OSError:
+        faiss_mtime = 0
+    return (
+        str(index_path.resolve()),
+        mtime_ns,
+        faiss_mtime,
+        meta.get("chunk_count", 0),
+        meta.get("embedding_backend"),
+        meta.get("embedding_model"),
     )
 
 
+def clear_vectorstore_cache() -> None:
+    """导入文档或测试后使 FAISS 热缓存失效。"""
+    global _cached_store, _cached_store_key
+    with _store_lock:
+        _cached_store = None
+        _cached_store_key = None
+
+
+def _load_vectorstore(provider: ProviderConfig | None = None):
+    global _cached_store, _cached_store_key
+    from langchain_community.vectorstores import FAISS
+
+    key = _index_cache_key()
+    if key is None:
+        clear_vectorstore_cache()
+        return None
+
+    with _store_lock:
+        if _cached_store is not None and _cached_store_key == key:
+            return _cached_store
+
+    embeddings = _embeddings_for_index(provider)
+    store = FAISS.load_local(
+        str(_VECTOR_DIR / "faiss_index"),
+        embeddings,
+        allow_dangerous_deserialization=True,
+    )
+    with _store_lock:
+        _cached_store = store
+        _cached_store_key = key
+        return _cached_store
+
+
 def _save_vectorstore(store) -> None:
+    global _cached_store, _cached_store_key
     index_path = _VECTOR_DIR / "faiss_index"
     store.save_local(str(index_path))
+    clear_vectorstore_cache()
+    # 保存后立刻回填缓存，避免紧接着的检索再读盘
+    key = _index_cache_key()
+    if key is not None:
+        with _store_lock:
+            _cached_store = store
+            _cached_store_key = key
 
 
 def _read_file(path: Path) -> str:
@@ -228,12 +284,12 @@ def ingest_files(
     else:
         store = FAISS.from_documents(documents, embeddings)
 
-    _save_vectorstore(store)
     meta["documents"] = sorted(known)
     meta["chunk_count"] = meta.get("chunk_count", 0) + len(documents)
     meta["embedding_backend"] = spec["backend"]
     meta["embedding_model"] = spec["model"]
     _save_meta(meta)
+    _save_vectorstore(store)
     return imported_files, len(documents)
 
 

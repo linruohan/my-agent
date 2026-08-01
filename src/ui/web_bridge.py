@@ -5,14 +5,18 @@ from __future__ import annotations
 import json
 import re
 import time
-from typing import Any, Callable
+from contextlib import contextmanager
+from typing import Any, Callable, Iterator
 
 from loguru import logger
 
 WindowGetter = Callable[[], Any]
 
-_TOKEN_FLUSH_CHARS = 48
-_TOKEN_FLUSH_SEC = 0.05
+# 批刷阈值：降低 evaluate_js 频率，兼顾流式体感
+_TOKEN_FLUSH_CHARS = 160
+_TOKEN_FLUSH_SEC = 0.08
+# 必须立刻推到 UI 的事件（审批/清屏/主题）
+_IMMEDIATE_UI_TYPES = frozenset({"approval", "clear", "theme"})
 
 
 class WebChatBridge:
@@ -26,25 +30,76 @@ class WebChatBridge:
         self._turn_started_at: float | None = None
         self._pending_token_ui = ""
         self._last_token_flush = 0.0
+        self._pending_ui_events: list[dict[str, Any]] = []
+        self._batching = False
 
     @property
     def assistant_stream_buffer(self) -> str:
         return self._stream_buffer
 
-    def _emit(self, event: dict[str, Any]) -> None:
-        if self._on_event:
-            try:
-                self._on_event(event)
-            except Exception as exc:
-                logger.warning("聊天事件持久化回调失败: {}", exc)
+    def _persist(self, event: dict[str, Any]) -> None:
+        if not self._on_event:
+            return
+        try:
+            self._on_event(event)
+        except Exception as exc:
+            logger.warning("聊天事件持久化回调失败: {}", exc)
+
+    def _push_ui_events(self, events: list[dict[str, Any]]) -> None:
+        if not events:
+            return
         window = self._get_window()
         if window is None:
             return
-        payload = json.dumps(event, ensure_ascii=False)
         try:
-            window.evaluate_js(f"window.ChatApp.handleEvent({payload})")
+            if len(events) == 1:
+                payload = json.dumps(events[0], ensure_ascii=False)
+                window.evaluate_js(f"window.ChatApp.handleEvent({payload})")
+            else:
+                payload = json.dumps(events, ensure_ascii=False)
+                script = (
+                    "(function(p){"
+                    "var a=window.ChatApp;"
+                    "if(a&&a.handleEvents){a.handleEvents(p);return;}"
+                    "if(a&&a.handleEvent){for(var i=0;i<p.length;i++)a.handleEvent(p[i]);}"
+                    "})("
+                    f"{payload})"
+                )
+                window.evaluate_js(script)
         except Exception as exc:
             logger.warning("推送聊天事件到 WebView 失败: {}", exc)
+
+    def _emit(self, event: dict[str, Any]) -> None:
+        self._persist(event)
+        etype = str(event.get("type") or "")
+        if etype in _IMMEDIATE_UI_TYPES or not self._batching:
+            self._flush_ui_queue()
+            self._push_ui_events([event])
+            return
+        self._pending_ui_events.append(event)
+
+    def _flush_ui_queue(self) -> None:
+        if not self._pending_ui_events:
+            return
+        batch = self._pending_ui_events
+        self._pending_ui_events = []
+        self._push_ui_events(batch)
+
+    def flush_ui(self) -> None:
+        """冲刷 token 缓冲与待推送 UI 事件（轮询批次结束时调用）。"""
+        self.flush_tokens()
+        self._flush_ui_queue()
+
+    @contextmanager
+    def ui_batch(self) -> Iterator[None]:
+        """在 Agent 事件轮询内合并多次 evaluate_js。"""
+        prev = self._batching
+        self._batching = True
+        try:
+            yield
+        finally:
+            self._batching = prev
+            self.flush_ui()
 
     def load_history(self, events: list[dict[str, Any]]) -> None:
         """批量回放会话历史（单次 JS 调用）。
@@ -53,6 +108,7 @@ class WebChatBridge:
         loadHistory 会重置消息列表，无需再单独 emit clear（避免异步竞态清空刚加载的内容）。
         """
         self._pending_token_ui = ""
+        self._pending_ui_events.clear()
         self._streaming = False
         self._stream_buffer = ""
         self._turn_started_at = None
@@ -252,6 +308,7 @@ class WebChatBridge:
 
     def clear(self) -> None:
         self._pending_token_ui = ""
+        self._pending_ui_events.clear()
         self._streaming = False
         self._stream_buffer = ""
         self._turn_started_at = None

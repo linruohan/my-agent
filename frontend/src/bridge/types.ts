@@ -122,6 +122,8 @@ export type OkSessionsResult = {
   ok: boolean;
   error?: string;
   active_id?: string;
+  /** 历史已由 Python WebChatBridge 推送，前端勿再 loadHistory */
+  history_via_bridge?: boolean;
   events?: ChatEvent[];
   sessions?: SessionSummary[];
 };
@@ -262,6 +264,8 @@ export type AppApi = {
 
 export type ChatAppBridge = {
   handleEvent: (ev: BridgeEvent) => void;
+  /** 一批事件单次 set，减少流式/工具状态 IPC 后的重渲染 */
+  handleEvents?: (events: BridgeEvent[]) => void;
   /** 与旧版 ChatUI.loadHistory 对齐，供 WebChatBridge 批量回放 */
   loadHistory: (events: ChatEvent[]) => void;
 };

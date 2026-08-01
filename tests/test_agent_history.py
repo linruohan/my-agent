@@ -58,6 +58,33 @@ def test_make_pre_model_hook_disabled_for_zero():
     assert make_pre_model_hook(0) is None
 
 
+def test_compress_and_token_budget():
+    from src.agent.history import compress_tool_results, estimate_tokens, trim_messages_for_model
+
+    assert estimate_tokens("你好世界") >= 2
+    long = "x" * 5000
+    messages = [
+        HumanMessage(content="q1"),
+        AIMessage(content="", tool_calls=[{"id": "t1", "name": "web_search", "args": {}}]),
+        ToolMessage(content=long, tool_call_id="t1", name="web_search"),
+        HumanMessage(content="q2"),
+        AIMessage(content="", tool_calls=[{"id": "t2", "name": "web_search", "args": {}}]),
+        ToolMessage(content="recent", tool_call_id="t2", name="web_search"),
+    ]
+    compressed = compress_tool_results(messages, max_chars=100, keep_recent_tools=1)
+    assert "已截断" in compressed[2].content
+    assert compressed[5].content == "recent"
+
+    trimmed = trim_messages_for_model(
+        messages,
+        max_messages=40,
+        max_tokens=50,
+        tool_result_max_chars=80,
+    )
+    assert len(trimmed) < len(messages)
+    assert not isinstance(trimmed[0], ToolMessage)
+
+
 def test_yaml_config_cache(tmp_path, monkeypatch):
     import src.infra.config as cfg_mod
 

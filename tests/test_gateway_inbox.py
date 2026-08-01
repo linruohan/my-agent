@@ -42,3 +42,10 @@ def test_pop_outbound_batch_marks_sent(tmp_path):
     assert len(batch) == 1
     assert batch[0].id == mid
     assert inbox.pop_outbound_batch(limit=10) == []
+
+
+def test_push_inbound_notifies_waiter(tmp_path):
+    inbox = GatewayInbox(db_path=tmp_path / "gw4.db")
+    assert inbox.wait_notify(timeout=0.01) is False
+    inbox.push_inbound("http", "c1", "wake")
+    assert inbox.wait_notify(timeout=0.2) is True

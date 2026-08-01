@@ -29,6 +29,7 @@ from src.memory.rag_worker import ingest_files_in_process
 from src.ui.file_dialog import create_file_dialog_safe
 from src.ui.input import append_history, list_history
 from src.ui.prefs import font_prefs, layout_prefs, theme_prefs
+from src.ui.session_history import session_history_limit
 from src.ui.skill import build_slash_catalog, get_skill_dirs
 from src.ui.theme_loader import list_theme_catalog
 from src.llm.models import list_provider_models_safe
@@ -79,7 +80,10 @@ class SettingsMixin:
             "slash_catalog": build_slash_catalog(),
             "input_history": list_history(),
             "skill_dirs": [str(p) for p in get_skill_dirs()],
-            "session_events": self._session_store.load_events(self._session_id),
+            "session_events": self._session_store.load_events(
+                self._session_id,
+                limit=session_history_limit(),
+            ),
         }
 
     def _base_provider_names(self) -> set[str]:

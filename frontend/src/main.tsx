@@ -10,11 +10,14 @@ function installChatAppBridge(): void {
   const handleEvent = (ev: BridgeEvent) => {
     useAppStore.getState().handleBridgeEvent(ev);
   };
+  const handleEvents = (events: BridgeEvent[]) => {
+    useAppStore.getState().handleBridgeEvents(events || []);
+  };
   const loadHistory = (events: ChatEvent[]) => {
     useAppStore.getState().loadHistory(events || []);
   };
 
-  window.ChatApp = { handleEvent, loadHistory };
+  window.ChatApp = { handleEvent, handleEvents, loadHistory };
   // 兼容 WebChatBridge.load_history → window.ChatUI.loadHistory
   window.ChatUI = { loadHistory, handleEvent };
 }

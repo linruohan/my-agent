@@ -152,6 +152,7 @@ class GatewayService:
 
     def stop(self) -> None:
         self._stop.set()
+        self.inbox.notify()
         if self._http:
             self._http.stop()
         if self._telegram:
@@ -203,7 +204,9 @@ class GatewayService:
                 except Exception:
                     logger.exception("Gateway 入站分发失败")
                     self.inbox.mark_inbound_failed(msg.id)
-            self._stop.wait(0.5 if msg else 1.0)
+                continue  # 队列可能还有积压，立即取下一条
+            # 无消息：等入站通知或 stop（最长 1s）
+            self.inbox.wait_notify(timeout=1.0)
 
     def reload(self, on_inbound: Callable[[GatewayMessage], None] | None = None) -> None:
         self.stop()

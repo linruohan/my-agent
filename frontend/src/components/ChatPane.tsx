@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Check, Clock3, Copy, MessageSquare } from "lucide-react";
 import { useAppStore, type DisplayMessage } from "@/stores/app-store";
 import { Markdown } from "@/components/Markdown";
@@ -71,10 +71,12 @@ function AssistantBody({ msg }: { msg: Extract<DisplayMessage, { role: "assistan
   return <Markdown content={msg.content || ""} />;
 }
 
-function MessageBubble({ msg }: { msg: DisplayMessage }) {
+const MESSAGE_WINDOW = 80;
+
+const MessageBubble = memo(function MessageBubble({ msg }: { msg: DisplayMessage }) {
   if (msg.role === "meta") {
     return (
-      <div className="flex justify-center px-1 py-2">
+      <div className="chat-msg flex justify-center px-1 py-2">
         <span className="rounded-full bg-muted px-3 py-1 text-caption text-muted-foreground">
           {msg.content}
         </span>
@@ -91,7 +93,12 @@ function MessageBubble({ msg }: { msg: DisplayMessage }) {
     (msg.format === "html" || looksLikeHtmlDocument(msg.content || ""));
 
   return (
-    <div className={cn("group flex px-1 py-1.5", isUser ? "justify-end" : "justify-start")}>
+    <div
+      className={cn(
+        "chat-msg group flex px-1 py-1.5",
+        isUser ? "justify-end" : "justify-start",
+      )}
+    >
       <div
         className={cn(
           "flex min-w-0 flex-col gap-1",
@@ -167,17 +174,39 @@ function MessageBubble({ msg }: { msg: DisplayMessage }) {
       </div>
     </div>
   );
-}
+});
 
 export function ChatPane() {
   const messages = useAppStore((s) => s.messages);
   const welcome = useAppStore((s) => s.welcome);
   const toolStatus = useAppStore((s) => s.toolStatus);
+  const streamingId = useAppStore((s) => s.streamingId);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [showAll, setShowAll] = useState(false);
+  const prevLenRef = useRef(0);
+
+  const hiddenCount =
+    !showAll && messages.length > MESSAGE_WINDOW
+      ? messages.length - MESSAGE_WINDOW
+      : 0;
+  const visibleMessages =
+    hiddenCount > 0 ? messages.slice(hiddenCount) : messages;
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, toolStatus]);
+    // 新消息到来时若仍在窗口模式，保持只渲染尾部
+    if (messages.length <= MESSAGE_WINDOW) {
+      setShowAll(false);
+    }
+  }, [messages.length]);
+
+  useEffect(() => {
+    const grew = messages.length > prevLenRef.current;
+    prevLenRef.current = messages.length;
+    // 流式用 auto，避免每 token smooth 滚动；仅新增消息条时用 smooth
+    const behavior: ScrollBehavior =
+      streamingId || !grew ? "auto" : "smooth";
+    bottomRef.current?.scrollIntoView({ behavior, block: "end" });
+  }, [messages, toolStatus, streamingId]);
 
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-page-canvas">
@@ -195,7 +224,22 @@ export function ChatPane() {
               </p>
             </div>
           ) : (
-            messages.map((m) => <MessageBubble key={m.id} msg={m} />)
+            <>
+              {hiddenCount > 0 ? (
+                <div className="flex justify-center px-1 py-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowAll(true)}
+                    className="rounded-full bg-muted px-3 py-1.5 text-caption text-muted-foreground transition hover:bg-surface-hover hover:text-foreground"
+                  >
+                    显示更早的 {hiddenCount} 条消息
+                  </button>
+                </div>
+              ) : null}
+              {visibleMessages.map((m) => (
+                <MessageBubble key={m.id} msg={m} />
+              ))}
+            </>
           )}
 
           {toolStatus ? (

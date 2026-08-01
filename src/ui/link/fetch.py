@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import atexit
 import re
+import threading
 from typing import Any
 from urllib.parse import urlparse
 
@@ -11,6 +13,10 @@ from bs4 import BeautifulSoup
 from loguru import logger
 
 from src.infra.config import load_search_config
+
+_pw_lock = threading.Lock()
+_pw_runtime: tuple[Any, Any] | None = None  # (playwright, browser)
+
 
 def _default_headers() -> dict[str, str]:
     cfg = load_search_config().get("search", {})
@@ -110,37 +116,81 @@ def _fetch_with_httpx(url: str) -> dict[str, Any]:
         return _result_payload(url, text, engine="httpx")
 
 
-def _fetch_with_playwright(url: str) -> dict[str, Any]:
-    from playwright.sync_api import sync_playwright  # type: ignore[import-untyped]
+def _get_shared_browser() -> Any:
+    """进程内复用 Chromium，避免每次 summarize_url 冷启动。"""
+    global _pw_runtime
+    with _pw_lock:
+        if _pw_runtime is not None:
+            return _pw_runtime[1]
+        from playwright.sync_api import sync_playwright  # type: ignore[import-untyped]
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        from src.tools.browser.config import load_browser_config
+
+        cfg = load_browser_config()
+        pw = sync_playwright().start()
+        launch_kwargs: dict[str, Any] = {"headless": True}
+        args = cfg.get("chromium_args") or []
+        if args:
+            launch_kwargs["args"] = list(args)
+        browser = pw.chromium.launch(**launch_kwargs)
+        _pw_runtime = (pw, browser)
+        return browser
+
+
+def _shutdown_shared_browser() -> None:
+    global _pw_runtime
+    with _pw_lock:
+        if _pw_runtime is None:
+            return
+        pw, browser = _pw_runtime
+        _pw_runtime = None
         try:
-            page = browser.new_page(user_agent=_default_headers()["User-Agent"])
-            page.set_extra_http_headers(
-                {"Accept-Language": _default_headers()["Accept-Language"]}
-            )
-            page.goto(url, wait_until="domcontentloaded", timeout=45000)
-            page.wait_for_timeout(2000)
-            try:
-                page.wait_for_load_state("networkidle", timeout=12000)
-            except Exception:
-                from loguru import logger
-
-                logger.debug("等待 networkidle 超时，继续抓取", exc_info=True)
-            try:
-                page.evaluate("window.scrollTo(0, Math.min(document.body.scrollHeight, 2400))")
-                page.wait_for_timeout(1200)
-            except Exception:
-                from loguru import logger
-
-                logger.debug("页面滚动失败，继续抓取", exc_info=True)
-            title = page.title()
-            body = page.inner_text("body")
-            text = _normalize_whitespace(f"标题: {title}\n\n{body}" if title else body)
-            return _result_payload(url, text, engine="playwright")
-        finally:
             browser.close()
+        except Exception:
+            pass
+        try:
+            pw.stop()
+        except Exception:
+            pass
+
+
+atexit.register(_shutdown_shared_browser)
+
+
+def _fetch_with_playwright(url: str) -> dict[str, Any]:
+    from src.tools.browser.config import load_browser_config
+    from src.tools.browser.media import install_media_blocker
+
+    browser = _get_shared_browser()
+    cfg = load_browser_config()
+    context = browser.new_context(user_agent=_default_headers()["User-Agent"])
+    page = context.new_page()
+    try:
+        page.set_extra_http_headers(
+            {"Accept-Language": _default_headers()["Accept-Language"]}
+        )
+        if cfg.get("block_media", True):
+            install_media_blocker(page)
+        page.goto(url, wait_until="domcontentloaded", timeout=45000)
+        page.wait_for_timeout(1500)
+        try:
+            page.wait_for_load_state("networkidle", timeout=10000)
+        except Exception:
+            logger.debug("等待 networkidle 超时，继续抓取", exc_info=True)
+        try:
+            page.evaluate("window.scrollTo(0, Math.min(document.body.scrollHeight, 2400))")
+            page.wait_for_timeout(800)
+        except Exception:
+            logger.debug("页面滚动失败，继续抓取", exc_info=True)
+        title = page.title()
+        body = page.inner_text("body")
+        text = _normalize_whitespace(f"标题: {title}\n\n{body}" if title else body)
+        return _result_payload(url, text, engine="playwright")
+    finally:
+        try:
+            context.close()
+        except Exception:
+            pass
 
 
 def summarize_url(url: str) -> dict[str, Any]:

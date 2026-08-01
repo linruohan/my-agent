@@ -66,6 +66,9 @@ class AgentMixin:
             except queue.Empty:
                 break
 
+        if not batch:
+            return
+
         skip_until: int | None = None
         for i, event in enumerate(batch):
             if event.kind == "tool_call" and event.payload.get("name") == "web_search":
@@ -74,26 +77,25 @@ class AgentMixin:
 
         waiting_approval = False
         still_running = True
-        for i, event in enumerate(batch):
-            if skip_until is not None and i < skip_until and event.kind == "token":
-                continue
-            if event.kind == "approval_required":
-                waiting_approval = True
-            if not self._handle_agent_event(event):
-                still_running = False
-                break
+        with self.chat.ui_batch():
+            for i, event in enumerate(batch):
+                if skip_until is not None and i < skip_until and event.kind == "token":
+                    continue
+                if event.kind == "approval_required":
+                    waiting_approval = True
+                if not self._handle_agent_event(event):
+                    still_running = False
+                    break
 
-        if still_running:
-            if waiting_approval:
-                still_running = True
-            else:
-                t = self.runner._thread
-                still_running = t is not None and t.is_alive()
-            if not still_running and self._running:
-                self._running = False
-                self.chat.set_running(False)
-
-        self.chat.flush_tokens()
+            if still_running:
+                if waiting_approval:
+                    still_running = True
+                else:
+                    t = self.runner._thread
+                    still_running = t is not None and t.is_alive()
+                if not still_running and self._running:
+                    self._running = False
+                    self.chat.set_running(False)
 
     def _handle_agent_event(self, event: StreamEvent) -> bool:
         if event.kind == "token":

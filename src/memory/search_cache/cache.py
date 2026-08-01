@@ -170,11 +170,22 @@ class SearchCache:
             return max(base // 2, self._min_ttl_days)
         return base
 
+    def _fuzzy_candidates(self, normalized: str) -> list[CacheRow]:
+        """精确未命中时：前缀分桶 + 最近条目兜底，避免全表 SequenceMatcher。"""
+        prefix_len = 6 if len(normalized) >= 6 else max(2, len(normalized))
+        prefix = normalized[:prefix_len]
+        bucket = self._store.list_by_key_prefix(prefix, limit=40)
+        if bucket:
+            return bucket
+        # 前缀无候选时退回最近活跃条目（上限 40）
+        return self._store.list_active(limit=40)
+
     def lookup(self, user_query: str) -> str | None:
         if not self.enabled or not user_query.strip():
             return None
 
         query = user_query.strip()
+        normalized = _normalize_query(query)
         with self._lock:
             self._session_stats.lookups += 1
 
@@ -182,9 +193,25 @@ class SearchCache:
             self._store.prune_expired()
             self._update_prune_time()
 
+        exact = self._store.find_exact(normalized) if normalized else None
+        if exact and exact.search_ok:
+            with self._lock:
+                self._session_stats.hits += 1
+            logger.info(
+                "搜索缓存精确命中 key={} query={} hit_rate={:.1f}%",
+                exact.cache_key[:40],
+                query[:60],
+                self._session_stats.hit_rate * 100,
+            )
+            self._store.record_hit(exact.cache_key)
+            new_ttl = self._calculate_adaptive_ttl(exact.hit_count + 1)
+            if new_ttl != self.ttl_days:
+                self._store.update_ttl(exact.cache_key, new_ttl)
+            return exact.response
+
         best_score = 0.0
         best_row: CacheRow | None = None
-        for row in self._store.list_active():
+        for row in self._fuzzy_candidates(normalized):
             if not row.search_ok:
                 continue
             score = self._score_row(query, row)

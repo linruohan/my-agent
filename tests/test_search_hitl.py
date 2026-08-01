@@ -4,8 +4,11 @@ from unittest.mock import MagicMock, patch
 
 from src.agent.hitl import (
     format_approval_description,
+    get_hitl_interrupt_payload,
     get_pending_tool_calls,
+    is_hitl_interrupted,
     is_interrupted_before_tools,
+    make_hitl_post_model_hook,
     needs_user_approval,
     reject_pending_tools,
 )
@@ -48,6 +51,31 @@ def test_is_interrupted_before_tools():
     assert is_interrupted_before_tools(snap) is True
     snap.next = ("agent",)
     assert is_interrupted_before_tools(snap) is False
+
+
+def test_get_hitl_interrupt_payload():
+    snap = MagicMock()
+    snap.interrupts = (
+        MagicMock(value={"tool_calls": [{"name": "delete_path"}], "description": "确认？"}),
+    )
+    snap.tasks = ()
+    payload = get_hitl_interrupt_payload(snap)
+    assert payload is not None
+    assert payload["tool_calls"][0]["name"] == "delete_path"
+    assert is_hitl_interrupted(snap) is True
+
+
+def test_hitl_post_model_hook_skips_safe_tools():
+    hook = make_hitl_post_model_hook()
+    state = {
+        "messages": [
+            AIMessage(
+                content="",
+                tool_calls=[{"name": "web_search", "id": "c1", "args": {"query": "q"}}],
+            )
+        ]
+    }
+    assert hook(state) == {}
 
 
 def test_search_bing_parse():

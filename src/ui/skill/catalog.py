@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import Any
 
 from src.infra.paths import DATA_DIR
 from src.infra.user_settings import load_user_settings
+
+_cache_lock = threading.Lock()
+_skills_cache: list[dict[str, Any]] | None = None
+_skills_cache_fp: tuple[Any, ...] | None = None
 
 
 def default_skills_dir() -> Path:
@@ -39,18 +44,40 @@ def get_skill_dirs() -> list[Path]:
         p = Path(str(item)).expanduser()
         if p.is_dir():
             dirs.append(p.resolve())
-    from src.ui.skill.catalog import default_skills_dir
-
     workspace_skills = default_skills_dir()
     if workspace_skills not in dirs:
         dirs.append(workspace_skills)
     return dirs
 
 
-def scan_skills() -> list[dict[str, Any]]:
+def _compute_skills_fingerprint(dirs: list[Path]) -> tuple[Any, ...]:
+    """仅用 SKILL.md 路径 + mtime/size，避免反复读文件内容。"""
+    parts: list[tuple[str, int, int]] = []
+    for base in dirs:
+        try:
+            for skill_md in base.rglob("SKILL.md"):
+                try:
+                    st = skill_md.stat()
+                    parts.append((str(skill_md.resolve()), st.st_mtime_ns, st.st_size))
+                except OSError:
+                    continue
+        except OSError:
+            continue
+    parts.sort()
+    return tuple(parts)
+
+
+def invalidate_skill_catalog_cache() -> None:
+    global _skills_cache, _skills_cache_fp
+    with _cache_lock:
+        _skills_cache = None
+        _skills_cache_fp = None
+
+
+def _scan_skills_uncached(dirs: list[Path]) -> list[dict[str, Any]]:
     skills: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for base in get_skill_dirs():
+    for base in dirs:
         for skill_md in base.rglob("SKILL.md"):
             folder = skill_md.parent
             name = folder.name
@@ -82,6 +109,20 @@ def scan_skills() -> list[dict[str, Any]]:
             )
     skills.sort(key=lambda s: s["name"].lower())
     return skills
+
+
+def scan_skills() -> list[dict[str, Any]]:
+    global _skills_cache, _skills_cache_fp
+    dirs = get_skill_dirs()
+    fingerprint = _compute_skills_fingerprint(dirs)
+    with _cache_lock:
+        if _skills_cache is not None and _skills_cache_fp == fingerprint:
+            return [dict(item) for item in _skills_cache]
+    skills = _scan_skills_uncached(dirs)
+    with _cache_lock:
+        _skills_cache = skills
+        _skills_cache_fp = fingerprint
+        return [dict(item) for item in _skills_cache]
 
 
 def build_slash_catalog() -> list[dict[str, Any]]:

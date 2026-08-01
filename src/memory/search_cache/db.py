@@ -7,6 +7,7 @@ import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 from loguru import logger
 
@@ -44,45 +45,84 @@ class SearchCacheStore(ReusableSqliteStore):
             ).fetchone()
             return int(row["c"]) if row else 0
 
-    def list_active(self) -> list[CacheRow]:
+    @staticmethod
+    def _parse_row(row: sqlite3.Row) -> CacheRow:
+        raw_uq = row["user_queries_g"]
+        user_queries = (
+            [part for part in str(raw_uq).split(chr(31)) if part] if raw_uq else []
+        )
+        return CacheRow(
+            cache_key=row["cache_key"],
+            search_query=row["search_query"],
+            response=row["response"],
+            user_queries=user_queries,
+            search_ok=bool(row["search_ok"]),
+            created_at=row["created_at"],
+            expires_at=row["expires_at"],
+            hit_count=int(row["hit_count"]),
+        )
+
+    _SELECT_ACTIVE = """
+        SELECT c.cache_key, c.search_query, c.response, c.search_ok,
+               c.created_at, c.expires_at, c.hit_count,
+               (
+                   SELECT GROUP_CONCAT(user_query, char(31))
+                   FROM search_cache_user_queries uq
+                   WHERE uq.cache_key = c.cache_key
+               ) AS user_queries_g
+        FROM search_cache c
+        WHERE c.expires_at > ?
+    """
+
+    def list_active(self, *, limit: int | None = None) -> list[CacheRow]:
+        now = self._now_iso()
+        sql = self._SELECT_ACTIVE + " ORDER BY c.created_at DESC"
+        params: list[Any] = [now]
+        if limit is not None and limit > 0:
+            sql += " LIMIT ?"
+            params.append(limit)
+        with self._connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+            return [self._parse_row(row) for row in rows]
+
+    def find_exact(self, normalized_query: str) -> CacheRow | None:
+        """按 cache_key 或用户原查询精确命中。"""
+        if not normalized_query:
+            return None
         now = self._now_iso()
         with self._connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT c.cache_key, c.search_query, c.response, c.search_ok,
-                       c.created_at, c.expires_at, c.hit_count,
-                       (
-                           SELECT GROUP_CONCAT(user_query, char(31))
-                           FROM search_cache_user_queries uq
-                           WHERE uq.cache_key = c.cache_key
-                       ) AS user_queries_g
-                FROM search_cache c
-                WHERE c.expires_at > ?
-                ORDER BY c.created_at DESC
+            row = conn.execute(
+                self._SELECT_ACTIVE + " AND c.cache_key = ? LIMIT 1",
+                (now, normalized_query),
+            ).fetchone()
+            if row:
+                return self._parse_row(row)
+            row = conn.execute(
+                self._SELECT_ACTIVE
+                + """
+                AND c.cache_key IN (
+                    SELECT cache_key FROM search_cache_user_queries
+                    WHERE lower(user_query) = ? OR user_query = ?
+                )
+                LIMIT 1
                 """,
-                (now,),
+                (now, normalized_query, normalized_query),
+            ).fetchone()
+            return self._parse_row(row) if row else None
+
+    def list_by_key_prefix(self, prefix: str, *, limit: int = 40) -> list[CacheRow]:
+        """按 cache_key 前缀拉取候选，供模糊相似度计算。"""
+        if not prefix:
+            return []
+        now = self._now_iso()
+        like = f"{prefix}%"
+        with self._connect() as conn:
+            rows = conn.execute(
+                self._SELECT_ACTIVE
+                + " AND c.cache_key LIKE ? ORDER BY c.hit_count DESC, c.created_at DESC LIMIT ?",
+                (now, like, limit),
             ).fetchall()
-            result: list[CacheRow] = []
-            for row in rows:
-                raw_uq = row["user_queries_g"]
-                user_queries = (
-                    [part for part in str(raw_uq).split(chr(31)) if part]
-                    if raw_uq
-                    else []
-                )
-                result.append(
-                    CacheRow(
-                        cache_key=row["cache_key"],
-                        search_query=row["search_query"],
-                        response=row["response"],
-                        user_queries=user_queries,
-                        search_ok=bool(row["search_ok"]),
-                        created_at=row["created_at"],
-                        expires_at=row["expires_at"],
-                        hit_count=int(row["hit_count"]),
-                    )
-                )
-            return result
+            return [self._parse_row(row) for row in rows]
 
     def upsert(
         self,

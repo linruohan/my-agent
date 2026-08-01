@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import atexit
 import json
 import os
+import queue
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,14 +17,18 @@ from src.infra.paths import DATA_DIR
 from src.infra.sqlite_store import ReusableSqliteStore
 
 _MAX_ROWS = 10_000
+_FLUSH_BATCH = 32
+_FLUSH_INTERVAL_SEC = 0.5
 
 
 def metrics_enabled() -> bool:
-    return os.environ.get("AGENT_METRICS", "1").strip().lower() not in (
+    # 默认关闭，避免热路径同步写库；需要时设 AGENT_METRICS=1
+    return os.environ.get("AGENT_METRICS", "0").strip().lower() not in (
         "0",
         "false",
         "no",
         "off",
+        "",
     )
 
 
@@ -53,6 +59,36 @@ class MetricsStore(ReusableSqliteStore):
                     (label, elapsed_ms, payload, now),
                 )
                 self._approx_rows += 1
+                overflow = self._approx_rows - _MAX_ROWS
+                if overflow > 0:
+                    conn.execute(
+                        """
+                        DELETE FROM timing_events WHERE id IN (
+                            SELECT id FROM timing_events ORDER BY id ASC LIMIT ?
+                        )
+                        """,
+                        (overflow,),
+                    )
+                    self._approx_rows -= overflow
+
+    def record_timing_batch(
+        self,
+        items: list[tuple[str, int, dict[str, Any] | None]],
+    ) -> None:
+        if not items:
+            return
+        now = datetime.now(timezone.utc).isoformat()
+        rows = [
+            (label, elapsed_ms, json.dumps(fields or {}, ensure_ascii=False), now)
+            for label, elapsed_ms, fields in items
+        ]
+        with self._write_lock:
+            with self._connect() as conn:
+                conn.executemany(
+                    "INSERT INTO timing_events (label, elapsed_ms, fields_json, created_at) VALUES (?, ?, ?, ?)",
+                    rows,
+                )
+                self._approx_rows += len(rows)
                 overflow = self._approx_rows - _MAX_ROWS
                 if overflow > 0:
                     conn.execute(
@@ -122,6 +158,10 @@ class MetricsStore(ReusableSqliteStore):
 
 _store: MetricsStore | None = None
 _store_lock = threading.Lock()
+_pending: queue.Queue[tuple[str, int, dict[str, Any] | None] | None] = queue.Queue()
+_worker_started = False
+_worker_lock = threading.Lock()
+_flush_event = threading.Event()
 
 
 def get_metrics_store() -> MetricsStore:
@@ -133,11 +173,70 @@ def get_metrics_store() -> MetricsStore:
         return _store
 
 
+def _ensure_worker() -> None:
+    global _worker_started
+    with _worker_lock:
+        if _worker_started:
+            return
+        thread = threading.Thread(target=_metrics_worker, name="metrics-flush", daemon=True)
+        thread.start()
+        _worker_started = True
+
+
+def _metrics_worker() -> None:
+    batch: list[tuple[str, int, dict[str, Any] | None]] = []
+    while True:
+        try:
+            item = _pending.get(timeout=_FLUSH_INTERVAL_SEC)
+        except queue.Empty:
+            item = None
+            if not batch:
+                continue
+
+        if item is None and not batch:
+            # 显式 flush 哨兵且无积压
+            _flush_event.set()
+            continue
+
+        if item is not None:
+            batch.append(item)
+
+        while len(batch) < _FLUSH_BATCH:
+            try:
+                nxt = _pending.get_nowait()
+            except queue.Empty:
+                break
+            if nxt is None:
+                break
+            batch.append(nxt)
+
+        if batch:
+            try:
+                get_metrics_store().record_timing_batch(batch)
+            except Exception:
+                from loguru import logger
+
+                logger.debug("批量写入 metrics 失败", exc_info=True)
+            batch.clear()
+        _flush_event.set()
+
+
+def flush_metrics() -> None:
+    """等待异步队列落盘（查询/导出/测试前调用）。"""
+    if not metrics_enabled():
+        return
+    _ensure_worker()
+    _flush_event.clear()
+    _pending.put(None)
+    _flush_event.wait(timeout=5.0)
+
+
 def record_timing(label: str, elapsed_ms: int, fields: dict[str, Any] | None = None) -> None:
     if not metrics_enabled():
         return
     try:
-        get_metrics_store().record_timing(label, elapsed_ms, fields)
+        _ensure_worker()
+        _pending.put((label, elapsed_ms, fields))
     except Exception:
         from loguru import logger
 
@@ -146,6 +245,7 @@ def record_timing(label: str, elapsed_ms: int, fields: dict[str, Any] | None = N
 
 def close_metrics_store() -> None:
     global _store
+    flush_metrics()
     with _store_lock:
         if _store is not None:
             _store.close()
@@ -158,6 +258,10 @@ def export_metrics_csv(path: Path | None = None, *, limit: int = 5000) -> tuple[
         raise RuntimeError("metrics 已关闭（AGENT_METRICS=0）")
     from src.infra.paths import DATA_DIR as data_root
 
+    flush_metrics()
     out = path or (data_root / "metrics_export.csv")
     count = get_metrics_store().export_csv(out, limit=limit)
     return count, out
+
+
+atexit.register(flush_metrics)

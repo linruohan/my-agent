@@ -44,6 +44,31 @@ class SessionStore(ReusableSqliteStore):
     def _init_schema(self) -> None:
         with self._connect() as conn:
             conn.executescript(SCHEMA)
+            self._ensure_next_seq_column(conn)
+
+    @staticmethod
+    def _ensure_next_seq_column(conn) -> None:
+        """兼容旧库：补 next_seq，并按已有消息回填。"""
+        cols = {str(r[1]) for r in conn.execute("PRAGMA table_info(sessions)").fetchall()}
+        if "next_seq" not in cols:
+            conn.execute(
+                "ALTER TABLE sessions ADD COLUMN next_seq INTEGER NOT NULL DEFAULT 0"
+            )
+        conn.execute(
+            """
+            UPDATE sessions
+            SET next_seq = (
+                SELECT COALESCE(MAX(m.seq), 0)
+                FROM session_messages m
+                WHERE m.session_id = sessions.id
+            )
+            WHERE next_seq < (
+                SELECT COALESCE(MAX(m.seq), 0)
+                FROM session_messages m
+                WHERE m.session_id = sessions.id
+            )
+            """
+        )
 
     @staticmethod
     def _now() -> str:
@@ -169,7 +194,8 @@ class SessionStore(ReusableSqliteStore):
         now = self._now()
         with self._connect() as conn:
             conn.execute(
-                "INSERT INTO sessions (id, thread_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO sessions (id, thread_id, title, created_at, updated_at, next_seq) "
+                "VALUES (?, ?, ?, ?, ?, 0)",
                 (sid, tid, title.strip() or "新会话", now, now),
             )
         return SessionInfo(
@@ -234,30 +260,66 @@ class SessionStore(ReusableSqliteStore):
         now = self._now()
         payload = json.dumps(event, ensure_ascii=False)
         with self._connect() as conn:
-            conn.execute(
+            seq_row = conn.execute(
+                """
+                UPDATE sessions
+                SET next_seq = next_seq + 1, updated_at = ?
+                WHERE id = ?
+                RETURNING next_seq
+                """,
+                (now, sid),
+            ).fetchone()
+            if not seq_row:
+                return 0
+            seq = int(seq_row["next_seq"])
+            cur = conn.execute(
                 """
                 INSERT INTO session_messages (session_id, seq, event_json)
-                VALUES (
-                    ?,
-                    (SELECT COALESCE(MAX(seq), 0) + 1 FROM session_messages WHERE session_id = ?),
-                    ?
-                )
+                VALUES (?, ?, ?)
                 """,
-                (sid, sid, payload),
+                (sid, seq, payload),
             )
-            conn.execute("UPDATE sessions SET updated_at = ? WHERE id = ?", (now, sid))
-            row = conn.execute("SELECT last_insert_rowid() AS id").fetchone()
-        return int(row["id"]) if row else 0
+            return int(cur.lastrowid or 0)
 
-    def load_events(self, session_id: str) -> list[dict[str, Any]]:
+    def count_events(self, session_id: str) -> int:
+        sid = _valid_id(session_id)
+        if not sid:
+            return 0
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) AS c FROM session_messages WHERE session_id = ?",
+                (sid,),
+            ).fetchone()
+        return int(row["c"]) if row else 0
+
+    def load_events(
+        self,
+        session_id: str,
+        *,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """加载会话事件。limit>0 时只取最近 N 条（按 seq 升序返回）。"""
         sid = _valid_id(session_id)
         if not sid:
             return []
         with self._connect() as conn:
-            rows = conn.execute(
-                "SELECT event_json FROM session_messages WHERE session_id = ? ORDER BY seq ASC",
-                (sid,),
-            ).fetchall()
+            if limit is not None and limit > 0:
+                rows = conn.execute(
+                    """
+                    SELECT event_json FROM (
+                        SELECT seq, event_json FROM session_messages
+                        WHERE session_id = ?
+                        ORDER BY seq DESC
+                        LIMIT ?
+                    ) ORDER BY seq ASC
+                    """,
+                    (sid, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT event_json FROM session_messages WHERE session_id = ? ORDER BY seq ASC",
+                    (sid,),
+                ).fetchall()
         events: list[dict[str, Any]] = []
         for row in rows:
             try:
@@ -272,6 +334,7 @@ class SessionStore(ReusableSqliteStore):
             return
         with self._connect() as conn:
             conn.execute("DELETE FROM session_messages WHERE session_id = ?", (sid,))
+            conn.execute("UPDATE sessions SET next_seq = 0 WHERE id = ?", (sid,))
 
     def search_messages(self, keyword: str, *, limit: int = 20) -> list[dict[str, Any]]:
         """跨会话搜索用户/助手消息文本。"""

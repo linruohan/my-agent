@@ -9,11 +9,14 @@ from langgraph.types import Command
 from loguru import logger
 
 from src.agent.hitl import (
+    get_hitl_interrupt_payload,
     get_pending_tool_calls,
+    is_hitl_interrupted,
     is_interrupted_before_tools,
     needs_user_approval,
     reject_pending_tools,
 )
+from src.agent.memory_session import begin_memory_turn, reset_memory_thread_id, set_memory_thread_id
 
 
 def run_agent_sync(graph: Any, prompt: str, thread_id: str) -> str:
@@ -21,34 +24,50 @@ def run_agent_sync(graph: Any, prompt: str, thread_id: str) -> str:
     config = {"configurable": {"thread_id": thread_id}}
     input_data: Any = {"messages": [{"role": "user", "content": prompt}]}
     parts: list[str] = []
+    token = set_memory_thread_id(thread_id)
+    begin_memory_turn(thread_id)
+    try:
+        for _ in range(40):
+            for chunk in graph.stream(input_data, config=config, stream_mode="messages"):
+                msg, _meta = chunk if isinstance(chunk, tuple) else (chunk, {})
+                if isinstance(msg, (AIMessage, AIMessageChunk)):
+                    text = _extract_text(msg.content)
+                    if text:
+                        parts.append(text)
+                elif isinstance(msg, ToolMessage):
+                    parts.append(f"\n[工具 {msg.name}] {str(msg.content)[:300]}\n")
 
-    for _ in range(40):
-        for chunk in graph.stream(input_data, config=config, stream_mode="messages"):
-            msg, _meta = chunk if isinstance(chunk, tuple) else (chunk, {})
-            if isinstance(msg, (AIMessage, AIMessageChunk)):
-                text = _extract_text(msg.content)
-                if text:
-                    parts.append(text)
-            elif isinstance(msg, ToolMessage):
-                parts.append(f"\n[工具 {msg.name}] {str(msg.content)[:300]}\n")
+            snapshot = graph.get_state(config)
+            hitl_payload = get_hitl_interrupt_payload(snapshot)
+            if hitl_payload is not None:
+                tool_calls = list(hitl_payload.get("tool_calls") or [])
+                logger.info(
+                    "定时任务自动拒绝敏感工具: {}",
+                    [tc.get("name") for tc in tool_calls],
+                )
+                input_data = Command(resume=False)
+                continue
 
-        snapshot = graph.get_state(config)
-        if not is_interrupted_before_tools(snapshot):
-            break
+            if not is_interrupted_before_tools(snapshot):
+                if not is_hitl_interrupted(snapshot):
+                    break
+                break
 
-        tool_calls = get_pending_tool_calls(snapshot.values)
-        if not tool_calls:
-            break
+            tool_calls = get_pending_tool_calls(snapshot.values)
+            if not tool_calls:
+                break
 
-        if needs_user_approval(tool_calls):
-            logger.info("定时任务自动拒绝敏感工具: {}", [tc.get("name") for tc in tool_calls])
-            reject_msgs = reject_pending_tools(snapshot.values)
-            if reject_msgs:
-                graph.update_state(config, {"messages": reject_msgs})
-            input_data = None
-            continue
+            if needs_user_approval(tool_calls):
+                logger.info("定时任务自动拒绝敏感工具: {}", [tc.get("name") for tc in tool_calls])
+                reject_msgs = reject_pending_tools(snapshot.values)
+                if reject_msgs:
+                    graph.update_state(config, {"messages": reject_msgs})
+                input_data = None
+                continue
 
-        input_data = Command(resume=True)
+            input_data = Command(resume=True)
+    finally:
+        reset_memory_thread_id(token)
 
     return "".join(parts).strip() or "（Agent 无输出）"
 

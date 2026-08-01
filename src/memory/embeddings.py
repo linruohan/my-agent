@@ -6,6 +6,9 @@ import threading
 from langchain_core.embeddings import Embeddings
 from loguru import logger
 
+_cache_lock = threading.Lock()
+_embedding_cache: dict[str, tuple[Embeddings, bool]] = {}
+
 
 class FastEmbedEmbeddings(Embeddings):
     """基于 fastembed 的本地 Embedding，无需外部 API。"""
@@ -48,9 +51,26 @@ class DummyEmbeddings(Embeddings):
 
 
 def create_local_embeddings(model_name: str) -> tuple[Embeddings, bool]:
-    """创建本地 Embedding，返回 (embeddings, is_fallback)。"""
+    """创建本地 Embedding，返回 (embeddings, is_fallback)。同模型进程内复用。"""
+    key = (model_name or "").strip() or "default"
+    with _cache_lock:
+        cached = _embedding_cache.get(key)
+        if cached is not None:
+            return cached
     try:
-        return FastEmbedEmbeddings(model_name), False
+        instance: tuple[Embeddings, bool] = (FastEmbedEmbeddings(model_name), False)
     except Exception:
         logger.exception("Embedding 模型加载失败，将使用降级实现")
-        return DummyEmbeddings(), True
+        instance = (DummyEmbeddings(), True)
+    with _cache_lock:
+        existing = _embedding_cache.get(key)
+        if existing is not None:
+            return existing
+        _embedding_cache[key] = instance
+        return instance
+
+
+def clear_embedding_cache() -> None:
+    """测试或热重载时清空 Embedding 单例缓存。"""
+    with _cache_lock:
+        _embedding_cache.clear()

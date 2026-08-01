@@ -2,18 +2,25 @@
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import yaml
+from loguru import logger
 
 from src.infra.paths import global_config_dir, project_config_dir
 
 _MAX_INDEX_LINES = 200
 _MAX_INDEX_BYTES = 25000
 _MAX_INDEX_CHARS = 2500
+_INDEX_DEBOUNCE_SEC = 1.5
+
+_debounce_lock = threading.Lock()
+_pending_roots: set[str] = set()
+_debounce_timer: threading.Timer | None = None
 
 
 @dataclass
@@ -124,6 +131,63 @@ def write_memory_index(project_root: Path | None = None) -> None:
     project_dir = project_config_dir(project_root)
     project_dir.mkdir(parents=True, exist_ok=True)
     (project_dir / "MEMORY.md").write_text(index_text + "\n", encoding="utf-8")
+
+
+def _root_key(project_root: Path | None) -> str:
+    if project_root is None:
+        return ""
+    return str(Path(project_root).resolve())
+
+
+def _flush_scheduled_memory_indexes() -> None:
+    global _debounce_timer
+    with _debounce_lock:
+        roots = list(_pending_roots)
+        _pending_roots.clear()
+        _debounce_timer = None
+    for key in roots:
+        try:
+            write_memory_index(None if key == "" else Path(key))
+        except Exception:
+            logger.exception("防抖写入 MEMORY.md 失败 root={}", key or "(default)")
+
+
+def schedule_write_memory_index(
+    project_root: Path | None = None,
+    *,
+    delay: float = _INDEX_DEBOUNCE_SEC,
+) -> None:
+    """合并短时间内的多次索引重建，避免连续写盘。"""
+    global _debounce_timer
+    key = _root_key(project_root)
+    with _debounce_lock:
+        _pending_roots.add(key)
+        if _debounce_timer is not None:
+            _debounce_timer.cancel()
+            _debounce_timer = None
+        if delay <= 0:
+            roots = list(_pending_roots)
+            _pending_roots.clear()
+        else:
+            _debounce_timer = threading.Timer(delay, _flush_scheduled_memory_indexes)
+            _debounce_timer.daemon = True
+            _debounce_timer.start()
+            return
+    for root_key in roots:
+        write_memory_index(None if root_key == "" else Path(root_key))
+
+
+def flush_memory_index_writes() -> None:
+    """立即刷出待写入的记忆索引（测试/关停用）。"""
+    global _debounce_timer
+    with _debounce_lock:
+        if _debounce_timer is not None:
+            _debounce_timer.cancel()
+            _debounce_timer = None
+        roots = list(_pending_roots)
+        _pending_roots.clear()
+    for key in roots:
+        write_memory_index(None if key == "" else Path(key))
 
 
 def read_memory_index(project_root: Path | None = None) -> str:

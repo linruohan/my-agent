@@ -6,7 +6,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     thread_id  TEXT NOT NULL,
     title      TEXT NOT NULL,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    next_seq   INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS session_messages (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
