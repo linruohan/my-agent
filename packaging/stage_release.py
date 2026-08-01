@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RELEASE_DATA = Path(__file__).resolve().parent / "release-data"
 
 # 与 exe 同目录拷贝的静态资源
-COPY_DIRS = ("config", "web")
+COPY_DIRS = ("config", "resources", "legacy/web", "dist/web")
 
 # data/ 下需预创建的子目录
 DATA_SUBDIRS = (

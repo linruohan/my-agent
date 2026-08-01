@@ -7,38 +7,26 @@ Vite + React + TypeScript + Tailwind 前端，通过 pywebview `js_api` 对接�
 ```bash
 cd frontend
 npm install
-npm run build   # 输出到 ../web/dist
+npm run build   # 输出到 ../dist/web（构建产物，勿手改）
 ```
 
-启动应用（优先加载 `web/dist`）：
+启动应用（优先加载 `dist/web`）：
 
 ```bash
-# 项目根目录
 python main.py
 ```
 
-强制旧版 UI：
+强制旧版 UI（`legacy/web`）：
 
 ```bash
-# PowerShell
 $env:AGENT_UI="legacy"; python main.py
 ```
 
-强制新版（若未 build 会报错）：
+## 目录约定
 
-```bash
-$env:AGENT_UI="react"; python main.py
-```
-
-浏览器热更新调试（无 pywebview API，仅看布局）：
-
-```bash
-npm run dev
-```
-
-## 目录
-
-- `src/bridge/` — 与 `src/ui/api` / WebChatBridge 对齐的类型与 API 封装
-- `src/stores/` — UI 状态（会话消息、主题、HITL）
-- `src/components/` — 侧栏 / 聊天 / Composer / 审批
-- `src/styles/tokens.css` — 设计令牌（承接 Python 注入的主题 CSS 变量）
+| 路径 | 用途 |
+|------|------|
+| `frontend/` | React **源码**（在此修改） |
+| `dist/web/` | `npm run build` **产物**（勿当源码改） |
+| `legacy/web/` | 旧版 vanilla UI 归档 |
+| `resources/themes/` | 主题 JSON |

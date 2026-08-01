@@ -49,7 +49,7 @@ export function App() {
           <h1 className="text-lg font-semibold text-fg">UI 启动失败</h1>
           <p className="mt-3 text-sm text-muted">{bootError}</p>
           <p className="mt-2 text-xs text-muted">
-            可设置 AGENT_UI=legacy 回退到旧版 web/index.html
+            可设置 AGENT_UI=legacy 回退到旧版 legacy/web/index.html
           </p>
         </div>
       </div>

@@ -16,7 +16,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: path.resolve(rootDir, "../web/dist"),
+    outDir: path.resolve(rootDir, "../dist/web"),
     emptyOutDir: true,
     sourcemap: true,
     chunkSizeWarningLimit: 700,

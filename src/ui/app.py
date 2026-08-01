@@ -8,7 +8,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from src.infra.paths import WEB_DIR, app_icon_path
+from src.infra.paths import DIST_DIR, LEGACY_WEB_DIR, app_icon_path
 from src.infra.process_executor import shutdown_process_pools
 from src.ui.app_api import AppApi
 from src.ui.controller import AssistantController
@@ -17,15 +17,15 @@ from src.ui.controller import AssistantController
 def resolve_web_index() -> Path:
     """选择前端入口（本地文件）。
 
-    - AGENT_UI=legacy|classic|old → 强制旧版 web/index.html
-    - AGENT_UI=react|new → 强制 web/dist（需先 npm run build）
-    - 未设置时：若 web/dist/index.html 存在则用 React UI，否则旧版
+    - AGENT_UI=legacy|classic|old → 强制旧版 legacy/web/index.html
+    - AGENT_UI=react|new → 强制 dist/web/index.html（需先 npm run build）
+    - 未设置时：若 dist/web/index.html 存在则用 React UI，否则旧版
 
     注意：AGENT_UI=dev|vite|hmr 请用 resolve_web_url()，不走本函数返回值。
     """
     ui = os.environ.get("AGENT_UI", "").strip().lower()
-    dist_index = WEB_DIR / "dist" / "index.html"
-    legacy_index = WEB_DIR / "index.html"
+    dist_index = DIST_DIR / "index.html"
+    legacy_index = LEGACY_WEB_DIR / "index.html"
 
     if ui in ("legacy", "classic", "old"):
         return legacy_index
@@ -115,7 +115,7 @@ def _finalize_exit(controller: AssistantController, poll_thread: threading.Threa
 
 
 def run_app() -> None:
-    """启动内置 web/ + pywebview 桌面 UI。"""
+    """启动桌面 UI（React dist/ 或 legacy/web）+ pywebview。"""
     try:
         import webview
     except ImportError as exc:

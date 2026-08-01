@@ -15,7 +15,8 @@ icon_path = root / "resources" / "windows" / "app-icon.ico"
 
 datas = [
     (str(root / "config"), "config"),
-    (str(root / "web"), "web"),
+    (str(root / "dist" / "web"), "dist/web"),
+    (str(root / "legacy" / "web"), "legacy/web"),
     (str(root / "resources"), "resources"),
 ]
 

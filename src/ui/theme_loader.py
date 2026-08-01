@@ -1,4 +1,4 @@
-"""从 web/themes/*.json 加载 gpui 主题并映射为 Web CSS 变量。"""
+"""从 resources/themes/*.json 加载 gpui 主题并映射为 Web CSS 变量。"""
 
 from __future__ import annotations
 

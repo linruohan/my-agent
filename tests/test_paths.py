@@ -21,8 +21,10 @@ def test_dev_layout():
     assert paths.install_root() == root
     assert paths.DATA_DIR == root / "data"
     assert paths.CONFIG_DIR == root / "config"
-    assert paths.WEB_DIR == root / "web"
-    assert paths.THEMES_DIR == root / "web" / "themes"
+    assert paths.DIST_DIR == root / "dist" / "web"
+    assert paths.LEGACY_WEB_DIR == root / "legacy" / "web"
+    assert paths.WEB_DIR == root / "dist" / "web"
+    assert paths.THEMES_DIR == root / "resources" / "themes"
 
 
 def test_frozen_layout_splits_bundle_and_install(tmp_path, monkeypatch):
@@ -31,8 +33,9 @@ def test_frozen_layout_splits_bundle_and_install(tmp_path, monkeypatch):
     bundle.mkdir()
     install.mkdir()
     (bundle / "config").mkdir()
-    (bundle / "web").mkdir()
-    (bundle / "web" / "themes").mkdir()
+    (bundle / "dist" / "web").mkdir(parents=True)
+    (bundle / "legacy" / "web").mkdir(parents=True)
+    (bundle / "resources" / "themes").mkdir(parents=True)
     exe = install / "my-agent.exe"
     exe.write_bytes(b"")
 
@@ -46,8 +49,10 @@ def test_frozen_layout_splits_bundle_and_install(tmp_path, monkeypatch):
     assert paths.install_root() == install
     assert paths.DATA_DIR == install / "data"
     assert paths.CONFIG_DIR == bundle / "config"
-    assert paths.WEB_DIR == bundle / "web"
-    assert paths.THEMES_DIR == bundle / "web" / "themes"
+    assert paths.DIST_DIR == bundle / "dist" / "web"
+    assert paths.LEGACY_WEB_DIR == bundle / "legacy" / "web"
+    assert paths.WEB_DIR == bundle / "dist" / "web"
+    assert paths.THEMES_DIR == bundle / "resources" / "themes"
 
 
 def test_frozen_prefers_external_resources_beside_exe(tmp_path, monkeypatch):
@@ -56,10 +61,11 @@ def test_frozen_prefers_external_resources_beside_exe(tmp_path, monkeypatch):
     bundle.mkdir()
     install.mkdir()
     (bundle / "config").mkdir()
-    (bundle / "web").mkdir()
+    (bundle / "dist" / "web").mkdir(parents=True)
     (install / "config").mkdir()
-    (install / "web").mkdir()
-    (install / "web" / "themes").mkdir()
+    (install / "dist" / "web").mkdir(parents=True)
+    (install / "legacy" / "web").mkdir(parents=True)
+    (install / "resources" / "themes").mkdir(parents=True)
     exe = install / "my-agent.exe"
     exe.write_bytes(b"")
 
@@ -69,5 +75,7 @@ def test_frozen_prefers_external_resources_beside_exe(tmp_path, monkeypatch):
 
     paths = _reload_paths()
     assert paths.CONFIG_DIR == install / "config"
-    assert paths.WEB_DIR == install / "web"
-    assert paths.THEMES_DIR == install / "web" / "themes"
+    assert paths.DIST_DIR == install / "dist" / "web"
+    assert paths.LEGACY_WEB_DIR == install / "legacy" / "web"
+    assert paths.WEB_DIR == install / "dist" / "web"
+    assert paths.THEMES_DIR == install / "resources" / "themes"

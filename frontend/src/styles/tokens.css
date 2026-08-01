@@ -1,42 +1,97 @@
 @import "tailwindcss";
 @import "highlight.js/styles/github-dark.css";
 
-/*
- * Surface 体系（参考 Multica Desktop shell，自实现不拷贝品牌组件）：
- * app-shell = 外框；page-canvas = 主画布；sidebar-accent = 导航激活态
- * Python 主题仍可注入 --bg-* / --fg / --accent，并映射到本体系。
- */
+/* ============================================================
+ * Apple 质感 Design Tokens & 全局样式
+ * 核心原则：Bento Grid + Aurora + Glass + Big Type + Physics
+ * ============================================================ */
+
 :root {
   color-scheme: light;
 
-  --app-shell: oklch(0.964 0.001 286);
-  --page-canvas: oklch(0.988 0 0);
-  --surface: oklch(1 0 0);
-  --surface-hover: oklch(0.967 0.001 286);
-  --surface-selected: oklch(0.95 0.002 286);
-  --surface-border: oklch(0.92 0.004 286);
-  --surface-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 1px rgb(15 23 42 / 0.03);
-  --menu-shadow: 0 8px 24px rgb(15 23 42 / 0.08), 0 2px 6px rgb(15 23 42 / 0.05);
+  /* ── 画布 & 基础底色 ── */
+  --app-shell: #F5F5F7;          /* Apple 画布色 */
+  --page-canvas: rgba(255, 255, 255, 0.65);  /* 玻璃底色 */
+  --surface: rgba(255, 255, 255, 0.82);     /* 卡片面 */
+  --surface-hover: rgba(0, 0, 0, 0.045);
+  --surface-selected: rgba(0, 113, 227, 0.1);
+  --surface-border: rgba(255, 255, 255, 0.6);
+  --surface-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 1px 1px rgba(15, 23, 42, 0.03),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --menu-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.15),
+    0 8px 24px rgba(0, 0, 0, 0.1),
+    0 0 0 0.5px rgba(0, 0, 0, 0.05);
 
-  --sidebar: var(--app-shell);
-  --sidebar-foreground: oklch(0.141 0.005 286);
-  --sidebar-accent: oklch(0.935 0.003 286);
-  --sidebar-accent-foreground: oklch(0.21 0.006 286);
-  --sidebar-border: transparent;
+  /* ── 侧栏 ── */
+  --sidebar: rgba(255, 255, 255, 0.72);
+  --sidebar-foreground: #1d1d1f;
+  --sidebar-accent: #0071e3;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(255, 255, 255, 0.6);
 
-  --foreground: oklch(0.141 0.005 286);
-  --muted-foreground: oklch(0.505 0.016 286);
-  --faint-foreground: oklch(0.606 0.016 286);
-  --border: oklch(0.945 0.003 286);
-  --input: oklch(0.985 0 0);
-  --ring: oklch(0.705 0.015 286);
-  --primary: oklch(0.21 0.006 286);
-  --primary-foreground: oklch(0.985 0 0);
-  --brand: oklch(0.55 0.16 255);
-  --brand-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.577 0.245 27);
+  /* ── 文字颜色 ── */
+  --foreground: #1d1d1f;
+  --muted-foreground: #86868b;
+  --faint-foreground: #a1a1a6;
+  --border: rgba(0, 0, 0, 0.08);
+  --input: #F2F2F7;
+  --ring: rgba(0, 113, 227, 0.18);
 
-  /* 兼容旧 Python 主题变量名 */
+  /* ── 品牌色：Apple 蓝 ── */
+  --primary: #0071e3;
+  --primary-hover: #0077ED;
+  --primary-foreground: #ffffff;
+  --brand: #0071e3;
+  --brand-foreground: #ffffff;
+  --brand-purple: #6e3bd6;
+  --brand-pink: #ff2d92;
+
+  /* ── 语义色 ── */
+  --destructive: #e5484d;
+  --success: #22c55e;
+  --warning: #eab308;
+  --info: #0ea5e9;
+
+  /* ── Apple 毛玻璃模糊 ── */
+  --glass-blur: blur(30px) saturate(180%);
+  --glass-blur-strong: blur(50px) saturate(200%);
+
+  /* ── 圆角系统：大 Bento 风 ── */
+  --radius: 14px;
+  --radius-panel: 24px;        /* 卡片/主容器 */
+  --radius-bubble: 22px;       /* 聊天气泡 */
+  --radius-input: 12px;        /* 输入框 */
+  --radius-pill: 980px;        /* 胶囊形 */
+
+  /* ── 字体：Apple 系统栈 + Big Type ── */
+  --font-family:
+    -apple-system, BlinkMacSystemFont,
+    "SF Pro Display", "SF Pro Text",
+    "PingFang SC", "Helvetica Neue",
+    "Segoe UI", system-ui, sans-serif;
+
+  /* ── 动画曲线：Physics 物理感 ── */
+  --ease-spring: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-spring-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ── 布局 ── */
+  --chat-width-pct: 85%;
+  --rail-width: 256px;
+  --rail-width-collapsed: 3rem;
+  --header-height: 3rem;
+  --session-panel-width: 280px;
+
+  /* ── Aurora 极光色 ── */
+  --aurora-blue: rgba(162, 210, 255, 0.45);
+  --aurora-purple: rgba(200, 180, 255, 0.38);
+  --aurora-pink: rgba(255, 190, 220, 0.28);
+  --aurora-cyan: rgba(170, 230, 255, 0.3);
+
+  /* ── 兼容旧 Python 主题变量名 ── */
   --bg-app: var(--page-canvas);
   --bg-sidebar: var(--sidebar);
   --bg-panel: var(--surface);
@@ -47,25 +102,49 @@
   --accent: var(--brand);
   --accent-fg: var(--brand-foreground);
   --danger: var(--destructive);
-
-  --radius: 0.625rem;
-  --radius-panel: calc(var(--radius) * 1.4);
-  --radius-bubble: calc(var(--radius) * 1.2);
-  --radius-input: var(--radius);
-  --font-family: "Inter", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
-  --chat-width-pct: 85%;
-  --rail-width: 256px;
-  --rail-width-collapsed: 3rem;
-  --header-height: 3rem;
-  --session-panel-width: 280px;
 }
 
-.chat-column {
-  width: var(--chat-width-pct, 85%);
-  max-width: 100%;
-  margin-inline: auto;
+/* 深色模式 tokens */
+html[data-theme-mode="dark"] {
+  --app-shell: #000000;
+  --page-canvas: rgba(28, 28, 30, 0.68);
+  --surface: rgba(44, 44, 46, 0.85);
+  --surface-hover: rgba(255, 255, 255, 0.08);
+  --surface-selected: rgba(10, 132, 255, 0.18);
+  --surface-border: rgba(255, 255, 255, 0.07);
+  --surface-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 1px 1px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --menu-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.5),
+    0 8px 24px rgba(0, 0, 0, 0.3),
+    0 0 0 0.5px rgba(255, 255, 255, 0.08);
+
+  --sidebar: rgba(30, 30, 32, 0.72);
+  --sidebar-foreground: #F5F5F7;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+
+  --foreground: #F5F5F7;
+  --muted-foreground: #8E8E93;
+  --faint-foreground: #636366;
+  --border: rgba(255, 255, 255, 0.09);
+  --input: #2C2C2E;
+  --ring: rgba(10, 132, 255, 0.3);
+
+  --primary: #0A84FF;
+  --primary-hover: #409CFF;
+  --brand: #0A84FF;
+  --brand-purple: #BF5AF2;
+  --brand-pink: #FF375F;
+
+  --aurora-blue: rgba(10, 132, 255, 0.3);
+  --aurora-purple: rgba(191, 90, 242, 0.28);
+  --aurora-pink: rgba(255, 55, 95, 0.2);
+  --aurora-cyan: rgba(64, 200, 224, 0.22);
 }
 
+/* Tailwind 主题映射 */
 @theme inline {
   --color-app-shell: var(--app-shell);
   --color-page-canvas: var(--page-canvas);
@@ -86,9 +165,17 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
+  --color-brand-purple: var(--brand-purple);
+  --color-brand-pink: var(--brand-pink);
   --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-aurora-blue: var(--aurora-blue);
+  --color-aurora-purple: var(--aurora-purple);
+  --color-aurora-pink: var(--aurora-pink);
+  --color-aurora-cyan: var(--aurora-cyan);
 
-  /* 旧别名，减少大面积改 class */
   --color-app: var(--page-canvas);
   --color-panel: var(--surface);
   --color-fg: var(--foreground);
@@ -96,15 +183,29 @@
   --color-accent: var(--brand);
   --color-accent-fg: var(--brand-foreground);
   --color-danger: var(--destructive);
+
   --font-sans: var(--font-family);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-xl: 16px;
+  --radius-2xl: var(--radius-panel);
+  --radius-pill: var(--radius-pill);
+
   --text-micro: 11px;
   --text-caption: 12px;
   --text-label: 13px;
   --text-body: 14px;
   --text-title-sm: 16px;
+  --text-title: 20px;
+  --text-display-sm: 28px;
+  --text-display: 40px;
 }
+
+/* ============================================================
+ * 1. 基础设置
+ * ============================================================ */
 
 * {
   box-sizing: border-box;
@@ -121,10 +222,88 @@ body {
   font-family: var(--font-sans);
   font-size: var(--text-body);
   line-height: 20px;
-  background: var(--app-shell);
   color: var(--foreground);
+  background: var(--app-shell);
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.02em;
+  position: relative;
+}
+
+/* ============================================================
+ * 2. Aurora 极光背景层（固定定位 + 呼吸动画）
+ * ============================================================ */
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: -40%;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 55vw 55vw at 10% 15%, var(--aurora-blue), transparent 60%),
+    radial-gradient(ellipse 50vw 50vw at 88% 78%, var(--aurora-purple), transparent 55%),
+    radial-gradient(ellipse 45vw 45vw at 50% 50%, var(--aurora-pink), transparent 60%),
+    radial-gradient(ellipse 40vw 40vw at 92% 8%, var(--aurora-cyan), transparent 58%),
+    radial-gradient(ellipse 48vw 48vw at 8% 95%, rgba(220, 200, 255, 0.22), transparent 60%);
+  opacity: 0.7;
+  filter: blur(100px) saturate(140%);
+  -webkit-filter: blur(100px) saturate(140%);
+  animation: aurora-breathe 30s ease-in-out infinite;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: -20%;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 40% 30% at 25% 35%, rgba(255, 255, 255, 0.12), transparent 70%),
+    radial-gradient(ellipse 55% 35% at 75% 15%, rgba(255, 255, 255, 0.08), transparent 70%);
+  animation: aurora-shimmer 25s ease-in-out infinite alternate;
+}
+
+html[data-theme-mode="dark"] body::before {
+  opacity: 0.48;
+}
+
+@keyframes aurora-breathe {
+  0%, 100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+    opacity: 0.65;
+  }
+  25% {
+    transform: translate(4vw, -2vh) scale(1.06) rotate(1deg);
+    opacity: 0.58;
+  }
+  50% {
+    transform: translate(-3vw, 3vh) scale(0.98) rotate(-0.5deg);
+    opacity: 0.72;
+  }
+  75% {
+    transform: translate(2vw, -1vh) scale(1.03) rotate(0.8deg);
+    opacity: 0.62;
+  }
+}
+
+@keyframes aurora-shimmer {
+  0%, 100% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 0.9;
+  }
+  50% {
+    transform: translate(8vw, -6vh) rotate(3deg);
+    opacity: 1;
+  }
+}
+
+/* 确保所有根元素在极光之上 */
+#root,
+#root > * {
+  position: relative;
+  z-index: 1;
 }
 
 button,
@@ -132,6 +311,10 @@ textarea,
 input {
   font: inherit;
 }
+
+/* ============================================================
+ * 3. 细滚动条
+ * ============================================================ */
 
 ::-webkit-scrollbar {
   width: 6px;
@@ -143,7 +326,14 @@ input {
   border-radius: 999px;
 }
 
-/* Markdown */
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ============================================================
+ * 4. Markdown 渲染样式
+ * ============================================================ */
+
 .md-body {
   line-height: 1.6;
   overflow-wrap: anywhere;
@@ -171,21 +361,14 @@ input {
 .md-body h3,
 .md-body h4 {
   margin: 0.8em 0 0.35em;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.3;
+  letter-spacing: -0.02em;
 }
 
-.md-body h1 {
-  font-size: 1.25em;
-}
-
-.md-body h2 {
-  font-size: 1.15em;
-}
-
-.md-body h3 {
-  font-size: 1.05em;
-}
+.md-body h1 { font-size: 1.3em; }
+.md-body h2 { font-size: 1.18em; }
+.md-body h3 { font-size: 1.08em; }
 
 .md-body ul,
 .md-body ol {
@@ -199,24 +382,56 @@ input {
 .md-body a {
   color: var(--brand);
   text-decoration: underline;
-  text-underline-offset: 2px;
+  text-underline-offset: 3px;
+  transition: color 0.2s var(--ease-spring);
+}
+
+.md-body a:hover {
+  color: var(--brand-purple);
 }
 
 .md-body code {
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "SF Mono", monospace;
   font-size: 0.9em;
-  padding: 0.1em 0.35em;
-  border-radius: 4px;
-  background: var(--surface-hover);
+  padding: 0.15em 0.45em;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface-hover) 100%, var(--input));
 }
 
 .md-body pre,
 .md-body .md-pre {
   overflow-x: auto;
-  padding: 0.75em 0.9em;
-  border-radius: var(--radius);
+  padding: 0.9em 1.1em;
+  border-radius: 14px;
   background: var(--surface-hover);
   border: 1px solid var(--surface-border);
+  position: relative;
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.08),
+    0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.html[data-theme-mode="dark"] .md-body pre,
+.html[data-theme-mode="dark"] .md-body .md-pre {
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.3),
+    0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+/* macOS 窗口控制点 */
+.md-body pre::before,
+.md-body .md-pre::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ff5f57;
+  box-shadow: 16px 0 0 #febc2e, 32px 0 0 #28c840;
+  opacity: 0.95;
+  pointer-events: none;
 }
 
 .md-body pre code,
@@ -230,12 +445,17 @@ input {
 .md-body .md-pre .hljs {
   background: transparent;
   padding: 0;
+  padding-top: 4px !important;
 }
 
 .md-body blockquote {
-  border-left: 3px solid var(--border);
-  padding-left: 0.8em;
+  border-left: 3px solid var(--brand);
+  padding-left: 0.9em;
+  padding-top: 0.2em;
+  padding-bottom: 0.2em;
   color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--brand) 5%, transparent);
+  border-radius: 0 10px 10px 0;
 }
 
 .md-body table {
@@ -247,10 +467,182 @@ input {
 .md-body th,
 .md-body td {
   border: 1px solid var(--surface-border);
-  padding: 0.35em 0.55em;
+  padding: 0.4em 0.65em;
   text-align: left;
+  border-radius: 0;
 }
 
 .md-body th {
   background: var(--surface-hover);
+  font-weight: 600;
+}
+
+/* ============================================================
+ * 5. 通用玻璃 & Bento 卡片工具类
+ * ============================================================ */
+
+.glass {
+  background: var(--surface);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--surface-border);
+  box-shadow: var(--surface-shadow);
+}
+
+.glass-strong {
+  background: var(--surface);
+  backdrop-filter: var(--glass-blur-strong);
+  -webkit-backdrop-filter: var(--glass-blur-strong);
+  border: 1px solid var(--surface-border);
+  box-shadow: var(--surface-shadow);
+}
+
+.bento-card {
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--surface-border);
+  box-shadow: var(--surface-shadow);
+}
+
+/* Apple 胶囊按钮 */
+.btn-pill {
+  border-radius: var(--radius-pill);
+  padding: 9px 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  transition:
+    transform 0.3s var(--ease-spring),
+    box-shadow 0.3s var(--ease-spring),
+    filter 0.2s ease,
+    background 0.2s ease;
+}
+
+.btn-primary-pill {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  box-shadow:
+    0 4px 14px color-mix(in srgb, var(--primary) 35%, transparent),
+    0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.btn-primary-pill:hover {
+  background: var(--primary-hover);
+  transform: scale(1.03);
+  filter: brightness(1.08);
+  box-shadow:
+    0 6px 22px color-mix(in srgb, var(--primary) 45%, transparent),
+    0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.btn-secondary-pill {
+  background: #E5E5EA;
+  color: #1d1d1f;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+html[data-theme-mode="dark"] .btn-secondary-pill {
+  background: #3A3A3C;
+  color: #F5F5F7;
+}
+
+.btn-secondary-pill:hover {
+  background: #DCDCE0;
+  transform: scale(1.02);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+html[data-theme-mode="dark"] .btn-secondary-pill:hover {
+  background: #454547;
+}
+
+/* 入场动画 */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-20px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(20px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.5s var(--ease-spring) both;
+}
+
+.animate-fade-in-left {
+  animation: fade-in-left 0.6s var(--ease-spring) both;
+}
+
+.animate-fade-in-right {
+  animation: fade-in-right 0.6s var(--ease-spring) both;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.4s var(--ease-spring-bounce) both;
+}
+
+/* 无障碍：减少动画 */
+@media (prefers-reduced-motion: reduce) {
+  body::before,
+  body::after {
+    animation: none !important;
+  }
+  .animate-fade-in-up,
+  .animate-fade-in-left,
+  .animate-fade-in-right,
+  .animate-scale-in {
+    animation: none !important;
+  }
+}
+
+/* 渐变标题文字 */
+.gradient-title {
+  background: linear-gradient(135deg, var(--foreground) 0%, var(--brand) 50%, var(--brand-purple) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+html[data-theme-mode="dark"] .gradient-title {
+  background: linear-gradient(135deg, #F5F5F7 0%, var(--brand) 50%, var(--brand-purple) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }

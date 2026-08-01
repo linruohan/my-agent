@@ -45,7 +45,7 @@ main.py
        │    ├─ AgentRunner         # Agent 后台执行
        │    └─ WebChatBridge       # Python → JS 事件桥
        ├─ AppApi                   # pywebview js_api
-       └─ webview + web/index.html # Web 聊天界面
+       └─ webview + dist/web/index.html # Web 聊天界面
 ```
 
 用户消息不总是走 Agent。控制器先通过**意图识别**分流：

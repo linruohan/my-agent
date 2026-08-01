@@ -48,5 +48,6 @@ if (-not (Test-Path $exe)) {
 Write-Host ""
 Write-Host "构建完成: $releaseDir"
 Write-Host "  my-agent.exe"
-Write-Host "  config/  web/  data/  (主题位于 web/themes/)"
+Write-Host "  config/  resources/  dist/web/  legacy/web/  data/"
+Write-Host "  (主题位于 resources/themes/)"
 Write-Host "可直接将整个 dist\my-agent 文件夹分发给用户。"

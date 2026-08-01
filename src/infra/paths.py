@@ -30,7 +30,7 @@ def install_root() -> Path:
 
 
 def resolve_resource_dir(name: str) -> Path:
-    """config / web 等：优先 exe 旁目录，否则使用 bundle 内资源。"""
+    """config / dist / resources 等：优先 exe 旁目录，否则使用 bundle 内资源。"""
     external = install_root() / name
     if external.is_dir():
         return external
@@ -57,7 +57,7 @@ def global_config_dir() -> Path:
 
 
 def managed_config_dir() -> Path:
-    """系统级配置目录：C:\ProgramData\my-agent\，仅管理员可改。"""
+    """系统级配置目录：C:\\ProgramData\\my-agent\\，仅管理员可改。"""
     return Path("C:/ProgramData/my-agent")
 
 
@@ -68,14 +68,26 @@ def project_config_dir(project_root: Path | None = None) -> Path:
 
 
 def _refresh_module_paths() -> None:
-    global BUNDLE_ROOT, INSTALL_ROOT, PROJECT_ROOT, DATA_DIR, CONFIG_DIR, WEB_DIR, THEMES_DIR
+    global BUNDLE_ROOT, INSTALL_ROOT, PROJECT_ROOT, DATA_DIR, CONFIG_DIR
+    global DIST_DIR, LEGACY_WEB_DIR, WEB_DIR, THEMES_DIR
     BUNDLE_ROOT = bundle_root()
     INSTALL_ROOT = install_root()
     PROJECT_ROOT = BUNDLE_ROOT
     DATA_DIR = INSTALL_ROOT / "data"
     CONFIG_DIR = resolve_config_dir()
-    WEB_DIR = resolve_resource_dir("web")
-    THEMES_DIR = WEB_DIR / "themes"
+    # React 构建产物（frontend npm run build → dist/web/）
+    DIST_DIR = resolve_resource_dir("dist/web")
+    # 旧版 vanilla UI（只读归档，勿当主源码改）
+    LEGACY_WEB_DIR = resolve_resource_dir("legacy/web")
+    # 兼容旧代码中的 WEB_DIR：指向 React 构建产物
+    WEB_DIR = DIST_DIR
+    # 主题 JSON：resources/themes
+    themes = resolve_resource_dir("resources") / "themes"
+    if not themes.is_dir():
+        # 兼容尚未迁移的打包布局
+        legacy_themes = LEGACY_WEB_DIR / "themes"
+        themes = legacy_themes if legacy_themes.is_dir() else themes
+    THEMES_DIR = themes
 
 
 _refresh_module_paths()
@@ -85,5 +97,7 @@ INSTALL_ROOT: Path
 PROJECT_ROOT: Path
 DATA_DIR: Path
 CONFIG_DIR: Path
+DIST_DIR: Path
+LEGACY_WEB_DIR: Path
 WEB_DIR: Path
 THEMES_DIR: Path

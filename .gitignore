@@ -26,18 +26,20 @@ data/*.db.migrated-shm
 data/*.db.migrated-wal
 data/checkpoints/*.db-shm
 data/checkpoints/*.db-wal
-web/fonts/
 data/vectorstore/*
 !data/vectorstore/.gitkeep
 data/vectorstore/faiss_index/**
 data/workspace/knowledge/*
 !data/checkpoints/.gitkeep
 !data/workspace/.gitkeep
-dist/
+# UI 构建产物（frontend npm run build → dist/web）
+# PyInstaller 发布目录也在 dist/my-agent 下
+dist/web/
+dist/my-agent/
+!dist/README.md
 build/
 frontend/node_modules/
 frontend/dist/
-web/dist/
 *.spec
 !packaging/*.spec
 

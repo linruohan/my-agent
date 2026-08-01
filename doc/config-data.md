@@ -103,8 +103,9 @@ API Key 存储优先级：
 | `PROJECT_ROOT` | 项目根目录 |
 | `CONFIG_DIR` | `config/` |
 | `DATA_DIR` | `data/` |
-| `THEMES_DIR` | `themes/` |
-| `WEB_DIR` | `web/` |
+| `THEMES_DIR` | `resources/themes/` |
+| `DIST_DIR` / `WEB_DIR` | `dist/web/`（React 构建产物） |
+| `LEGACY_WEB_DIR` | `legacy/web/`（旧版 UI） |
 
 所有路径相对于 `PROJECT_ROOT` 解析，支持 `~` 展开。
 

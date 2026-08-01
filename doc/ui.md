@@ -6,7 +6,7 @@
 
 ```
 pywebview 窗口
-  └─ web/index.html
+  └─ dist/web/index.html（frontend 构建产物）
        ├─ CSS: app.css, calendar.css
        └─ JS:
             ├─ app.js       — API 桥、主题、设置

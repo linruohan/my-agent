@@ -24,7 +24,7 @@
 1. `main.py` → `setup_logger()` → `run_app()`
 2. `run_app()` 创建 `AssistantController`，初始化 SessionStore、TaskStore、NoteStore、SearchCache
 3. `build_agent_graph()` 构建 LangGraph Agent 图
-4. 创建 pywebview 窗口，加载 `web/index.html`
+4. 创建 pywebview 窗口，加载 `dist/web/index.html`（或 `legacy/web`）
 5. 启动后台线程 `poll_agent_events()`，每 50ms 从事件队列取 Agent 事件推送到前端
 
 ## 消息处理流程

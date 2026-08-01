@@ -3,11 +3,12 @@ my-agent Windows 发布包
 
 目录说明
 --------
-my-agent.exe   主程序
-config/        配置文件（可直接编辑）
-themes/        UI 主题
-web/           前端静态资源（含可选字体）
-data/          运行时数据（数据库、工作区、向量库等）
+my-agent.exe     主程序
+config/          配置文件（可直接编辑）
+resources/       资源（含 themes/ 主题）
+dist/web/        React 前端构建产物
+legacy/web/      旧版前端（可选回退）
+data/            运行时数据（数据库、工作区、向量库等）
 
 使用说明
 --------
@@ -22,3 +23,4 @@ data/          运行时数据（数据库、工作区、向量库等）
 - 请勿将 data/secrets.json 分享给他人
 - 动态网页抓取（Playwright）需另行安装 Chromium
 - 需要 Microsoft Edge WebView2 运行时
+- 请勿手改 dist/web/，前端请改 frontend/ 后重新 npm run build

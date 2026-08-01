@@ -1,0 +1,364 @@
+/* ============================================================
+ * 万年历 Apple 质感增强样式层
+ * ============================================================ */
+
+/* 日历主容器 - Bento 卡片 */
+.calendar-feature-body .calendar-layout {
+  border-radius: 24px !important;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.7) !important;
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(30px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(180%) !important;
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.08),
+    0 4px 16px rgba(0, 0, 0, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95) !important;
+}
+
+html[data-theme-mode="dark"] .calendar-feature-body .calendar-layout {
+  background: rgba(44, 44, 46, 0.9) !important;
+  border: 1px solid rgba(255, 255, 255, 0.07) !important;
+}
+
+/* 日历网格区 */
+.calendar-feature-body .calendar-grid-section {
+  padding: 28px 28px 24px !important;
+  border-right: 1px solid rgba(0, 0, 0, 0.06) !important;
+  background: rgba(255, 255, 255, 0.7) !important;
+}
+
+html[data-theme-mode="dark"] .calendar-feature-body .calendar-grid-section {
+  border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
+  background: rgba(255, 255, 255, 0.02) !important;
+}
+
+/* 日历详情侧栏 */
+.calendar-feature-body .calendar-detail-section {
+  padding: 28px 24px !important;
+  gap: 18px !important;
+  background:
+    linear-gradient(180deg, rgba(0, 113, 227, 0.04) 0%, transparent 40%),
+    rgba(255, 255, 255, 0.55) !important;
+}
+
+html[data-theme-mode="dark"] .calendar-feature-body .calendar-detail-section {
+  background:
+    linear-gradient(180deg, rgba(10, 132, 255, 0.08) 0%, transparent 40%),
+    rgba(255, 255, 255, 0.02) !important;
+}
+
+/* 工具栏：月份标题和今天按钮 */
+.cal-toolbar {
+  margin-bottom: 20px !important;
+}
+
+.cal-month-label {
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em !important;
+}
+
+.cal-nav-btn {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 12px !important;
+  background: #F2F2F7 !important;
+  transition:
+    transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 0.2s ease,
+    box-shadow 0.2s ease !important;
+}
+
+html[data-theme-mode="dark"] .cal-nav-btn {
+  background: #3A3A3C !important;
+  color: #F5F5F7 !important;
+}
+
+.cal-nav-btn:hover {
+  background: #E5E5EA !important;
+  transform: scale(1.08) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+html[data-theme-mode="dark"] .cal-nav-btn:hover {
+  background: #454547 !important;
+}
+
+.cal-today-btn {
+  background: #0071e3 !important;
+  color: #ffffff !important;
+  border-radius: 980px !important;
+  padding: 8px 18px !important;
+  font-weight: 600 !important;
+  box-shadow:
+    0 4px 14px rgba(0, 113, 227, 0.35),
+    0 1px 3px rgba(0, 0, 0, 0.08) !important;
+  transition:
+    transform 0.3s cubic-bezier(0.25, 1, 0.5, 1),
+    box-shadow 0.3s cubic-bezier(0.25, 1, 0.5, 1),
+    filter 0.2s ease,
+    background 0.2s ease !important;
+}
+
+.cal-today-btn:hover {
+  background: #0077ED !important;
+  transform: scale(1.03) !important;
+  filter: brightness(1.08);
+  box-shadow:
+    0 6px 22px rgba(0, 113, 227, 0.45),
+    0 2px 6px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* 星期表头 */
+.cal-week-head {
+  margin-bottom: 10px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+/* 日历单元格 */
+.cal-grid {
+  gap: 6px !important;
+}
+
+.cal-cell {
+  min-height: 76px !important;
+  padding: 10px 8px !important;
+  border-radius: 14px !important;
+  transition:
+    transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 0.25s cubic-bezier(0.25, 1, 0.5, 1),
+    box-shadow 0.25s cubic-bezier(0.25, 1, 0.5, 1) !important;
+}
+
+.cal-cell:hover {
+  transform: scale(1.06) !important;
+  background: rgba(0, 0, 0, 0.05) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+html[data-theme-mode="dark"] .cal-cell:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.cal-cell.today:not(.selected) {
+  background: rgba(0, 113, 227, 0.08) !important;
+  box-shadow: inset 0 0 0 1.5px rgba(0, 113, 227, 0.3) !important;
+}
+
+.cal-cell.today:not(.selected) .cal-num {
+  color: #0071e3 !important;
+}
+
+.cal-cell.selected {
+  background: #0071e3 !important;
+  box-shadow:
+    0 8px 24px rgba(0, 113, 227, 0.4),
+    0 2px 6px rgba(0, 0, 0, 0.1) !important;
+}
+
+.cal-cell.selected:hover {
+  transform: scale(1.04) !important;
+}
+
+.cal-num {
+  font-size: 16px !important;
+  font-weight: 600 !important;
+}
+
+.cal-sub {
+  font-size: 10px !important;
+  margin-top: 4px !important;
+}
+
+/* 右侧：今天标签 */
+.cal-today-tag {
+  align-self: center !important;
+  background: #0071e3 !important;
+  color: #ffffff !important;
+  padding: 4px 14px !important;
+  border-radius: 980px !important;
+  font-weight: 600 !important;
+  margin-top: -4px !important;
+  box-shadow: 0 4px 12px rgba(0, 113, 227, 0.3) !important;
+}
+
+/* 日期大字 */
+.cal-big-day {
+  font-size: 64px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.05em !important;
+  background: linear-gradient(135deg, #0071e3 0%, #6e3bd6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+html[data-theme-mode="dark"] .cal-big-day {
+  background: linear-gradient(135deg, #0A84FF 0%, #BF5AF2 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.cal-day-arrow {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 50% !important;
+  background: #F2F2F7 !important;
+  transition:
+    transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 0.2s ease,
+    box-shadow 0.2s ease !important;
+}
+
+html[data-theme-mode="dark"] .cal-day-arrow {
+  background: #3A3A3C !important;
+  color: #0A84FF !important;
+}
+
+.cal-day-arrow:hover {
+  background: #E5E5EA !important;
+  transform: scale(1.12) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+html[data-theme-mode="dark"] .cal-day-arrow:hover {
+  background: #454547 !important;
+}
+
+/* 干支、宜忌信息卡片 */
+.cal-ganzhi {
+  border-radius: 16px !important;
+  padding: 14px 18px !important;
+  background: rgba(255, 255, 255, 0.85) !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+html[data-theme-mode="dark"] .cal-ganzhi {
+  background: rgba(58, 58, 60, 0.9) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+.cal-yiji-row {
+  gap: 12px !important;
+  padding: 14px 16px !important;
+  border-radius: 16px !important;
+  background: rgba(255, 255, 255, 0.85) !important;
+  border: 1px solid rgba(0, 0, 0, 0.05) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+}
+
+html[data-theme-mode="dark"] .cal-yiji-row {
+  background: rgba(58, 58, 60, 0.9) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+.cal-yiji-label {
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 8px !important;
+  font-size: 14px !important;
+}
+
+/* 节气信息 */
+.cal-jieqi {
+  padding-top: 14px !important;
+  border-top: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+
+.cal-jieqi > div {
+  padding: 10px 14px !important;
+  border-radius: 12px !important;
+  margin-bottom: 6px !important;
+  background: rgba(0, 113, 227, 0.06) !important;
+  border: 1px solid rgba(0, 113, 227, 0.1) !important;
+}
+
+html[data-theme-mode="dark"] .cal-jieqi > div {
+  background: rgba(10, 132, 255, 0.1) !important;
+  border: 1px solid rgba(10, 132, 255, 0.15) !important;
+}
+
+/* 假期标签 */
+.cal-holiday-tag.tag-rest {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%) !important;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.35) !important;
+}
+
+.cal-holiday-tag.tag-work {
+  background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%) !important;
+  color: #1d1d1f !important;
+  box-shadow: 0 4px 12px rgba(234, 179, 8, 0.35) !important;
+}
+
+/* 侧栏日历入口卡片 */
+.sidebar-calendar {
+  border-radius: 16px !important;
+  padding: 14px !important;
+  border: 1px solid rgba(0, 113, 227, 0.2) !important;
+  background:
+    linear-gradient(135deg, rgba(0, 113, 227, 0.08) 0%, rgba(110, 59, 214, 0.06) 100%),
+    rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  box-shadow:
+    0 6px 20px rgba(0, 113, 227, 0.1),
+    0 2px 6px rgba(0, 0, 0, 0.04) !important;
+  transition:
+    transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.3s cubic-bezier(0.25, 1, 0.5, 1),
+    border-color 0.25s ease !important;
+}
+
+html[data-theme-mode="dark"] .sidebar-calendar {
+  background:
+    linear-gradient(135deg, rgba(10, 132, 255, 0.14) 0%, rgba(191, 90, 242, 0.1) 100%),
+    rgba(44, 44, 46, 0.9) !important;
+  border: 1px solid rgba(10, 132, 255, 0.2) !important;
+}
+
+.sidebar-calendar:hover {
+  transform: translateY(-3px) scale(1.01) !important;
+  border-color: rgba(0, 113, 227, 0.35) !important;
+  box-shadow:
+    0 12px 32px rgba(0, 113, 227, 0.18),
+    0 4px 12px rgba(0, 0, 0, 0.06) !important;
+}
+
+.sidebar-cal-day-num {
+  font-size: 30px !important;
+  min-width: 44px !important;
+  background: linear-gradient(135deg, #0071e3 0%, #6e3bd6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 800 !important;
+}
+
+html[data-theme-mode="dark"] .sidebar-cal-day-num {
+  background: linear-gradient(135deg, #0A84FF 0%, #BF5AF2 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* 响应式 */
+@media (max-width: 720px) {
+  .cal-big-day {
+    font-size: 52px !important;
+  }
+  .calendar-feature-body .calendar-grid-section {
+    padding: 20px !important;
+    border-right: none !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+  }
+  html[data-theme-mode="dark"] .calendar-feature-body .calendar-grid-section {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+  }
+}
