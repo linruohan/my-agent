@@ -43,10 +43,10 @@ export function SkillsPanel() {
     <section className="space-y-2">
       <h3 className="text-sm font-semibold text-fg">
         {title}{" "}
-        <span className="font-normal text-muted">{count ? `(${count})` : ""}</span>
+        <span className="font-normal text-muted-foreground">{count ? `(${count})` : ""}</span>
       </h3>
       {!items.length ? (
-        <p className="text-sm text-muted">{empty}</p>
+        <p className="text-sm text-muted-foreground">{empty}</p>
       ) : (
         <div className="space-y-1">
           {items.map((item) => (
@@ -65,7 +65,7 @@ export function SkillsPanel() {
               >
                 {item.slash || `/${item.name}`}
               </span>
-              <span className="truncate text-sm text-muted">{item.desc || ""}</span>
+              <span className="truncate text-sm text-muted-foreground">{item.desc || ""}</span>
             </button>
           ))}
         </div>

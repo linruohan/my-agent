@@ -78,7 +78,7 @@ export function ModelSelect() {
         type="button"
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          "inline-flex max-w-[200px] items-center gap-1 rounded-lg px-2 py-1 text-micro transition",
+          "inline-flex max-w-[160px] items-center gap-1 rounded-full px-2.5 py-1 text-micro transition",
           "text-muted-foreground hover:bg-surface-hover hover:text-foreground",
           open && "bg-surface-hover text-foreground",
         )}

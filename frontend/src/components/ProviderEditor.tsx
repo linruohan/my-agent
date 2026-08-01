@@ -90,7 +90,7 @@ export function ProviderEditor({ provider, open, onClose, onSaved }: Props) {
         </div>
         <div className="space-y-3 px-5 py-4">
           <label className="block space-y-1">
-            <span className="text-xs text-muted">显示名称</span>
+            <span className="text-xs text-muted-foreground">显示名称</span>
             <input
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
@@ -98,7 +98,7 @@ export function ProviderEditor({ provider, open, onClose, onSaved }: Props) {
             />
           </label>
           <label className="block space-y-1">
-            <span className="text-xs text-muted">类型</span>
+            <span className="text-xs text-muted-foreground">类型</span>
             <select
               value={type}
               disabled={!!provider?.is_builtin}
@@ -113,7 +113,7 @@ export function ProviderEditor({ provider, open, onClose, onSaved }: Props) {
             </select>
           </label>
           <label className="block space-y-1">
-            <span className="text-xs text-muted">模型</span>
+            <span className="text-xs text-muted-foreground">模型</span>
             <input
               value={model}
               onChange={(e) => setModel(e.target.value)}
@@ -121,7 +121,7 @@ export function ProviderEditor({ provider, open, onClose, onSaved }: Props) {
             />
           </label>
           <label className="block space-y-1">
-            <span className="text-xs text-muted">Base URL</span>
+            <span className="text-xs text-muted-foreground">Base URL</span>
             <input
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
@@ -130,7 +130,7 @@ export function ProviderEditor({ provider, open, onClose, onSaved }: Props) {
             />
           </label>
           <label className="block space-y-1">
-            <span className="text-xs text-muted">API Key</span>
+            <span className="text-xs text-muted-foreground">API Key</span>
             <input
               type="password"
               value={apiKey}
@@ -139,7 +139,7 @@ export function ProviderEditor({ provider, open, onClose, onSaved }: Props) {
             />
           </label>
           <label className="block space-y-1">
-            <span className="text-xs text-muted">Temperature: {temperature}</span>
+            <span className="text-xs text-muted-foreground">Temperature: {temperature}</span>
             <input
               type="range"
               min={0}
@@ -151,7 +151,7 @@ export function ProviderEditor({ provider, open, onClose, onSaved }: Props) {
             />
           </label>
           {hint ? (
-            <p className={`text-xs ${hintOk ? "text-muted" : "text-danger"}`}>{hint}</p>
+            <p className={`text-xs ${hintOk ? "text-muted-foreground" : "text-danger"}`}>{hint}</p>
           ) : null}
         </div>
         <div className="flex justify-end gap-2 border-t border-border px-5 py-4">

@@ -26,7 +26,6 @@ const COLUMNS: {
 type Props = {
   newOpen: boolean;
   onNewOpenChange: (open: boolean) => void;
-  onCountChange?: (count: number) => void;
 };
 
 function truncate(text: string, n = 80): string {
@@ -35,7 +34,7 @@ function truncate(text: string, n = 80): string {
   return `${t.slice(0, n)}…`;
 }
 
-export function TasksPanel({ newOpen, onNewOpenChange, onCountChange }: Props) {
+export function TasksPanel({ newOpen, onNewOpenChange }: Props) {
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,16 +52,14 @@ export function TasksPanel({ newOpen, onNewOpenChange, onCountChange }: Props) {
     }
     try {
       const res = await api.list_tasks(true);
-      const list = res.tasks || [];
-      setTasks(list);
-      onCountChange?.(list.length);
+      setTasks(res.tasks || []);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
-  }, [onCountChange]);
+  }, []);
 
   useEffect(() => {
     void refresh();
@@ -147,6 +144,16 @@ export function TasksPanel({ newOpen, onNewOpenChange, onCountChange }: Props) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-page-canvas">
+      <div className="flex shrink-0 items-center justify-end gap-2 px-4 py-2">
+        <span className="mr-auto text-caption text-muted-foreground">{tasks.length} Tasks</span>
+        <button
+          type="button"
+          onClick={() => onNewOpenChange(true)}
+          className="h-8 rounded-md bg-primary px-2.5 text-label font-medium text-primary-foreground hover:opacity-90"
+        >
+          + New Task
+        </button>
+      </div>
       {error ? (
         <div className="border-b border-border px-4 py-2 text-body text-destructive">{error}</div>
       ) : null}

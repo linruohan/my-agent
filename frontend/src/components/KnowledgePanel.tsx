@@ -43,7 +43,7 @@ export function KnowledgePanel() {
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
         <section className="rounded-[var(--radius-panel)] border border-border bg-panel p-4">
           <h3 className="text-sm font-semibold text-fg">索引状态</h3>
-          <pre className="mt-3 whitespace-pre-wrap font-mono text-xs leading-relaxed text-muted">
+          <pre className="mt-3 whitespace-pre-wrap font-mono text-xs leading-relaxed text-muted-foreground">
             {stats}
           </pre>
           <button
@@ -57,7 +57,7 @@ export function KnowledgePanel() {
 
         <section className="rounded-[var(--radius-panel)] border border-border bg-panel p-4">
           <h3 className="text-sm font-semibold text-fg">导入文档</h3>
-          <p className="mt-1 text-xs text-muted">
+          <p className="mt-1 text-xs text-muted-foreground">
             支持 txt / md / pdf / docx。导入在后台进行，完成后会在会话中提示。
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
@@ -79,7 +79,7 @@ export function KnowledgePanel() {
             </button>
           </div>
           {log ? (
-            <pre className="mt-3 max-h-48 overflow-y-auto whitespace-pre-wrap font-mono text-xs leading-relaxed text-muted">
+            <pre className="mt-3 max-h-48 overflow-y-auto whitespace-pre-wrap font-mono text-xs leading-relaxed text-muted-foreground">
               {log}
             </pre>
           ) : null}

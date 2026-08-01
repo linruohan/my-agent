@@ -146,7 +146,7 @@ export function SettingsModal() {
           <button
             type="button"
             onClick={() => setSettingsOpen(false)}
-            className="rounded-md px-2 py-1 text-sm text-muted hover:bg-app hover:text-fg"
+            className="rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-app hover:text-fg"
           >
             关闭
           </button>
@@ -161,7 +161,7 @@ export function SettingsModal() {
               className={`rounded-t-lg px-3 py-2 text-sm transition ${
                 tab === t.id
                   ? "bg-app font-medium text-fg"
-                  : "text-muted hover:text-fg"
+                  : "text-muted-foreground hover:text-fg"
               }`}
             >
               {t.label}
@@ -171,14 +171,14 @@ export function SettingsModal() {
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
           {loading ? (
-            <p className="text-sm text-muted">加载中…</p>
+            <p className="text-sm text-muted-foreground">加载中…</p>
           ) : (
             <>
               {tab === "appearance" ? (
                 <section className="space-y-4">
-                  <p className="text-xs text-muted">主题、明暗与界面字体</p>
+                  <p className="text-xs text-muted-foreground">主题、明暗与界面字体</p>
                   <label className="block space-y-1.5">
-                    <span className="text-xs font-medium text-muted">主题</span>
+                    <span className="text-xs font-medium text-muted-foreground">主题</span>
                     <select
                       value={themeId}
                       onChange={(e) => setThemeId(e.target.value)}
@@ -192,7 +192,7 @@ export function SettingsModal() {
                     </select>
                   </label>
                   <label className="block space-y-1.5">
-                    <span className="text-xs font-medium text-muted">外观</span>
+                    <span className="text-xs font-medium text-muted-foreground">外观</span>
                     <select
                       value={appearance}
                       onChange={(e) => setAppearance(e.target.value)}
@@ -203,7 +203,7 @@ export function SettingsModal() {
                     </select>
                   </label>
                   <label className="block space-y-1.5">
-                    <span className="text-xs font-medium text-muted">字体</span>
+                    <span className="text-xs font-medium text-muted-foreground">字体</span>
                     <select
                       value={fontId}
                       onChange={(e) => setFontId(e.target.value)}
@@ -223,21 +223,21 @@ export function SettingsModal() {
 
               {tab === "workspace" ? (
                 <section className="space-y-4">
-                  <p className="text-xs text-muted">任务默认负责人与 Skill 扫描目录</p>
+                  <p className="text-xs text-muted-foreground">任务默认负责人与 Skill 扫描目录</p>
                   <label className="block space-y-1.5">
-                    <span className="text-xs font-medium text-muted">任务 Owner 名称</span>
+                    <span className="text-xs font-medium text-muted-foreground">任务 Owner 名称</span>
                     <input
                       value={owner}
                       onChange={(e) => setOwner(e.target.value)}
                       className={fieldClass}
                       placeholder="例如：林若寒"
                     />
-                    <span className="text-[11px] text-muted">
+                    <span className="text-[11px] text-muted-foreground">
                       /tsk add 未指定 @owner 时使用
                     </span>
                   </label>
                   <label className="block space-y-1.5">
-                    <span className="text-xs font-medium text-muted">Skill 目录（每行一个）</span>
+                    <span className="text-xs font-medium text-muted-foreground">Skill 目录（每行一个）</span>
                     <textarea
                       value={skillDirs}
                       onChange={(e) => setSkillDirs(e.target.value)}
@@ -251,7 +251,7 @@ export function SettingsModal() {
               {tab === "providers" ? (
                 <section className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs text-muted">切换、添加或编辑 LLM 提供商</p>
+                    <p className="text-xs text-muted-foreground">切换、添加或编辑 LLM 提供商</p>
                     <button
                       type="button"
                       onClick={() => {
@@ -278,7 +278,7 @@ export function SettingsModal() {
                         >
                           <div
                             className={`truncate ${
-                              p.active ? "font-medium text-fg" : "text-muted"
+                              p.active ? "font-medium text-fg" : "text-muted-foreground"
                             }`}
                           >
                             {p.display_name}
@@ -286,7 +286,7 @@ export function SettingsModal() {
                               <span className="ml-2 text-[10px] text-accent">使用中</span>
                             ) : null}
                           </div>
-                          <div className="truncate font-mono text-[11px] text-muted">
+                          <div className="truncate font-mono text-[11px] text-muted-foreground">
                             {p.model}
                           </div>
                         </button>
@@ -296,7 +296,7 @@ export function SettingsModal() {
                             setEditing(p);
                             setEditorOpen(true);
                           }}
-                          className="rounded px-1.5 py-0.5 text-xs text-muted hover:bg-panel hover:text-fg"
+                          className="rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-panel hover:text-fg"
                         >
                           编辑
                         </button>
@@ -312,7 +312,7 @@ export function SettingsModal() {
                       </div>
                     ))}
                     {!providers.length ? (
-                      <div className="px-2 py-2 text-xs text-muted">暂无提供商</div>
+                      <div className="px-2 py-2 text-xs text-muted-foreground">暂无提供商</div>
                     ) : null}
                   </div>
                 </section>

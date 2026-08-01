@@ -14,7 +14,7 @@ def test_chat_width_pct_roundtrip(tmp_path, monkeypatch):
 
     path = tmp_path / "user_settings.yaml"
     monkeypatch.setattr(user_settings, "USER_SETTINGS_PATH", path)
-    assert get_chat_width_pct() == 85
+    assert get_chat_width_pct() == 100
     assert persist_chat_width_pct(70) == 70
     assert get_chat_width_pct() == 70
     assert persist_chat_width_pct(999) == 100

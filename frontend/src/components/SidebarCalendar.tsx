@@ -38,7 +38,7 @@ export function SidebarCalendar({ collapsed = false }: Props) {
         }`}
       >
         <span className="text-lg font-bold leading-none">{info.d}</span>
-        <span className="mt-0.5 text-[9px] text-muted">{info.m}月</span>
+        <span className="mt-0.5 text-[9px] text-muted-foreground">{info.m}月</span>
       </button>
     );
   }
@@ -54,7 +54,7 @@ export function SidebarCalendar({ collapsed = false }: Props) {
       }`}
     >
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[11px] text-muted">
+        <div className="truncate text-[11px] text-muted-foreground">
           {info.y}年{info.m}月{info.d}日 {info.week}
         </div>
         <div className="mt-0.5 truncate text-xs text-fg">{info.lunar}</div>

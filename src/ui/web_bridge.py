@@ -134,7 +134,13 @@ class WebChatBridge:
 
     def end_assistant(self) -> None:
         self.flush_tokens()
-        event: dict[str, Any] = {"type": "assistant_end", "content": self._stream_buffer}
+        content = self._stream_buffer
+        event: dict[str, Any] = {"type": "assistant_end", "content": content}
+        stripped = (content or "").lstrip().lower()
+        if stripped.startswith(("<!doctype html", "<html")) or (
+            "wx-wrap" in stripped[:800] and "<style" in stripped[:800]
+        ):
+            event["content_format"] = "html"
         elapsed = self._elapsed_ms()
         if elapsed is not None:
             event["elapsed_ms"] = elapsed
@@ -167,7 +173,15 @@ class WebChatBridge:
         if name == "web_search":
             self.append_search_done(content)
             return
-        preview = content[:200] + ("..." if len(content) > 200 else "")
+        text = content or ""
+        stripped = text.lstrip()
+        # 工具直接返回完整 HTML 页面（如天气预报）时，以卡片形式渲染
+        if stripped.lower().startswith(("<!doctype html", "<html")) or (
+            "wx-wrap" in stripped[:800] and "<style" in stripped[:800]
+        ):
+            self.append_assistant_complete(text, content_format="html")
+            return
+        preview = text[:200] + ("..." if len(text) > 200 else "")
         self._emit({"type": "meta", "content": f"📋 {name} 返回: {preview}"})
 
     def append_search_done(self, raw_result: str) -> None:

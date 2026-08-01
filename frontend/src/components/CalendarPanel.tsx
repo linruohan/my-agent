@@ -147,7 +147,7 @@ export function CalendarPanel() {
 
       <div className="grid flex-1 gap-6 p-6 lg:grid-cols-[1fr_280px]">
         <div>
-          <div className="mb-2 grid grid-cols-7 gap-1 text-center text-xs text-muted">
+          <div className="mb-2 grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground">
             {WEEK_LABELS.map((w) => (
               <div key={w} className="py-1">
                 {w}
@@ -180,7 +180,7 @@ export function CalendarPanel() {
                   {holiday ? (
                     <span
                       className={`absolute top-1 right-1 text-[10px] ${
-                        holiday === "rest" ? "text-danger" : "text-muted"
+                        holiday === "rest" ? "text-danger" : "text-muted-foreground"
                       }`}
                     >
                       {holiday === "rest" ? "休" : "班"}
@@ -197,7 +197,7 @@ export function CalendarPanel() {
                   >
                     {cell.d}
                   </span>
-                  <span className="mt-0.5 line-clamp-1 text-[10px] text-muted">
+                  <span className="mt-0.5 line-clamp-1 text-[10px] text-muted-foreground">
                     {label}
                   </span>
                 </button>
@@ -207,7 +207,7 @@ export function CalendarPanel() {
         </div>
 
         <aside className="rounded-[var(--radius-panel)] border border-border bg-panel p-4">
-          <div className="text-sm text-muted">
+          <div className="text-sm text-muted-foreground">
             {selected.y}年{selected.m}月{selected.d}日 {detail.weekName}
             {detail.isToday ? (
               <span className="ml-2 rounded bg-accent/15 px-1.5 py-0.5 text-xs text-accent">
@@ -219,7 +219,7 @@ export function CalendarPanel() {
                 className={`ml-2 rounded px-1.5 py-0.5 text-xs ${
                   detail.holiday === "rest"
                     ? "bg-danger/15 text-danger"
-                    : "bg-border text-muted"
+                    : "bg-border text-muted-foreground"
                 }`}
               >
                 {detail.holiday === "rest" ? "休" : "班"}
@@ -227,24 +227,24 @@ export function CalendarPanel() {
             ) : null}
           </div>
           <div className="mt-3 text-5xl font-semibold text-fg">{selected.d}</div>
-          <div className="mt-2 text-sm text-muted">
+          <div className="mt-2 text-sm text-muted-foreground">
             （{detail.lunar.getYearShengXiao()}年）农历
             {detail.lunar.getMonthInChinese()}月
             {detail.lunar.getDayInChinese()}
             {detail.festivals.length ? ` ${detail.festivals.join(" ")}` : ""}
           </div>
-          <div className="mt-3 text-xs text-muted">{detail.ganzhi}</div>
+          <div className="mt-3 text-xs text-muted-foreground">{detail.ganzhi}</div>
           <div className="mt-4 space-y-2 text-sm">
             <div>
-              <span className="text-muted">宜 </span>
+              <span className="text-muted-foreground">宜 </span>
               <span className="text-fg">{detail.yi}</span>
             </div>
             <div>
-              <span className="text-muted">忌 </span>
+              <span className="text-muted-foreground">忌 </span>
               <span className="text-fg">{detail.ji}</span>
             </div>
           </div>
-          <div className="mt-4 space-y-1 text-xs text-muted">
+          <div className="mt-4 space-y-1 text-xs text-muted-foreground">
             {detail.prevJq ? <div>上一节气：{detail.prevJq}</div> : null}
             {detail.nextJq ? <div>下一节气：{detail.nextJq}</div> : null}
           </div>

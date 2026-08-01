@@ -10,16 +10,47 @@ import type {
   WorkspaceInfo,
 } from "@/bridge/types";
 
+export type ContentFormat = "markdown" | "html";
+
 export type DisplayMessage =
   | { id: string; role: "user"; content: string; images?: ChatImage[] }
   | {
       id: string;
       role: "assistant";
       content: string;
+      format?: ContentFormat;
       streaming?: boolean;
       elapsedMs?: number;
     }
   | { id: string; role: "meta"; content: string; accent?: string };
+
+function resolveContentFormat(
+  format: string | undefined,
+  content: string,
+): ContentFormat {
+  if (format === "html") return "html";
+  if (format === "markdown") {
+    // 历史事件可能漏掉 format，对完整 HTML 文档兜底
+    const head = (content || "").trimStart().slice(0, 200).toLowerCase();
+    if (
+      head.startsWith("<!doctype html") ||
+      head.startsWith("<html") ||
+      (head.includes("wx-wrap") && head.includes("<style"))
+    ) {
+      return "html";
+    }
+    return "markdown";
+  }
+  const head = (content || "").trimStart().slice(0, 200).toLowerCase();
+  if (
+    head.startsWith("<!doctype html") ||
+    head.startsWith("<html") ||
+    (head.includes("wx-wrap") && head.includes("<style"))
+  ) {
+    return "html";
+  }
+  return "markdown";
+}
 
 export type MainView = "chat" | "tasks" | "skills" | "calendar" | "knowledge";
 
@@ -120,7 +151,7 @@ function applyThemeToDom(variables: ThemeVariables): void {
 }
 
 function clampChatWidth(pct: number): number {
-  return Math.max(50, Math.min(100, Math.round(Number(pct) || 85)));
+  return Math.max(50, Math.min(100, Math.round(Number(pct) || 100)));
 }
 
 function applyChatWidthToDom(pct: number): number {
@@ -186,13 +217,19 @@ function reduceChatEvent(
       };
     }
     case "assistant_end": {
+      const content = ev.content || "";
+      const format = resolveContentFormat(ev.content_format, content || "");
       if (streamingId) {
         return {
           messages: messages.map((m) =>
             m.id === streamingId && m.role === "assistant"
               ? {
                   ...m,
-                  content: ev.content || m.content,
+                  content: content || m.content,
+                  format: resolveContentFormat(
+                    ev.content_format,
+                    content || m.content,
+                  ),
                   streaming: false,
                   elapsedMs: ev.elapsed_ms,
                 }
@@ -202,14 +239,15 @@ function reduceChatEvent(
           toolStatus: "",
         };
       }
-      if (ev.content) {
+      if (content) {
         return {
           messages: [
             ...messages,
             {
               id: nextId("assistant"),
               role: "assistant",
-              content: ev.content,
+              content,
+              format,
               elapsedMs: ev.elapsed_ms,
             },
           ],
@@ -266,7 +304,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   themeId: "default",
   appearance: "dark",
   fontId: "system",
-  chatWidthPct: 85,
+  chatWidthPct: 100,
   activeView: "chat",
   composerPrefill: null,
   sidebarCollapsed: false,
@@ -326,7 +364,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       streamingId = next.streamingId;
     }
 
-    const chatWidthPct = applyChatWidthToDom(state.chat_width_pct ?? 85);
+    const chatWidthPct = applyChatWidthToDom(state.chat_width_pct ?? 100);
     const sessions = (state.sessions || []).filter((s) => !!s?.id);
 
     set({

@@ -2,7 +2,6 @@ import { lazy, Suspense, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { ChatPane } from "@/components/ChatPane";
 import { Composer } from "@/components/Composer";
-import { ChatWidthControl } from "@/components/ChatWidthControl";
 import { ApprovalDialog } from "@/components/ApprovalDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useAppStore } from "@/stores/app-store";
@@ -25,14 +24,10 @@ const TasksPanel = lazy(() =>
 
 function PanelFallback() {
   return (
-    <div className="flex flex-1 items-center justify-center text-sm text-muted">
+    <div className="flex flex-1 items-center justify-center text-body text-muted-foreground">
       加载中…
     </div>
   );
-}
-
-function InboxActions() {
-  return <ChatWidthControl />;
 }
 
 export function App() {
@@ -40,15 +35,14 @@ export function App() {
   const bootError = useAppStore((s) => s.bootError);
   const activeView = useAppStore((s) => s.activeView);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
-  const [taskCount, setTaskCount] = useState<number | null>(null);
 
   if (bootError) {
     return (
-      <div className="flex h-full items-center justify-center bg-app p-8">
-        <div className="max-w-lg rounded-[var(--radius-panel)] border border-border bg-panel p-6">
-          <h1 className="text-lg font-semibold text-fg">UI 启动失败</h1>
-          <p className="mt-3 text-sm text-muted">{bootError}</p>
-          <p className="mt-2 text-xs text-muted">
+      <div className="flex h-full items-center justify-center bg-app-shell p-8">
+        <div className="max-w-lg rounded-xl border border-surface-border bg-surface p-6 shadow-[var(--surface-shadow)]">
+          <h1 className="text-title-sm font-semibold text-foreground">UI 启动失败</h1>
+          <p className="mt-3 text-body text-muted-foreground">{bootError}</p>
+          <p className="mt-2 text-caption text-muted-foreground">
             可设置 AGENT_UI=legacy 回退到旧版 legacy/web/index.html
           </p>
         </div>
@@ -58,33 +52,15 @@ export function App() {
 
   if (!ready) {
     return (
-      <div className="flex h-full items-center justify-center bg-app text-sm text-muted">
+      <div className="flex h-full items-center justify-center bg-app-shell text-body text-muted-foreground">
         正在连接 pywebview…
       </div>
     );
   }
 
-  const headerActions =
-    activeView === "chat" ? (
-      <InboxActions />
-    ) : activeView === "tasks" ? (
-      <>
-        {taskCount != null ? (
-          <span className="text-caption text-muted-foreground">{taskCount} Tasks</span>
-        ) : null}
-        <button
-          type="button"
-          onClick={() => setNewTaskOpen(true)}
-          className="h-8 rounded-lg bg-primary px-2.5 text-label font-medium text-primary-foreground"
-        >
-          + New Task
-        </button>
-      </>
-    ) : null;
-
   return (
     <>
-      <AppShell headerActions={headerActions}>
+      <AppShell>
         {activeView === "chat" ? (
           <>
             <ChatPane />
@@ -93,11 +69,7 @@ export function App() {
         ) : null}
         <Suspense fallback={<PanelFallback />}>
           {activeView === "tasks" ? (
-            <TasksPanel
-              newOpen={newTaskOpen}
-              onNewOpenChange={setNewTaskOpen}
-              onCountChange={setTaskCount}
-            />
+            <TasksPanel newOpen={newTaskOpen} onNewOpenChange={setNewTaskOpen} />
           ) : null}
           {activeView === "skills" ? <SkillsPanel /> : null}
           {activeView === "calendar" ? <CalendarPanel /> : null}

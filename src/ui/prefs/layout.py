@@ -6,7 +6,7 @@ from pathlib import Path
 
 from src.ui.prefs.base import UserSettingsBacked
 
-DEFAULT_CHAT_WIDTH_PCT = 85
+DEFAULT_CHAT_WIDTH_PCT = 100
 MIN_CHAT_WIDTH_PCT = 50
 MAX_CHAT_WIDTH_PCT = 100
 

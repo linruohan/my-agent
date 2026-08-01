@@ -77,7 +77,7 @@ function CodeBlock({ children }: { children?: ReactNode }) {
       <CopyFlashButton
         label="复制代码"
         getText={() => extractCodeText(children)}
-        className="absolute top-2 right-2 z-10 rounded-md border border-border bg-panel/90 px-2 py-1 text-[11px] text-muted opacity-0 transition group-hover:opacity-100 hover:text-fg"
+        className="absolute top-2 right-2 z-10 rounded-md border border-border bg-panel/90 px-2 py-1 text-[11px] text-muted-foreground opacity-0 transition group-hover:opacity-100 hover:text-fg"
       />
       <pre className="md-pre">{children}</pre>
     </div>

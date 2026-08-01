@@ -39,7 +39,7 @@ function LocalPathChip({ path }: { path: string }) {
   };
 
   if (known && !exists) {
-    return <span className="break-all text-muted">{path}</span>;
+    return <span className="break-all text-muted-foreground">{path}</span>;
   }
 
   return (
@@ -56,7 +56,7 @@ function LocalPathChip({ path }: { path: string }) {
         type="button"
         onClick={() => void onOpen()}
         title="用默认应用打开"
-        className="shrink-0 rounded border border-border bg-app px-1.5 py-0.5 text-[10px] text-muted hover:text-fg"
+        className="shrink-0 rounded border border-border bg-app px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-fg"
       >
         {status === "opened" ? "已打开" : status === "error" ? "失败" : "打开"}
       </button>
