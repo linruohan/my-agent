@@ -1,8 +1,9 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Check, Clock3, Copy, MessageSquare } from "lucide-react";
 import { useAppStore, type DisplayMessage } from "@/stores/app-store";
 import { Markdown } from "@/components/Markdown";
 import { HtmlEmbed, looksLikeHtmlDocument } from "@/components/HtmlEmbed";
+import { getApi } from "@/bridge/api";
 import { copyText } from "@/lib/clipboard";
 import { formatElapsed } from "@/lib/format";
 import { cn } from "@/lib/cn";
@@ -181,9 +182,15 @@ export function ChatPane() {
   const welcome = useAppStore((s) => s.welcome);
   const toolStatus = useAppStore((s) => s.toolStatus);
   const streamingId = useAppStore((s) => s.streamingId);
+  const sessions = useAppStore((s) => s.sessions);
+  const historyHasMore = useAppStore((s) => s.historyHasMore);
+  const historyOldestSeq = useAppStore((s) => s.historyOldestSeq);
+  const historyLoading = useAppStore((s) => s.historyLoading);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [showAll, setShowAll] = useState(false);
   const prevLenRef = useRef(0);
+  const pinScrollRef = useRef<{ top: number; height: number } | null>(null);
 
   const hiddenCount =
     !showAll && messages.length > MESSAGE_WINDOW
@@ -199,7 +206,16 @@ export function ChatPane() {
     }
   }, [messages.length]);
 
+  useLayoutEffect(() => {
+    const pin = pinScrollRef.current;
+    const el = scrollRef.current;
+    if (!pin || !el) return;
+    el.scrollTop = el.scrollHeight - pin.height + pin.top;
+    pinScrollRef.current = null;
+  }, [messages]);
+
   useEffect(() => {
+    if (pinScrollRef.current) return;
     const grew = messages.length > prevLenRef.current;
     prevLenRef.current = messages.length;
     // 流式用 auto，避免每 token smooth 滚动；仅新增消息条时用 smooth
@@ -208,9 +224,43 @@ export function ChatPane() {
     bottomRef.current?.scrollIntoView({ behavior, block: "end" });
   }, [messages, toolStatus, streamingId]);
 
+  const loadEarlierFromServer = async () => {
+    if (historyLoading || !historyHasMore || historyOldestSeq == null) return;
+    const active = sessions.find((s) => s.active);
+    if (!active?.id) return;
+    const el = scrollRef.current;
+    if (el) {
+      pinScrollRef.current = { top: el.scrollTop, height: el.scrollHeight };
+    }
+    const store = useAppStore.getState();
+    store.setHistoryLoading(true);
+    try {
+      const api = getApi();
+      if (!api?.load_earlier_events) {
+        store.setHistoryLoading(false);
+        pinScrollRef.current = null;
+        return;
+      }
+      const res = await api.load_earlier_events(active.id, historyOldestSeq);
+      if (!res?.ok) {
+        store.setHistoryLoading(false);
+        pinScrollRef.current = null;
+        return;
+      }
+      store.prependHistory(res.events || [], {
+        oldestSeq: res.oldest_seq,
+        hasMore: res.has_more,
+        total: res.history_total,
+      });
+    } catch {
+      useAppStore.getState().setHistoryLoading(false);
+      pinScrollRef.current = null;
+    }
+  };
+
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-page-canvas">
-      <div className="min-h-0 flex-1 overflow-y-auto py-4">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto py-4">
         <div className="chat-column">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center gap-3 px-4 pt-24 pb-10 text-center">
@@ -233,6 +283,17 @@ export function ChatPane() {
                     className="rounded-full bg-muted px-3 py-1.5 text-caption text-muted-foreground transition hover:bg-surface-hover hover:text-foreground"
                   >
                     显示更早的 {hiddenCount} 条消息
+                  </button>
+                </div>
+              ) : historyHasMore ? (
+                <div className="flex justify-center px-1 py-3">
+                  <button
+                    type="button"
+                    disabled={historyLoading}
+                    onClick={() => void loadEarlierFromServer()}
+                    className="rounded-full bg-muted px-3 py-1.5 text-caption text-muted-foreground transition hover:bg-surface-hover hover:text-foreground disabled:opacity-60"
+                  >
+                    {historyLoading ? "加载中…" : "加载更早的消息"}
                   </button>
                 </div>
               ) : null}

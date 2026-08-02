@@ -15,6 +15,7 @@ def test_schedule_write_memory_index_debounces(tmp_path, monkeypatch):
 
     monkeypatch.setattr(memory_index, "write_memory_index", fake_write)
     memory_index.flush_memory_index_writes()
+    calls.clear()
 
     memory_index.schedule_write_memory_index(tmp_path, delay=0.15)
     memory_index.schedule_write_memory_index(tmp_path, delay=0.15)
@@ -31,6 +32,7 @@ def test_flush_memory_index_writes_immediate(tmp_path, monkeypatch):
 
     monkeypatch.setattr(memory_index, "write_memory_index", fake_write)
     memory_index.flush_memory_index_writes()
+    calls.clear()
     memory_index.schedule_write_memory_index(tmp_path, delay=10.0)
     assert calls == []
     memory_index.flush_memory_index_writes()

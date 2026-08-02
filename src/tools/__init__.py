@@ -68,10 +68,9 @@ def requires_confirmation(tool_name: str) -> bool:
 
 # 默认走子进程：网络 I/O、大规模文件搜索、向量检索等可能阻塞 GIL 的工具
 # 默认子进程：重 IO / 易阻塞 GIL 的工具。search_notes、天气已同进程（FAISS/HTTP 热路径）。
+# find/grep 内部已调 fd/rg 子进程，外层再走 ProcessPool 是双重开销
 _DEFAULT_SUBPROCESS_TOOLS = frozenset({
     "web_search",
-    "find_files",
-    "grep_files",
 })
 
 

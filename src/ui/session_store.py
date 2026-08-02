@@ -292,41 +292,96 @@ class SessionStore(ReusableSqliteStore):
             ).fetchone()
         return int(row["c"]) if row else 0
 
+    def load_events_page(
+        self,
+        session_id: str,
+        *,
+        limit: int | None = None,
+        before_seq: int | None = None,
+    ) -> dict[str, Any]:
+        """分页加载会话事件（按 seq 升序）。
+
+        before_seq: 只取严格小于该 seq 的更早消息（向上翻页）。
+        """
+        sid = _valid_id(session_id)
+        empty = {
+            "events": [],
+            "oldest_seq": None,
+            "newest_seq": None,
+            "has_more": False,
+            "total": 0,
+        }
+        if not sid:
+            return empty
+        total = self.count_events(sid)
+        where = "session_id = ?"
+        params: list[Any] = [sid]
+        if before_seq is not None:
+            where += " AND seq < ?"
+            params.append(int(before_seq))
+        with self._connect() as conn:
+            if limit is not None and limit > 0:
+                rows = conn.execute(
+                    f"""
+                    SELECT seq, event_json FROM (
+                        SELECT seq, event_json FROM session_messages
+                        WHERE {where}
+                        ORDER BY seq DESC
+                        LIMIT ?
+                    ) ORDER BY seq ASC
+                    """,
+                    (*params, int(limit)),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    f"""
+                    SELECT seq, event_json FROM session_messages
+                    WHERE {where}
+                    ORDER BY seq ASC
+                    """,
+                    params,
+                ).fetchall()
+        events: list[dict[str, Any]] = []
+        seqs: list[int] = []
+        for row in rows:
+            try:
+                events.append(json.loads(row["event_json"]))
+                seqs.append(int(row["seq"]))
+            except (json.JSONDecodeError, TypeError, ValueError):
+                continue
+        oldest = seqs[0] if seqs else None
+        newest = seqs[-1] if seqs else None
+        has_more = False
+        if oldest is not None:
+            with self._connect() as conn:
+                older = conn.execute(
+                    """
+                    SELECT 1 FROM session_messages
+                    WHERE session_id = ? AND seq < ?
+                    LIMIT 1
+                    """,
+                    (sid, oldest),
+                ).fetchone()
+                has_more = older is not None
+        return {
+            "events": events,
+            "oldest_seq": oldest,
+            "newest_seq": newest,
+            "has_more": has_more,
+            "total": total,
+        }
+
     def load_events(
         self,
         session_id: str,
         *,
         limit: int | None = None,
+        before_seq: int | None = None,
     ) -> list[dict[str, Any]]:
         """加载会话事件。limit>0 时只取最近 N 条（按 seq 升序返回）。"""
-        sid = _valid_id(session_id)
-        if not sid:
-            return []
-        with self._connect() as conn:
-            if limit is not None and limit > 0:
-                rows = conn.execute(
-                    """
-                    SELECT event_json FROM (
-                        SELECT seq, event_json FROM session_messages
-                        WHERE session_id = ?
-                        ORDER BY seq DESC
-                        LIMIT ?
-                    ) ORDER BY seq ASC
-                    """,
-                    (sid, limit),
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    "SELECT event_json FROM session_messages WHERE session_id = ? ORDER BY seq ASC",
-                    (sid,),
-                ).fetchall()
-        events: list[dict[str, Any]] = []
-        for row in rows:
-            try:
-                events.append(json.loads(row["event_json"]))
-            except json.JSONDecodeError:
-                continue
-        return events
+        return self.load_events_page(
+            session_id, limit=limit, before_seq=before_seq
+        )["events"]
 
     def clear_messages(self, session_id: str) -> None:
         sid = _valid_id(session_id)
@@ -426,19 +481,44 @@ class SessionStore(ReusableSqliteStore):
         return hits
 
     def fetch_messages_for_index(self, *, limit: int = 100) -> list[dict[str, Any]]:
-        """获取候选消息供向量索引（按 message id 升序）。"""
+        """获取尚未向量化的消息（按 message id 升序）。"""
         cap = max(1, limit)
         with self._connect() as conn:
-            rows = conn.execute(
+            has_vec = conn.execute(
                 """
-                SELECT m.id AS message_id, m.session_id, s.title AS session_title, m.event_json
-                FROM session_messages m
-                JOIN sessions s ON s.id = m.session_id
-                ORDER BY m.id DESC
-                LIMIT ?
-                """,
-                (cap * 3,),
-            ).fetchall()
+                SELECT 1 FROM sqlite_master
+                WHERE type = 'table' AND name = 'conversation_vectors'
+                LIMIT 1
+                """
+            ).fetchone()
+            if has_vec:
+                rows = conn.execute(
+                    """
+                    SELECT m.id AS message_id, m.session_id, s.title AS session_title,
+                           m.event_json
+                    FROM session_messages m
+                    JOIN sessions s ON s.id = m.session_id
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM conversation_vectors v
+                        WHERE v.message_id = m.id
+                    )
+                    ORDER BY m.id ASC
+                    LIMIT ?
+                    """,
+                    (cap * 3,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT m.id AS message_id, m.session_id, s.title AS session_title,
+                           m.event_json
+                    FROM session_messages m
+                    JOIN sessions s ON s.id = m.session_id
+                    ORDER BY m.id ASC
+                    LIMIT ?
+                    """,
+                    (cap * 3,),
+                ).fetchall()
         out: list[dict[str, Any]] = []
         for row in rows:
             try:

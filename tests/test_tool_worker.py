@@ -56,7 +56,8 @@ def test_should_run_in_process_defaults(monkeypatch):
 
     monkeypatch.setattr("src.tools.tool_worker.tool_process_enabled", lambda: True)
     assert should_run_in_process("web_search") is True
-    assert should_run_in_process("find_files") is True
+    assert should_run_in_process("find_files") is False
+    assert should_run_in_process("grep_files") is False
     assert should_run_in_process("list_tasks") is False
     assert should_run_in_process("search_notes") is False
     assert should_run_in_process("get_weather_forecast") is False

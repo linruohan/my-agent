@@ -5,6 +5,8 @@ app:
   window_height: 800
   # 会话切换/启动时最多加载的历史事件条数；0 表示不限制
   session_history_limit: 200
+  # 向上「加载更早消息」每次拉取条数
+  session_history_page_size: 50
 
 paths:
   checkpoints: "data/checkpoints"

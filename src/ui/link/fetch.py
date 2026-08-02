@@ -8,11 +8,11 @@ import threading
 from typing import Any
 from urllib.parse import urlparse
 
-import httpx
 from bs4 import BeautifulSoup
 from loguru import logger
 
 from src.infra.config import load_search_config
+from src.infra.http_client import shared_http_client
 
 _pw_lock = threading.Lock()
 _pw_runtime: tuple[Any, Any] | None = None  # (playwright, browser)
@@ -102,18 +102,15 @@ def _result_payload(
 
 
 def _fetch_with_httpx(url: str) -> dict[str, Any]:
-    with httpx.Client(
-        follow_redirects=True,
-        timeout=25.0,
-        headers=_default_headers(),
-    ) as client:
-        resp = client.get(url)
-        resp.raise_for_status()
-        content_type = resp.headers.get("content-type", "")
-        if "html" not in content_type.lower() and "<html" not in resp.text[:500].lower():
-            return {"ok": False, "error": "链接不是可读的 HTML 页面"}
-        text = _extract_readable_text(resp.text)
-        return _result_payload(url, text, engine="httpx")
+    resp = shared_http_client().get(
+        url, headers=_default_headers(), timeout=25.0
+    )
+    resp.raise_for_status()
+    content_type = resp.headers.get("content-type", "")
+    if "html" not in content_type.lower() and "<html" not in resp.text[:500].lower():
+        return {"ok": False, "error": "链接不是可读的 HTML 页面"}
+    text = _extract_readable_text(resp.text)
+    return _result_payload(url, text, engine="httpx")
 
 
 def _get_shared_browser() -> Any:

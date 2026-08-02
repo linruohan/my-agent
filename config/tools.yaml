@@ -1,6 +1,6 @@
 # 工具元数据：enabled / risk / requires_confirmation
 # run_in_process（可选）：true 强制子进程；false 强制同进程；省略则按内置默认
-# 默认子进程：web_search, find_files, grep_files（可用 run_in_process 覆盖）
+# 默认子进程：web_search（find/grep 默认同进程，避免 fd/rg 外再套 ProcessPool）
 tools:
   search_tools_status:
     enabled: true
@@ -11,11 +11,13 @@ tools:
     enabled: true
     risk: low
     requires_confirmation: false
+    run_in_process: false
 
   grep_files:
     enabled: true
     risk: low
     requires_confirmation: false
+    run_in_process: false
 
   list_directory:
     enabled: true

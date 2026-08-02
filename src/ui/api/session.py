@@ -27,3 +27,11 @@ class SessionApiMixin(ApiBase):
 
     def rename_session(self, session_id: str, title: str) -> dict[str, Any]:
         return self._ctrl.rename_session(session_id, title)
+
+    def load_earlier_events(
+        self,
+        session_id: str,
+        before_seq: int | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        return self._ctrl.load_earlier_events(session_id, before_seq, limit)

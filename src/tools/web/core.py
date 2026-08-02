@@ -5,11 +5,11 @@ from dataclasses import dataclass
 from typing import Literal
 from urllib.parse import quote_plus
 
-import httpx
 from bs4 import BeautifulSoup
 from loguru import logger
 
 from src.infra.config import load_search_config
+from src.infra.http_client import shared_http_client
 from src.infra.time_context import current_year, search_timestamp
 
 SearchEngine = Literal["bing", "baidu", "auto"]
@@ -36,13 +36,13 @@ class SearchResult:
     stale_hint: str = ""
 
 
-def _client(timeout: float) -> httpx.Client:
+def _request_headers() -> dict[str, str]:
     cfg = load_search_config()
     headers = dict(_DEFAULT_HEADERS)
     ua = cfg.get("search", {}).get("user_agent")
     if ua:
         headers["User-Agent"] = ua
-    return httpx.Client(headers=headers, timeout=timeout, follow_redirects=True)
+    return headers
 
 
 def _clean(text: str) -> str:
@@ -119,8 +119,9 @@ def _try_python_docs(query: str, timeout: float) -> SearchResult | None:
     ]
     for url in urls:
         try:
-            with _client(timeout) as client:
-                resp = client.get(url)
+            resp = shared_http_client().get(
+                url, headers=_request_headers(), timeout=timeout
+            )
             if resp.status_code != 200:
                 continue
             soup = BeautifulSoup(resp.text, "html.parser")
@@ -144,9 +145,10 @@ def search_bing(query: str, max_results: int = 5, timeout: float = 15) -> list[S
         f"https://cn.bing.com/search?q={quote_plus(query)}"
         f"&count={max_results}&setlang=zh-Hans&mkt=zh-CN"
     )
-    with _client(timeout) as client:
-        resp = client.get(url)
-        resp.raise_for_status()
+    resp = shared_http_client().get(
+        url, headers=_request_headers(), timeout=timeout
+    )
+    resp.raise_for_status()
 
     soup = BeautifulSoup(resp.text, "html.parser")
     results: list[SearchResult] = []
@@ -172,9 +174,10 @@ def search_bing(query: str, max_results: int = 5, timeout: float = 15) -> list[S
 
 def search_baidu(query: str, max_results: int = 5, timeout: float = 15) -> list[SearchResult]:
     url = f"https://www.baidu.com/s?wd={quote_plus(query)}&rn={max_results}"
-    with _client(timeout) as client:
-        resp = client.get(url)
-        resp.raise_for_status()
+    resp = shared_http_client().get(
+        url, headers=_request_headers(), timeout=timeout
+    )
+    resp.raise_for_status()
 
     soup = BeautifulSoup(resp.text, "html.parser")
     results: list[SearchResult] = []

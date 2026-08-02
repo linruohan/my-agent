@@ -14,3 +14,14 @@ def session_history_limit() -> int | None:
     except (TypeError, ValueError):
         n = 200
     return n if n > 0 else None
+
+
+def session_history_page_size() -> int:
+    """向上翻页每次加载条数。"""
+    cfg = load_app_config().get("app", {}) or {}
+    raw = cfg.get("session_history_page_size", 50)
+    try:
+        n = int(raw or 50)
+    except (TypeError, ValueError):
+        n = 50
+    return max(1, min(n, 500))

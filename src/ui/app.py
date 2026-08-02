@@ -86,8 +86,10 @@ def _shutdown_controller(controller: AssistantController) -> None:
     controller._gateway.stop()
     controller._gateway_inbox.close()
     from src.tools.browser.session import BrowserSessionManager
+    from src.tools.code.sandbox import shutdown_sandbox_workers
 
     BrowserSessionManager.shared().shutdown()
+    shutdown_sandbox_workers()
     controller._session_store.close()
     controller._task_store.close()
     controller._note_store.close()

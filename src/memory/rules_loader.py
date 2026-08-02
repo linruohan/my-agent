@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import fnmatch
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,11 @@ import yaml
 from src.infra.paths import global_config_dir, managed_config_dir, project_config_dir
 
 _MAX_RULES_CHARS = 2000
+
+_cache_lock = threading.Lock()
+_all_rules_cache: list[RuleFile] | None = None
+_all_rules_fp: tuple[Any, ...] | None = None
+_all_rules_root: str | None = None
 
 
 @dataclass
@@ -66,6 +72,65 @@ def _match_paths(rule: RuleFile, current_file: str | None) -> bool:
     return False
 
 
+def _rules_dirs(project_root: Path | None) -> list[Path]:
+    return [
+        managed_config_dir() / "rules",
+        global_config_dir() / "rules",
+        project_config_dir(project_root) / "rules",
+        project_config_dir(project_root) / "rules.local",
+    ]
+
+
+def _compute_rules_fingerprint(dirs: list[Path]) -> tuple[Any, ...]:
+    parts: list[tuple[str, int, int]] = []
+    for base in dirs:
+        try:
+            if not base.is_dir():
+                parts.append((str(base), 0, 0))
+                continue
+            for path in sorted(base.glob("*.md")):
+                try:
+                    st = path.stat()
+                    parts.append((str(path.resolve()), st.st_mtime_ns, st.st_size))
+                except OSError:
+                    continue
+        except OSError:
+            parts.append((str(base), 0, 0))
+    return tuple(parts)
+
+
+def rules_fingerprint(project_root: Path | None = None) -> tuple[Any, ...]:
+    return _compute_rules_fingerprint(_rules_dirs(project_root))
+
+
+def invalidate_rules_cache() -> None:
+    global _all_rules_cache, _all_rules_fp, _all_rules_root
+    with _cache_lock:
+        _all_rules_cache = None
+        _all_rules_fp = None
+        _all_rules_root = None
+
+
+def _load_all_rules_uncached(project_root: Path | None) -> list[RuleFile]:
+    rules: list[RuleFile] = []
+    visited: set[Path] = set()
+    for dir_path in _rules_dirs(project_root):
+        if not dir_path.is_dir():
+            continue
+        for path in sorted(dir_path.glob("*.md")):
+            if path in visited:
+                continue
+            visited.add(path)
+            rule = _load_rule_file(path)
+            if rule:
+                rules.append(rule)
+    rules.sort(
+        key=lambda r: (r.priority == "high", r.priority == "medium", r.priority == "low"),
+        reverse=True,
+    )
+    return rules
+
+
 def load_rules(
     current_file: str | None = None,
     project_root: Path | None = None,
@@ -79,27 +144,23 @@ def load_rules(
     Returns:
         匹配的规则文件列表，按优先级排序（项目规则优先）
     """
-    rules: list[RuleFile] = []
-    visited = set()
-
-    def _load_rules_from_dir(dir_path: Path, is_project: bool = False) -> None:
-        if not dir_path.is_dir():
-            return
-        for path in sorted(dir_path.glob("*.md")):
-            if path in visited:
-                continue
-            visited.add(path)
-            rule = _load_rule_file(path)
-            if rule and _match_paths(rule, current_file):
-                rules.append(rule)
-
-    _load_rules_from_dir(managed_config_dir() / "rules")
-    _load_rules_from_dir(global_config_dir() / "rules")
-    _load_rules_from_dir(project_config_dir(project_root) / "rules", is_project=True)
-    _load_rules_from_dir(project_config_dir(project_root) / "rules.local", is_project=True)
-
-    rules.sort(key=lambda r: (r.priority == "high", r.priority == "medium", r.priority == "low"), reverse=True)
-    return rules
+    global _all_rules_cache, _all_rules_fp, _all_rules_root
+    root_key = "" if project_root is None else str(Path(project_root).resolve())
+    dirs = _rules_dirs(project_root)
+    fingerprint = _compute_rules_fingerprint(dirs)
+    with _cache_lock:
+        if (
+            _all_rules_cache is not None
+            and _all_rules_fp == fingerprint
+            and _all_rules_root == root_key
+        ):
+            all_rules = _all_rules_cache
+        else:
+            all_rules = _load_all_rules_uncached(project_root)
+            _all_rules_cache = all_rules
+            _all_rules_fp = fingerprint
+            _all_rules_root = root_key
+    return [r for r in all_rules if _match_paths(r, current_file)]
 
 
 def build_rules_prompt_block(current_file: str | None = None, project_root: Path | None = None) -> str:

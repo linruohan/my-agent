@@ -67,6 +67,10 @@ type AppStore = {
   messages: DisplayMessage[];
   streamingId: string | null;
   toolStatus: string;
+  historyOldestSeq: number | null;
+  historyHasMore: boolean;
+  historyTotal: number;
+  historyLoading: boolean;
   approval: string | null;
   modelLabel: string;
   slashCatalog: SlashCatalogItem[];
@@ -85,6 +89,16 @@ type AppStore = {
   handleBridgeEvent: (ev: BridgeEvent) => void;
   handleBridgeEvents: (events: BridgeEvent[]) => void;
   loadHistory: (events: ChatEvent[]) => void;
+  prependHistory: (
+    events: ChatEvent[],
+    meta?: { oldestSeq?: number | null; hasMore?: boolean; total?: number },
+  ) => void;
+  setHistoryMeta: (meta: {
+    oldestSeq?: number | null;
+    hasMore?: boolean;
+    total?: number;
+  }) => void;
+  setHistoryLoading: (loading: boolean) => void;
   setSessions: (sessions: SessionSummary[]) => void;
   setApproval: (description: string | null) => void;
   setBootError: (msg: string | null) => void;
@@ -304,6 +318,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
   messages: [],
   streamingId: null,
   toolStatus: "",
+  historyOldestSeq: null,
+  historyHasMore: false,
+  historyTotal: 0,
+  historyLoading: false,
   approval: null,
   modelLabel: "—",
   slashCatalog: [],
@@ -387,6 +405,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
       messages,
       streamingId,
       toolStatus: "",
+      historyOldestSeq:
+        state.history_oldest_seq === undefined || state.history_oldest_seq === null
+          ? null
+          : Number(state.history_oldest_seq),
+      historyHasMore: !!state.history_has_more,
+      historyTotal: Number(state.history_total || 0),
+      historyLoading: false,
       modelLabel: state.composer_meta?.current_model || "—",
       slashCatalog: state.slash_catalog || [],
       inputHistory: state.input_history || [],
@@ -455,6 +480,49 @@ export const useAppStore = create<AppStore>((set, get) => ({
       streamingId = next.streamingId;
       if (next.toolStatus !== undefined) toolStatus = next.toolStatus;
     }
-    set({ messages, streamingId, toolStatus });
+    set({ messages, streamingId, toolStatus, historyLoading: false });
+  },
+
+  setHistoryMeta: (meta) => {
+    set({
+      ...(meta.oldestSeq !== undefined
+        ? {
+            historyOldestSeq:
+              meta.oldestSeq === null || meta.oldestSeq === undefined
+                ? null
+                : Number(meta.oldestSeq),
+          }
+        : {}),
+      ...(meta.hasMore !== undefined ? { historyHasMore: !!meta.hasMore } : {}),
+      ...(meta.total !== undefined ? { historyTotal: Number(meta.total || 0) } : {}),
+    });
+  },
+
+  setHistoryLoading: (historyLoading) => set({ historyLoading }),
+
+  prependHistory: (events, meta) => {
+    let prefix: DisplayMessage[] = [];
+    let streamingId: string | null = null;
+    for (const ev of events || []) {
+      const next = reduceChatEvent(prefix, streamingId, ev);
+      prefix = next.messages;
+      streamingId = next.streamingId;
+    }
+    if (!prefix.length && !meta) return;
+    const { messages } = get();
+    set({
+      messages: [...prefix, ...messages],
+      ...(meta?.oldestSeq !== undefined
+        ? {
+            historyOldestSeq:
+              meta.oldestSeq === null ? null : Number(meta.oldestSeq),
+          }
+        : {}),
+      ...(meta?.hasMore !== undefined ? { historyHasMore: !!meta.hasMore } : {}),
+      ...(meta?.total !== undefined
+        ? { historyTotal: Number(meta.total || 0) }
+        : {}),
+      historyLoading: false,
+    });
   },
 }));

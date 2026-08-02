@@ -72,6 +72,33 @@ class SessionMixin:
         created = self._session_store.create_session("新会话")
         return self._activate_session(created.id, announce=True)
 
+    def load_earlier_events(
+        self,
+        session_id: str,
+        before_seq: int | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        """向上翻页：加载当前会话中更早的消息（不重置前端）。"""
+        sid = str(session_id or "").strip()
+        if not sid or sid != self._session_id:
+            return {"ok": False, "error": "只能加载当前会话的更早消息"}
+        if before_seq is None:
+            return {"ok": False, "error": "缺少 before_seq"}
+        from src.ui.session_history import session_history_page_size
+
+        page_size = limit if limit and int(limit) > 0 else session_history_page_size()
+        page = self._session_store.load_events_page(
+            sid, limit=page_size, before_seq=int(before_seq)
+        )
+        return {
+            "ok": True,
+            "events": page["events"],
+            "oldest_seq": page["oldest_seq"],
+            "newest_seq": page["newest_seq"],
+            "has_more": page["has_more"],
+            "history_total": page["total"],
+        }
+
     def _activate_session(self, session_id: str, *, announce: bool) -> dict[str, Any]:
         info = self._session_store.get(session_id)
         if not info:
@@ -81,8 +108,9 @@ class SessionMixin:
         from src.ui.session_history import session_history_limit
 
         limit = session_history_limit()
-        total = self._session_store.count_events(session_id)
-        events = self._session_store.load_events(session_id, limit=limit)
+        page = self._session_store.load_events_page(session_id, limit=limit)
+        events = page["events"]
+        total = int(page["total"] or 0)
         # 只走 load_history（内部会重置前端消息），避免 clear 事件异步晚到把刚加载的历史清空
         self._skip_persist_events = True
         try:
@@ -91,7 +119,7 @@ class SessionMixin:
             self._skip_persist_events = False
         if announce and not events:
             self.chat.append_system(f"新会话：{info.title}")
-        elif limit and total > len(events):
+        elif page["has_more"]:
             self.chat.append_system(f"仅显示最近 {len(events)} 条消息（共 {total} 条）")
         self.chat.set_status(self._status_text("就绪"))
         # 历史已通过 WebChatBridge.load_history 推送，不再回传 events，
@@ -101,6 +129,8 @@ class SessionMixin:
             "active_id": session_id,
             "history_via_bridge": True,
             "history_total": total,
-            "history_truncated": bool(limit and total > len(events)),
+            "history_truncated": bool(page["has_more"]),
+            "history_oldest_seq": page["oldest_seq"],
+            "history_has_more": bool(page["has_more"]),
             **self.list_sessions_api(),
         }

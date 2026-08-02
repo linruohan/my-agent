@@ -6,9 +6,9 @@ import json
 import re
 from typing import Any
 
-import httpx
 from loguru import logger
 
+from src.infra.http_client import shared_http_client
 from src.tools.weather.render import LiveSnapshot
 
 _DATASK_RE = re.compile(r"var\s+dataSK\s*=\s*(\{[\s\S]*?\});")
@@ -84,12 +84,11 @@ def fetch_sk_live(
     h = dict(headers or {})
     h.setdefault("Referer", "https://www.weather.com.cn/")
     try:
-        with httpx.Client(follow_redirects=True, timeout=timeout, headers=h) as client:
-            resp = client.get(url)
-            resp.raise_for_status()
-            if resp.encoding is None or resp.encoding.lower() == "iso-8859-1":
-                resp.encoding = getattr(resp, "charset_encoding", None) or "utf-8"
-            return parse_sk_live(resp.text)
+        resp = shared_http_client().get(url, headers=h, timeout=timeout)
+        resp.raise_for_status()
+        if resp.encoding is None or resp.encoding.lower() == "iso-8859-1":
+            resp.encoding = getattr(resp, "charset_encoding", None) or "utf-8"
+        return parse_sk_live(resp.text)
     except Exception as exc:
         logger.warning("[weather] sk_2d 抓取失败 {}: {}", url, exc)
         return None

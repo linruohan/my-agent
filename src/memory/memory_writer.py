@@ -17,7 +17,10 @@ from loguru import logger
 
 from src.infra.config import load_app_config
 from src.infra.paths import project_config_dir
-from src.memory.memory_index import schedule_write_memory_index
+from src.memory.memory_index import (
+    invalidate_memory_entries_cache,
+    schedule_write_memory_index,
+)
 
 MEMORY_TYPES = ["user", "feedback", "project", "reference"]
 _LAST_WRITE_NAME = ".last_write"
@@ -286,6 +289,7 @@ def _write_memory_file(
     formatted = _format_memory_content(memory_type, name, description, content, tags)
     file_path.write_text(formatted + "\n", encoding="utf-8")
     logger.info("已写入记忆: {}", file_name)
+    invalidate_memory_entries_cache(project_root)
     mark_memory_written(project_root)
 
     return MemoryWriteResult(

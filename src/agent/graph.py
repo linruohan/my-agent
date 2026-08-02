@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 from pathlib import Path
 
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -17,16 +18,56 @@ from src.agent.memory_session import (
     store_memory_injection,
 )
 from src.memory.context_files import build_memory_prompt_block, build_claude_prompt_block
-from src.memory.memory_index import load_all_memory_entries
+from src.memory.memory_index import load_all_memory_entries, memory_entries_fingerprint
 from src.memory.memory_reader import (
     FindRelevantMemoriesInput,
     build_memory_injection_block,
     find_relevant_memories,
 )
-from src.memory.rules_loader import build_rules_prompt_block
+from src.memory.rules_loader import build_rules_prompt_block, rules_fingerprint
 from src.memory.settings_store import build_critical_rules_prompt_block
 from src.tools import get_enabled_tools
 from src.tools.process_wrap import wrap_tools_for_process
+
+_static_prompt_lock = threading.Lock()
+_static_prompt_key: tuple | None = None
+_static_prompt_value: str | None = None
+
+
+def _path_fingerprint(paths: list[Path]) -> tuple:
+    parts: list[tuple[str, int, int]] = []
+    for path in paths:
+        try:
+            if not path.is_file():
+                parts.append((str(path), 0, 0))
+                continue
+            st = path.stat()
+            parts.append((str(path), st.st_mtime_ns, st.st_size))
+        except OSError:
+            parts.append((str(path), 0, 0))
+    return tuple(parts)
+
+
+def _context_prompt_fingerprint(current_file: str | None) -> tuple:
+    from src.infra.paths import global_config_dir, project_config_dir
+    from src.memory.context_files import memory_file_path, user_file_path
+
+    paths = [
+        global_config_dir() / "USER.md",
+        project_config_dir() / "USER.md",
+        project_config_dir() / "USER.md.local",
+        project_config_dir() / "USER.local.md",
+        user_file_path(),
+        memory_file_path(),
+        global_config_dir() / "MEMORY.md",
+        project_config_dir() / "MEMORY.md",
+        project_config_dir() / "CLAUDE.md",
+        project_config_dir() / "CLAUDE.local.md",
+    ]
+    if current_file:
+        paths.append(Path(current_file))
+    return _path_fingerprint(paths)
+
 
 class AgentGraphBundle:
     """持有 SQLite 连接与编译后的 Agent 图，避免连接被提前关闭。"""
@@ -57,8 +98,22 @@ def _search_rules_block() -> str:
 
 
 def _build_static_prompt(base_prompt: str, current_file: str | None) -> str:
-    """构建不含相关记忆检索的静态 prompt 段（文件读取侧已有 mtime 缓存）。"""
+    """构建不含相关记忆检索的静态 prompt 段；按日期/规则/记忆指纹缓存。"""
+    global _static_prompt_key, _static_prompt_value
     base = base_prompt.strip() or "你是一个 helpful 的个人助理。"
+    date_ctx = current_date_context()
+    key = (
+        base,
+        current_file or "",
+        date_ctx,
+        rules_fingerprint(),
+        memory_entries_fingerprint(),
+        _context_prompt_fingerprint(current_file),
+    )
+    with _static_prompt_lock:
+        if _static_prompt_key == key and _static_prompt_value is not None:
+            return _static_prompt_value
+
     memory_block = build_memory_prompt_block()
     claude_block = build_claude_prompt_block(current_file=current_file)
     rules_block = build_rules_prompt_block(current_file=current_file)
@@ -73,7 +128,11 @@ def _build_static_prompt(base_prompt: str, current_file: str | None) -> str:
         parts.append(f"【行为规则 RULES】\n{rules_block}")
     if memory_block:
         parts.append(memory_block)
-    return "\n\n".join(parts)
+    value = "\n\n".join(parts)
+    with _static_prompt_lock:
+        _static_prompt_key = key
+        _static_prompt_value = value
+    return value
 
 
 def build_system_prompt(

@@ -91,6 +91,25 @@ def test_append_event_uses_monotonic_next_seq(tmp_path):
     store.close()
 
 
+def test_load_events_page_before_seq(tmp_path):
+    store = SessionStore(tmp_path / "sessions.db")
+    sid = store.list_sessions()[0].id
+    for i in range(5):
+        store.append_event(sid, {"type": "user", "content": f"m{i}"})
+    page = store.load_events_page(sid, limit=2)
+    assert [e["content"] for e in page["events"]] == ["m3", "m4"]
+    assert page["oldest_seq"] == 4
+    assert page["has_more"] is True
+    earlier = store.load_events_page(sid, limit=2, before_seq=page["oldest_seq"])
+    assert [e["content"] for e in earlier["events"]] == ["m1", "m2"]
+    assert earlier["oldest_seq"] == 2
+    assert earlier["has_more"] is True
+    oldest = store.load_events_page(sid, limit=2, before_seq=earlier["oldest_seq"])
+    assert [e["content"] for e in oldest["events"]] == ["m0"]
+    assert oldest["has_more"] is False
+    store.close()
+
+
 def test_migrate_legacy_sessions_without_next_seq(tmp_path):
     import sqlite3
 

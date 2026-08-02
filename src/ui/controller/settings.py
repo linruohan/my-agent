@@ -80,10 +80,19 @@ class SettingsMixin:
             "slash_catalog": build_slash_catalog(),
             "input_history": list_history(),
             "skill_dirs": [str(p) for p in get_skill_dirs()],
-            "session_events": self._session_store.load_events(
-                self._session_id,
-                limit=session_history_limit(),
-            ),
+            **self._session_history_payload(),
+        }
+
+    def _session_history_payload(self) -> dict[str, Any]:
+        page = self._session_store.load_events_page(
+            self._session_id,
+            limit=session_history_limit(),
+        )
+        return {
+            "session_events": page["events"],
+            "history_total": page["total"],
+            "history_oldest_seq": page["oldest_seq"],
+            "history_has_more": bool(page["has_more"]),
         }
 
     def _base_provider_names(self) -> set[str]:

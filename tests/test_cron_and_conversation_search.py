@@ -127,6 +127,28 @@ def test_conversation_index_backfill_and_search(tmp_path, monkeypatch):
     assert "FAISS" in out or "向量" in out
 
 
+def test_fetch_messages_for_index_skips_indexed_same_db(tmp_path, monkeypatch):
+    from src.memory.conversation_index import ConversationIndex, backfill_conversation_index
+
+    db = tmp_path / "shared.db"
+    store = SessionStore(db_path=db)
+    index = ConversationIndex(db_path=db)
+    session = store.create_session("去重")
+    store.append_event(session.id, {"type": "user", "content": "第一条待索引"})
+    store.append_event(session.id, {"type": "assistant_end", "content": "第二条待索引"})
+
+    class FakeEmbeddings:
+        def embed_documents(self, texts: list[str]):
+            return [[1.0, 0.0] for _ in texts]
+
+    monkeypatch.setattr("src.memory.conversation_index._embeddings", lambda: FakeEmbeddings())
+    added = backfill_conversation_index(batch_size=10, store=store, index=index)
+    assert added == 2
+    assert store.fetch_messages_for_index(limit=10) == []
+    added_again = backfill_conversation_index(batch_size=10, store=store, index=index)
+    assert added_again == 0
+
+
 def test_search_past_conversations_semantic_mock(tmp_path):
     db = tmp_path / "sessions2.db"
     store = SessionStore(db_path=db)

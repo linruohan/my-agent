@@ -22,6 +22,10 @@ _debounce_lock = threading.Lock()
 _pending_roots: set[str] = set()
 _debounce_timer: threading.Timer | None = None
 
+_entries_lock = threading.Lock()
+# root_key -> (fingerprint, entries)
+_entries_cache: dict[str, tuple[tuple[Any, ...], list[MemoryEntry]]] = {}
+
 
 @dataclass
 class MemoryEntry:
@@ -69,14 +73,56 @@ def _load_memory_entry(path: Path) -> MemoryEntry | None:
     )
 
 
-def load_all_memory_entries(project_root: Path | None = None) -> list[MemoryEntry]:
-    """加载所有记忆文件的条目（只读 frontmatter）。"""
-    entries: list[MemoryEntry] = []
-    visited = set()
+def _memory_dirs(project_root: Path | None) -> list[Path]:
+    dirs = [
+        global_config_dir() / "memory",
+        project_config_dir(project_root) / "memory",
+    ]
+    from src.memory.settings_store import is_team_memory_enabled
 
-    def _load_from_dir(memory_dir: Path) -> None:
-        if not memory_dir.is_dir():
+    if is_team_memory_enabled(project_root):
+        dirs.append(project_config_dir(project_root) / "memory" / "team")
+    return dirs
+
+
+def _compute_entries_fingerprint(dirs: list[Path]) -> tuple[Any, ...]:
+    parts: list[tuple[str, int, int]] = []
+    for base in dirs:
+        try:
+            if not base.is_dir():
+                parts.append((str(base), 0, 0))
+                continue
+            for path in sorted(base.glob("*.md")):
+                try:
+                    st = path.stat()
+                    parts.append((str(path.resolve()), st.st_mtime_ns, st.st_size))
+                except OSError:
+                    continue
+        except OSError:
+            parts.append((str(base), 0, 0))
+    return tuple(parts)
+
+
+def memory_entries_fingerprint(project_root: Path | None = None) -> tuple[Any, ...]:
+    return _compute_entries_fingerprint(_memory_dirs(project_root))
+
+
+def invalidate_memory_entries_cache(project_root: Path | None = None) -> None:
+    """记忆写入后清除条目缓存。"""
+    with _entries_lock:
+        if project_root is None:
+            _entries_cache.clear()
             return
+        _entries_cache.pop(_root_key(project_root), None)
+        _entries_cache.pop("", None)
+
+
+def _load_all_memory_entries_uncached(project_root: Path | None = None) -> list[MemoryEntry]:
+    entries: list[MemoryEntry] = []
+    visited: set[Path] = set()
+    for memory_dir in _memory_dirs(project_root):
+        if not memory_dir.is_dir():
+            continue
         for path in sorted(memory_dir.glob("*.md")):
             if path in visited:
                 continue
@@ -84,16 +130,22 @@ def load_all_memory_entries(project_root: Path | None = None) -> list[MemoryEntr
             entry = _load_memory_entry(path)
             if entry:
                 entries.append(entry)
-
-    _load_from_dir(global_config_dir() / "memory")
-    _load_from_dir(project_config_dir(project_root) / "memory")
-
-    from src.memory.settings_store import is_team_memory_enabled
-
-    if is_team_memory_enabled(project_root):
-        _load_from_dir(project_config_dir(project_root) / "memory" / "team")
-
     return entries
+
+
+def load_all_memory_entries(project_root: Path | None = None) -> list[MemoryEntry]:
+    """加载所有记忆文件的条目（只读 frontmatter；mtime 指纹缓存）。"""
+    key = _root_key(project_root)
+    dirs = _memory_dirs(project_root)
+    fingerprint = _compute_entries_fingerprint(dirs)
+    with _entries_lock:
+        cached = _entries_cache.get(key)
+        if cached is not None and cached[0] == fingerprint:
+            return list(cached[1])
+    entries = _load_all_memory_entries_uncached(project_root)
+    with _entries_lock:
+        _entries_cache[key] = (fingerprint, entries)
+        return list(entries)
 
 
 def build_memory_index(project_root: Path | None = None) -> str:
@@ -125,18 +177,18 @@ def build_memory_index(project_root: Path | None = None) -> str:
     return index_text
 
 
+def _root_key(project_root: Path | None) -> str:
+    if project_root is None:
+        return ""
+    return str(Path(project_root).resolve())
+
+
 def write_memory_index(project_root: Path | None = None) -> None:
     """写入 MEMORY.md 索引文件。"""
     index_text = build_memory_index(project_root)
     project_dir = project_config_dir(project_root)
     project_dir.mkdir(parents=True, exist_ok=True)
     (project_dir / "MEMORY.md").write_text(index_text + "\n", encoding="utf-8")
-
-
-def _root_key(project_root: Path | None) -> str:
-    if project_root is None:
-        return ""
-    return str(Path(project_root).resolve())
 
 
 def _flush_scheduled_memory_indexes() -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -105,27 +106,67 @@ class ConversationIndex(ReusableSqliteStore):
                 """,
                 (max(limit, cap),),
             ).fetchall()
-        scored: list[tuple[float, dict[str, Any]]] = []
+        metas: list[dict[str, Any]] = []
+        vectors: list[list[float]] = []
         for row in rows:
             try:
                 vec = json.loads(row["embedding_json"])
             except (json.JSONDecodeError, TypeError):
                 continue
-            score = _cosine(query_vec, vec)
+            if not isinstance(vec, list) or not vec:
+                continue
+            vectors.append(vec)
+            metas.append(
+                {
+                    "session_title": row["session_title"],
+                    "role": row["role"],
+                    "text": row["text"],
+                }
+            )
+        if not vectors:
+            return []
+        scores = _score_vectors(query_vec, vectors)
+        scored: list[tuple[float, dict[str, Any]]] = []
+        for score, meta in zip(scores, metas):
             if score >= threshold:
                 scored.append(
                     (
                         score,
-                        {
-                            "session_title": row["session_title"],
-                            "role": row["role"],
-                            "text": row["text"],
-                            "score": round(score, 3),
-                        },
+                        {**meta, "score": round(float(score), 3)},
                     )
                 )
         scored.sort(key=lambda x: x[0], reverse=True)
         return [item for _, item in scored[: max(1, limit)]]
+
+
+def _score_vectors(query_vec: list[float], vectors: list[list[float]]) -> list[float]:
+    """批量余弦相似度；优先 numpy，否则预计算 query 范数后逐条算。"""
+    try:
+        import numpy as np
+
+        q = np.asarray(query_vec, dtype=np.float32)
+        m = np.asarray(vectors, dtype=np.float32)
+        if q.ndim != 1 or m.ndim != 2 or m.shape[1] != q.shape[0]:
+            raise ValueError("embedding dim mismatch")
+        qn = float(np.linalg.norm(q))
+        if qn <= 0:
+            return [0.0] * len(vectors)
+        mn = np.linalg.norm(m, axis=1)
+        dots = m @ q
+        denom = qn * mn
+        with np.errstate(divide="ignore", invalid="ignore"):
+            scores = np.where(denom > 0, dots / denom, 0.0)
+        return [float(x) for x in scores]
+    except Exception:
+        pass
+    qn = math.sqrt(sum(x * x for x in query_vec))
+    if qn <= 0:
+        return [0.0] * len(vectors)
+    out: list[float] = []
+    for vec in vectors:
+        score = _cosine(query_vec, vec)
+        out.append(score)
+    return out
 
 
 def shared_conversation_index() -> ConversationIndex:
@@ -194,29 +235,38 @@ def backfill_conversation_index(
     session_store = store or SessionStore()
     idx = index or shared_conversation_index()
     rows = session_store.fetch_messages_for_index(limit=max(1, size))
-    added = 0
+    prepared: list[tuple[dict[str, Any], str, str]] = []
     for row in rows:
-        if idx.has_entry(row["message_id"]):
+        mid = int(row["message_id"])
+        if idx.has_entry(mid):
             continue
         event = row.get("event") or {}
         fields = _event_to_index_fields(event)
         if not fields:
             continue
         role, text = fields
+        prepared.append((row, role, text[:1500]))
+    if not prepared:
+        return 0
+    try:
+        vectors = _embeddings().embed_documents([body for _, _, body in prepared])
+    except Exception:
+        logger.exception("对话索引回填批量 Embedding 失败 n={}", len(prepared))
+        return 0
+    added = 0
+    for (row, role, body), vec in zip(prepared, vectors):
         try:
-            vec = _embeddings().embed_documents([text[:1500]])[0]
+            idx.upsert(
+                message_id=int(row["message_id"]),
+                session_id=row["session_id"],
+                session_title=row["session_title"],
+                role=role,
+                text=body,
+                embedding=list(vec),
+            )
+            added += 1
         except Exception:
-            logger.exception("对话索引回填失败 message_id={}", row["message_id"])
-            break
-        idx.upsert(
-            message_id=row["message_id"],
-            session_id=row["session_id"],
-            session_title=row["session_title"],
-            role=role,
-            text=text,
-            embedding=vec,
-        )
-        added += 1
+            logger.exception("对话索引回填写入失败 message_id={}", row.get("message_id"))
     return added
 
 

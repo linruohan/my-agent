@@ -116,6 +116,9 @@ export type InitialState = {
   input_history: string[];
   skill_dirs: string[];
   session_events: ChatEvent[];
+  history_total?: number;
+  history_oldest_seq?: number | null;
+  history_has_more?: boolean;
 };
 
 export type OkSessionsResult = {
@@ -126,6 +129,20 @@ export type OkSessionsResult = {
   history_via_bridge?: boolean;
   events?: ChatEvent[];
   sessions?: SessionSummary[];
+  history_total?: number;
+  history_truncated?: boolean;
+  history_oldest_seq?: number | null;
+  history_has_more?: boolean;
+};
+
+export type LoadEarlierResult = {
+  ok: boolean;
+  error?: string;
+  events?: ChatEvent[];
+  oldest_seq?: number | null;
+  newest_seq?: number | null;
+  has_more?: boolean;
+  history_total?: number;
 };
 
 export type UiEvent =
@@ -163,6 +180,11 @@ export type AppApi = {
   switch_session: (sessionId: string) => Promise<OkSessionsResult>;
   delete_session: (sessionId: string) => Promise<OkSessionsResult>;
   rename_session: (sessionId: string, title: string) => Promise<OkSessionsResult>;
+  load_earlier_events: (
+    sessionId: string,
+    beforeSeq: number,
+    limit?: number,
+  ) => Promise<LoadEarlierResult>;
 
   get_settings_data: () => Promise<SettingsData>;
   save_settings: (payload: Record<string, unknown>) => Promise<{
